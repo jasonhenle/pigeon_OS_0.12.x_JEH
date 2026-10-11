@@ -1,8 +1,8 @@
-"""Drop pigeon_0_11.py's unused top-level imports (pyflakes' list).
+"""Drop pigeon_0_12.py's unused top-level imports (pyflakes' list).
 
 Usage (from ``pigeonSystem``)::
 
-    python3 -m pyflakes pigeon_0_11.py > /tmp/pf.txt; python3 prune_imports.py pigeon_0_11.py /tmp/pf.txt
+    python3 -m pyflakes pigeon_0_12.py > /tmp/pf.txt; python3 prune_imports.py pigeon_0_12.py /tmp/pf.txt
 
 Only unconditional top-level ``import`` / ``from ... import`` statements are
 edited (optional imports inside ``try`` keep their fallbacks). ``tkinter.*``

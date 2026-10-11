@@ -10,7 +10,7 @@ ROOT = sys.argv[1]  # pigeonSystem dir
 PLAN = json.load(open(sys.argv[2]))  # {module: [names]}
 ROWS = {r["name"]: r for r in json.load(open(sys.argv[3]))}
 NEW_DOCS = json.load(open(sys.argv[4]))  # {module: first-line doc} for new modules
-path = os.path.join(ROOT, "pigeon_0_11.py")
+path = os.path.join(ROOT, "pigeon_0_12.py")
 src = open(path).read()
 lines = src.splitlines(keepends=True)
 tree = ast.parse(src)
@@ -214,7 +214,7 @@ for mod, fns in modules_out.items():
         cl[last_imp:last_imp] = [a + "\n" for a in add]
         cur = "".join(cl).rstrip("\n") + "\n"
     else:
-        cur = f'"""{NEW_DOCS[mod]}\n\nExtracted verbatim from ``{SCOPE.split("-")[0]}()`` in ``pigeon_0_11.py``. Each function\ntakes the app state it used to close over as keyword-only arguments;\n``{SCOPE.split("-")[0]}()`` binds them once with ``bind_deps`` so call sites are unchanged.\n"""\n\nfrom __future__ import annotations\n\n'
+        cur = f'"""{NEW_DOCS[mod]}\n\nExtracted verbatim from ``{SCOPE.split("-")[0]}()`` in ``pigeon_0_12.py``. Each function\ntakes the app state it used to close over as keyword-only arguments;\n``{SCOPE.split("-")[0]}()`` binds them once with ``bind_deps`` so call sites are unchanged.\n"""\n\nfrom __future__ import annotations\n\n'
         cur += "".join(sorted(x + "\n" for x in needed))
     for n, t, _i in fns:
         cur += "\n\n" + t.rstrip("\n") + "\n"

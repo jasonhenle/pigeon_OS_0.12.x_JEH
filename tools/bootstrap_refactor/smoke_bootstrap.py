@@ -54,13 +54,13 @@ def make_root(*a, **k):
 tkinter.Tk = make_root
 # Note: Pigeon has no PIGEON_NO_SPLASH switch; with the extensions loaded this always
 # runs the splash path. tests/startup_trace_harness.py --no-ext covers the other path.
-import pigeon_0_11
-sys.argv = ["pigeon_0_11.py"]
+import pigeon_0_12
+sys.argv = ["pigeon_0_12.py"]
 def watchdog():
     import time; time.sleep(150); print("SMOKE: timeout", flush=True); os._exit(3)
 threading.Thread(target=watchdog, daemon=True).start()
 try:
-    rc = pigeon_0_11.main()
+    rc = pigeon_0_12.main()
     print("SMOKE: main returned", rc, flush=True)
 except SystemExit as e:
     print("SMOKE: exit", e, flush=True)

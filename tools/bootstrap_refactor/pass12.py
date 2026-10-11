@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 pass12.py pigeon_0_11.py p12.json
+    python3 pass12.py pigeon_0_12.py p12.json
 
 Covers ``def``s that are direct statements of an ``if`` body at ``main()``'s
 top level (the ``if _PIGEON_EXT:`` splash block, ``_bootstrap_after_splash``).

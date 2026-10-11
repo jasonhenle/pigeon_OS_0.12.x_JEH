@@ -16,7 +16,7 @@ points at every function named in <expr>):
 - no thread already started (main() before mainloop, or bootstrap() up to the
   new bind point, directly or via calls) reaches it.
 
-Usage: python3 pass3.py pigeon_0_11.py pass2.json out.json
+Usage: python3 pass3.py pigeon_0_12.py pass2.json out.json
 """
 import ast, glob, json, os, sys, collections
 

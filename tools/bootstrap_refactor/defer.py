@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 defer.py pigeon_0_11.py HOLDER [HOLDER ...]
+    python3 defer.py pigeon_0_12.py HOLDER [HOLDER ...]
 
 For each ``HOLDER`` bound once at bootstrap()'s top level as
 ``HOLDER = [expr]`` (or ``HOLDER: list[T] = [expr]``), this rewrites that

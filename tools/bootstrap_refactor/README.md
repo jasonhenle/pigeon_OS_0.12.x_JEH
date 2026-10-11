@@ -1,16 +1,16 @@
 # bootstrap() lift tooling (passes 2–3)
 
-(The entry point was renamed `pigeon_0_9.py` -> `pigeon_0_11.py` in 0.11.38; the
-notes below that say `pigeon_0_11.py` describe the same file under its old name.)
+(The entry point was renamed `pigeon_0_9.py` -> `pigeon_0_12.py` in 0.11.38; the
+notes below that say `pigeon_0_12.py` describe the same file under its old name.)
 
 Dev-only scripts used to move nested helpers out of `bootstrap()` in
-`pigeonSystem/pigeon_0_11.py` into `pigeon/core/`. Not shipped.
+`pigeonSystem/pigeon_0_12.py` into `pigeon/core/`. Not shipped.
 
-Run from `PigeonOS_0.11_Development/Pigeon/pigeonSystem` with Python 3.10+:
+Run from `PigeonOS_0.12_Development/Pigeon/pigeonSystem` with Python 3.10+:
 
 ```bash
 T=../../../tools/bootstrap_refactor
-python3 $T/pass2.py pigeon_0_11.py /tmp/p2.json        # classify every remaining helper
+python3 $T/pass2.py pigeon_0_12.py /tmp/p2.json        # classify every remaining helper
 python3 $T/transform.py . $T/plan.json /tmp/p2.json $T/new_module_docs.json
 ```
 
@@ -39,15 +39,15 @@ unbound (scope-aware call graph, Tk registrations, event-loop pumps, running thr
 callbacks handed off early); see its docstring.
 
 ```bash
-python3 $T/pass2.py pigeon_0_11.py /tmp/p2.json
-python3 $T/pass3.py pigeon_0_11.py /tmp/p2.json /tmp/p3.json
+python3 $T/pass2.py pigeon_0_12.py /tmp/p2.json
+python3 $T/pass3.py pigeon_0_12.py /tmp/p2.json /tmp/p3.json
 python3 $T/transform.py . $T/plan3.json /tmp/p3.json $T/new_module_docs.json
 ```
 
 ## Checks after any pass
 
 ```bash
-python3 $T/verify_order.py pigeon_0_11.py      # bootstrap() never reads a name before binding it
+python3 $T/verify_order.py pigeon_0_12.py      # bootstrap() never reads a name before binding it
 python3 -m pyflakes pigeon/core/*.py
 HOME=$(mktemp -d) python3 $T/smoke_bootstrap.py   # runs main() + bootstrap() top level with a fake tkinter
 ```
@@ -64,7 +64,7 @@ same `x_holder[0]` pattern the codebase already uses — so the name is bound
 once and helpers can take it as a dependency:
 
 ```bash
-python3 $T/holderize.py pigeon_0_11.py skip_cache dev_phase active_tmdb_title_key active_tmdb_display_title
+python3 $T/holderize.py pigeon_0_12.py skip_cache dev_phase active_tmdb_title_key active_tmdb_display_title
 ```
 
 It rewrites `x` → `x[0]` only where the name resolves to `bootstrap()`'s
@@ -91,9 +91,9 @@ pointed at such a local. Those locals are renamed `_stale_skip_cache`
 Check every holderize run is a pure rename:
 
 ```bash
-cp pigeon_0_11.py /tmp/before.py
-python3 $T/holderize.py pigeon_0_11.py NAME ...
-python3 $T/holder_equiv.py /tmp/before.py pigeon_0_11.py NAME ...   # AST: IDENTICAL
+cp pigeon_0_12.py /tmp/before.py
+python3 $T/holderize.py pigeon_0_12.py NAME ...
+python3 $T/holder_equiv.py /tmp/before.py pigeon_0_12.py NAME ...   # AST: IDENTICAL
 ```
 
 Dead code noticed (never called, kept verbatim): `_remove_saved_receiver_device`,
@@ -138,8 +138,8 @@ once by a `def` / `_bind_deps(...)` / `_core_*.X`, and the helper only calls it
 or passes it as an argument.
 
 ```bash
-python3 $T/pass2.py pigeon_0_11.py /tmp/p2.json
-python3 $T/pass7.py pigeon_0_11.py /tmp/p2.json /tmp/p7.json
+python3 $T/pass2.py pigeon_0_12.py /tmp/p2.json
+python3 $T/pass7.py pigeon_0_12.py /tmp/p2.json /tmp/p7.json
 python3 $T/transform.py . $T/plan7.json /tmp/p7.json $T/new_module_docs.json
 ```
 
@@ -188,10 +188,10 @@ startup, each such object gets a holder up front that is filled where the
 object has always been created:
 
 ```bash
-python3 $T/holderize.py pigeon_0_11.py main_settings_widget:main_settings_widget_holder \
+python3 $T/holderize.py pigeon_0_12.py main_settings_widget:main_settings_widget_holder \
     view_circles_widget:view_circles_widget_holder update_btn:update_btn_holder \
     purge_image_media_btn:purge_image_media_btn_holder
-python3 $T/defer.py pigeon_0_11.py main_settings_widget_holder view_circles_widget_holder \
+python3 $T/defer.py pigeon_0_12.py main_settings_widget_holder view_circles_widget_holder \
     update_btn_holder purge_image_media_btn_holder scene_enabled
 ```
 
@@ -216,7 +216,7 @@ for `main()`'s top-level `def`s; `transform.py --scope=main` moves them with a
 4-space dedent and binds them where the `def` stood.
 
 ```bash
-python3 $T/pass10.py pigeon_0_11.py /tmp/p10.json
+python3 $T/pass10.py pigeon_0_12.py /tmp/p10.json
 python3 $T/transform.py . $T/plan10.json /tmp/p10.json $T/new_module_docs.json --scope=main
 ```
 
@@ -249,9 +249,9 @@ Left in `main()` after pass 10: the three `tk.Widget` patches,
   `self`. Deps must start with `_`; no Tk call in the app passes such a keyword.
 
 ```bash
-python3 $T/hoist_main.py pigeon_0_11.py _try_remove_splash_overlay \
+python3 $T/hoist_main.py pigeon_0_12.py _try_remove_splash_overlay \
     splash_photo _splash_rgb_cache _splash_bgra_cache _splash_photo_cache
-python3 $T/pass10.py pigeon_0_11.py /tmp/p11.json \
+python3 $T/pass10.py pigeon_0_12.py /tmp/p11.json \
     --method _pack_patched --method _grid_patched --method _place_patched
 python3 $T/transform.py . $T/plan11.json /tmp/p11.json $T/new_module_docs.json --scope=main
 ```
@@ -277,7 +277,7 @@ body before the `def`. Two additions:
   read anywhere in `main()` before the new bind point.
 
 ```bash
-python3 $T/pass12.py pigeon_0_11.py /tmp/p12.json
+python3 $T/pass12.py pigeon_0_12.py /tmp/p12.json
 python3 $T/transform.py . $T/plan12.json /tmp/p12.json $T/new_module_docs.json --scope=main-if
 ```
 
@@ -307,8 +307,8 @@ globals the phases use, then calls the 14 `run`s. Helpers and their
 `_bind_deps` wiring are unchanged; the wiring now lives in the phases.
 
 ```bash
-python3 $T/phases.py pigeon_0_11.py $T/plan13.json          # analyse: in/out per phase, errors
-python3 $T/phases.py pigeon_0_11.py $T/plan13.json --write  # rewrite (asserts each phase's AST)
+python3 $T/phases.py pigeon_0_12.py $T/plan13.json          # analyse: in/out per phase, errors
+python3 $T/phases.py pigeon_0_12.py $T/plan13.json --write  # rewrite (asserts each phase's AST)
 ```
 
 What it checks (see its docstring): prologue names definitely bound when the
@@ -329,7 +329,7 @@ epilogue; the test tells you if a read now comes before its write. The pass
 2-12 tools and `verify_order.py` assume the old single `bootstrap()` body and
 no longer apply.
 
-pigeon_0_11.py: 5,949 -> 1,788 lines (bootstrap() is 179, mostly the seed).
+pigeon_0_12.py: 5,949 -> 1,788 lines (bootstrap() is 179, mostly the seed).
 
 ## Pass 14: dead code
 
@@ -352,14 +352,14 @@ bindings nobody reads (including `x = ctx.x` prologue reads left over from
 pass 14), then drop `ctx.x = x` writes and bootstrap() seeds no phase reads.
 
 ```bash
-python3 $T/prune.py pigeon_0_11.py
+python3 $T/prune.py pigeon_0_12.py
 ```
 
 This round removed 8 phase bindings, and with them the old Tk settings
 mouse-wheel handlers `_settings_mousewheel`, `_settings_is_under_scroll_surface`
 and `_settings_wheel_target_should_ignore` (pigeon/core/settings_ui.py): the
 functions that bound them to the wheel (`_settings_bind_wheel_globals`, pass 14)
-were never called, so they could never run. pigeon_0_11.py also drops the 30
+were never called, so they could never run. pigeon_0_12.py also drops the 30
 top-level imports it no longer uses (unconditional imports only; the
 `tkinter.*` submodule imports stay, because importing them is what makes
 `tk.messagebox` etc. available to other modules).
@@ -374,9 +374,9 @@ then reads back every name the rest of `main()` and `bootstrap()` use
 unchanged.
 
 ```bash
-python3 $T/phases.py pigeon_0_11.py $T/plan16.json --scope=main          # analyse
-python3 $T/phases.py pigeon_0_11.py $T/plan16.json --scope=main --write  # rewrite
-python3 -m pyflakes pigeon_0_11.py > /tmp/pf.txt; python3 $T/prune_imports.py pigeon_0_11.py /tmp/pf.txt
+python3 $T/phases.py pigeon_0_12.py $T/plan16.json --scope=main          # analyse
+python3 $T/phases.py pigeon_0_12.py $T/plan16.json --scope=main --write  # rewrite
+python3 -m pyflakes pigeon_0_12.py > /tmp/pf.txt; python3 $T/prune_imports.py pigeon_0_12.py /tmp/pf.txt
 ```
 
 Additions for this scope:
@@ -386,11 +386,11 @@ Additions for this scope:
 - names bound only on one path (`splash_tick` exists only when `_PIGEON_EXT`)
   are read and written back inside `try: ... except NameError: pass`, so they
   stay unbound on the other path exactly as before;
-- `__file__` is seeded from pigeon_0_11.py, so the startup log still names the
+- `__file__` is seeded from pigeon_0_12.py, so the startup log still names the
   script, not the phase module.
 
 `tests/test_boot_phases.py` checks both groups (`m*` seeded by `_main_ctx`,
-`p*` by bootstrap()'s `ctx`). pigeon_0_11.py: 1,748 -> 1,191 lines.
+`p*` by bootstrap()'s `ctx`). pigeon_0_12.py: 1,748 -> 1,191 lines.
 
 ## Review of 0.11.37 (no code moved)
 

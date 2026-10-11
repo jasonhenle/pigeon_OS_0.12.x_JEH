@@ -2,8 +2,8 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 phases.py pigeon_0_11.py PLAN.json            # analyse only
-    python3 phases.py pigeon_0_11.py PLAN.json --write    # rewrite
+    python3 phases.py pigeon_0_12.py PLAN.json            # analyse only
+    python3 phases.py pigeon_0_12.py PLAN.json --write    # rewrite
 
 ``PLAN.json`` is a list of ``{"module": "p01_state", "start": 0, "doc": "..."}``;
 ``start`` is the index of the phase's first top-level statement in
@@ -468,7 +468,7 @@ for ph in phases:
                   for n in ph["outputs"] if n not in ph["publish"])
     mod = (
         f'"""{ph["doc"]}\n\n'
-        f"Phase {phases.index(ph) + 1} of ``{host.name}()`` in ``pigeon_0_11.py``, moved verbatim. ``run``\n"
+        f"Phase {phases.index(ph) + 1} of ``{host.name}()`` in ``pigeon_0_12.py``, moved verbatim. ``run``\n"
         "reads the names it needs from the shared boot context, runs the original\n"
         "statements, and writes back the names later phases read.\n"
         '"""\n\nfrom __future__ import annotations\n\n'

@@ -8,22 +8,22 @@ This repository is the **canonical source** for the app — fresh installs and i
 
 | Version | Folder | Git branch |
 |---------|--------|------------|
-| **PigeonOS 0.11 (current)** | [`PigeonOS_0.11_Development/Pigeon/`](PigeonOS_0.11_Development/Pigeon/) | `PigeonOS_0.11` (dev) / `main` (release) |
+| **PigeonOS 0.11 (current)** | [`PigeonOS_0.12_Development/Pigeon/`](PigeonOS_0.12_Development/Pigeon/) | `PigeonOS_0.12` (dev) / `main` (release) |
 | 0.9 (archived locally) | [`Archive/PigeonOS_0.9_Development/`](Archive/PigeonOS_0.9_Development/) | `PigeonOS_0.9` / historical `pigeon_0.7.x` |
 | 0.8 (archived locally) | [`Archive/Pigeon_0.8.0_Development/`](Archive/Pigeon_0.8.0_Development/) | git history on `main` before 0.9 |
 | 0.7 (archived) | [`Archive/Pigeon_0.70_Development/`](Archive/Pigeon_0.70_Development/) | — |
 
-> **Do not** point new builds or installers at `Archive/`. Runtime assets live under `PigeonOS_0.11_Development/Pigeon/pigeonAssets/`. Design sources for 0.10 live under `PigeonOS_0.11_Development/PigeonOS_0.11_GFX/` (local; not shipped in the Pi tarball).
+> **Do not** point new builds or installers at `Archive/`. Runtime assets live under `PigeonOS_0.12_Development/Pigeon/pigeonAssets/`. Design sources for 0.10 live under `PigeonOS_0.12_Development/PigeonOS_0.12_GFX/` (local; not shipped in the Pi tarball).
 
 ## Quick links
 
 | Goal | Where |
 |------|--------|
-| **Glossary (views, assets, shortcuts)** | [`PigeonOS_0.11_Development/README.md`](PigeonOS_0.11_Development/README.md) |
-| **Install from scratch (Pi, Mac, Linux)** | [`PigeonOS_0.11_Development/Pigeon/GITHUB.md`](PigeonOS_0.11_Development/Pigeon/GITHUB.md) |
-| **Raspberry Pi** | [`PigeonOS_0.11_Development/Pigeon/raspberryPi/README_RASPBERRY_PI.md`](PigeonOS_0.11_Development/Pigeon/raspberryPi/README_RASPBERRY_PI.md) |
-| **App folder (code + assets)** | [`PigeonOS_0.11_Development/Pigeon/`](PigeonOS_0.11_Development/Pigeon/) |
-| **GitHub Releases** (Pi tarballs) | https://github.com/jasonhenle/pigeon_OS_0.11.x_JEH/releases |
+| **Glossary (views, assets, shortcuts)** | [`PigeonOS_0.12_Development/README.md`](PigeonOS_0.12_Development/README.md) |
+| **Install from scratch (Pi, Mac, Linux)** | [`PigeonOS_0.12_Development/Pigeon/GITHUB.md`](PigeonOS_0.12_Development/Pigeon/GITHUB.md) |
+| **Raspberry Pi** | [`PigeonOS_0.12_Development/Pigeon/raspberryPi/README_RASPBERRY_PI.md`](PigeonOS_0.12_Development/Pigeon/raspberryPi/README_RASPBERRY_PI.md) |
+| **App folder (code + assets)** | [`PigeonOS_0.12_Development/Pigeon/`](PigeonOS_0.12_Development/Pigeon/) |
+| **GitHub Releases** (Pi tarballs) | https://github.com/jasonhenle/pigeon_OS_0.12.x_JEH/releases |
 
 ## One-command install
 
@@ -31,7 +31,7 @@ This repository is the **canonical source** for the app — fresh installs and i
 
 ```bash
 curl -fsSL -o /tmp/pigeon-install.sh \
-  "https://raw.githubusercontent.com/jasonhenle/pigeon_OS_0.11.x_JEH/main/PigeonOS_0.11_Development/Pigeon/installer/install_from_github.sh"
+  "https://raw.githubusercontent.com/jasonhenle/pigeon_OS_0.12.x_JEH/main/PigeonOS_0.12_Development/Pigeon/installer/install_from_github.sh"
 bash /tmp/pigeon-install.sh
 ```
 
@@ -43,12 +43,12 @@ bash /tmp/pigeon-install.sh
 
 | Branch | Purpose |
 |--------|---------|
-| `PigeonOS_0.11` | Day-to-day PigeonOS 0.11 development |
+| `PigeonOS_0.12` | Day-to-day PigeonOS 0.11 development |
 | `main` | Release line — what Updates / installers pull |
 | `experiment` | Legacy 0.8-era working branch (superseded by `PigeonOS_0.10`) |
 
 ## What is in git
 
-The tracked tree includes **all runtime code and UI assets** (`pigeonAssets/`, `installer/`, `pigeonSystem/`). It does **not** include your personal settings (`~/.pigeon_0_6/`), local TMDb cache, or the large design GFX trees (`PigeonOS_0.11_GFX/`, `Pigeon_GFX/`, `Archive/`).
+The tracked tree includes **all runtime code and UI assets** (`pigeonAssets/`, `installer/`, `pigeonSystem/`). It does **not** include your personal settings (`~/.pigeon_0_6/`), local TMDb cache, or the large design GFX trees (`PigeonOS_0.12_GFX/`, `Pigeon_GFX/`, `Archive/`).
 
-When `version.py` changes on `main`, GitHub Actions builds `pigeon_<version>_raspberry_pi.tar.gz` and attaches it to [Releases](https://github.com/jasonhenle/pigeon_OS_0.11.x_JEH/releases).
+When `version.py` changes on `main`, GitHub Actions builds `pigeon_<version>_raspberry_pi.tar.gz` and attaches it to [Releases](https://github.com/jasonhenle/pigeon_OS_0.12.x_JEH/releases).

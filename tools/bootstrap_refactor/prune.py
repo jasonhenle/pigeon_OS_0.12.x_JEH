@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 prune.py pigeon_0_11.py
+    python3 prune.py pigeon_0_12.py
 
 Repeats until nothing changes:
 

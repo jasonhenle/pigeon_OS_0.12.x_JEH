@@ -5,7 +5,7 @@ is ``main()`` and its grandparent is the module.
 
 Usage (from ``pigeonSystem``)::
 
-    python3 pass10.py pigeon_0_11.py p10.json
+    python3 pass10.py pigeon_0_12.py p10.json
 
 A top-level ``def`` in ``main()`` (other than ``bootstrap``) is liftable when:
 
@@ -31,7 +31,7 @@ Pass 11 options:
   function, so it becomes a bound method). Every dependency name must start
   with ``_`` and no ``.pack(`` / ``.grid(`` / ``.place(`` call in the app
   passes such a keyword (Tk option names never start with ``_``).
-- ``**kwargs`` is accepted when every call of the helper in ``pigeon_0_11.py``
+- ``**kwargs`` is accepted when every call of the helper in ``pigeon_0_12.py``
   and ``pigeon/core/`` passes explicit keywords only (no ``**`` splat) and none
   of them is a dependency name; the dependencies are then keyword-only
   parameters placed before ``**kwargs``, so ``kwargs`` sees exactly the same

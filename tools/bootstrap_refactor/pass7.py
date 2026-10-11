@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 pass7.py pigeon_0_11.py p2.json p7.json
+    python3 pass7.py pigeon_0_12.py p2.json p7.json
 
 A helper qualifies when every blocker in its pass-2 row is ``forward:X`` or
 ``recursive`` and each such X (and the helper itself, when recursive):

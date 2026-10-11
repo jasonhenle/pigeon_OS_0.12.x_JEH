@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 hoist_main.py pigeon_0_11.py BEFORE_DEF NAME [NAME ...]
+    python3 hoist_main.py pigeon_0_12.py BEFORE_DEF NAME [NAME ...]
 
 Each ``NAME`` must be bound exactly once in ``main()``, by a statement that
 sits directly in a top-level ``if _PIGEON_EXT:`` block and whose value is a

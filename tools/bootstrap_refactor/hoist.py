@@ -2,7 +2,7 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 hoist.py pigeon_0_11.py NAME [NAME ...]
+    python3 hoist.py pigeon_0_12.py NAME [NAME ...]
 
 Helpers defined early in ``bootstrap()`` often read holders / dicts that are
 created further down (``dev_phase = [DevPhase.OFF]``). Creating those objects

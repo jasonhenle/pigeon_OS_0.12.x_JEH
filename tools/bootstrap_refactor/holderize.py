@@ -2,9 +2,9 @@
 
 Usage (from ``pigeonSystem``)::
 
-    python3 holderize.py pigeon_0_11.py NAME [NAME ...]
-    python3 holderize.py --main pigeon_0_11.py NAME [NAME ...]
-    python3 holderize.py pigeon_0_11.py NAME:NEW_NAME ...   # holder gets a new name
+    python3 holderize.py pigeon_0_12.py NAME [NAME ...]
+    python3 holderize.py --main pigeon_0_12.py NAME [NAME ...]
+    python3 holderize.py pigeon_0_12.py NAME:NEW_NAME ...   # holder gets a new name
 
 With ``NAME:NEW_NAME`` every rewritten reference becomes ``NEW_NAME[0]`` and the
 initial binding binds ``NEW_NAME`` (e.g. ``main_settings_widget:main_settings_widget_holder``),
