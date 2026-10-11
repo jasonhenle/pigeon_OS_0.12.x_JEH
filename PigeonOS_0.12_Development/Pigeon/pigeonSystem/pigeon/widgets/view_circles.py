@@ -56,6 +56,7 @@ from pigeon.np_layout import (
     CLOCK_VIEW_W,
     DEFAULT_16X9_POSTER_ZONE,
     NOW_PLAYING_ZONES,
+    ZONE11,
     NP_HEADER_CLOCK_SIZE_PX,
     NP_ZONE6_ART_MIN_TOP_PX,
     NowPlayingZone,
@@ -6215,8 +6216,91 @@ class ViewCirclesWidget:
         self._tt_patch_cache[key] = patch
         return patch
 
+    def _zone11_on(self, assignments: tuple[str, ...] | list[str] | None = None) -> bool:
+        """option5 = zone11 layout: TT across zones 1-3, input / volume / TRT in zone 4."""
+        zones = self._assignments() if assignments is None else assignments
+        return bool(zones) and str(zones[0] or "") == "tt_zone11"
+
+    def _draw_zone11_art(self, out: np.ndarray) -> None:
+        """TT (or album art) as large as zones 1-3 allow, with room above it."""
+        z = ZONE11
+        zx, zy, zw, zh = z.xywh
+        # Top padding clears the header clock that sits above zones 1-3.
+        pad_top = max(36, int(round(float(header_clock_baseline_y()) + 10.0 - zy)))
+        pad_side, pad_bottom = 40, 8
+        bx, by = zx + pad_side, zy + pad_top
+        bw, bh = max(1, zw - 2 * pad_side), max(1, zh - pad_top - pad_bottom)
+        patch = self._tt_countdown_tt_patch(z, dest_wh=(bw, bh))
+        if patch is None or patch.size == 0:
+            if self._tt_widget_loading():
+                sh_h = max(56, int(round(bh * 0.42)))
+                _draw_shimmer_rounded_rect(
+                    out,
+                    x=bx + (bw - int(bw * 0.8)) // 2,
+                    y=by + (bh - sh_h) // 2,
+                    w=int(bw * 0.8),
+                    h=sh_h,
+                    radius=int(round(float(WIDGET_SHIMMER_RADIUS))),
+                    recorder=self._record_shimmer,
+                )
+            return
+        ph, pw = int(patch.shape[0]), int(patch.shape[1])
+        _paste_patch_bgra(
+            out, patch, bx + (bw - pw) // 2, by + (bh - ph) // 2
+        )
+
+    def _draw_zone11_info(self, out: np.ndarray) -> None:
+        """Zone 4 strip: input name | volume | TRT in the title's UI color."""
+        zone = _zone_spec(4)
+        zx, zy, zw, zh = (int(v) for v in zone.xywh)
+        self._tt_time_paint_rects.append((zx, zy, zw, zh))
+        recv = self._has_receiver_connection()
+        left = self._receiver_readout() if recv else ""
+        mid = _receiver_volume_display_line(self._state.volume) if recv else ""
+        right = ""
+        if self.content_mode != _CONTENT_MODE_MUSIC:
+            right = format_countdown_timecode(self._state.remaining_text) or ""
+        mid_y = float(zy) + float(zh) * 0.5
+        cols = strip_cast_columns(zone)
+        for (x0, col_w), text in zip(cols[:2], (left, mid)):
+            patch = _cast_line_patch(
+                text, size_px=CAST_ACTOR_SIZE_PX, max_width_px=max(48, int(col_w) - 24)
+            )
+            if patch is not None:
+                _paste_ink_centered(
+                    out,
+                    patch,
+                    float(x0) + float(col_w) * 0.5,
+                    mid_y - int(patch.shape[0]) * 0.5,
+                )
+        if not right or len(cols) < 3:
+            return
+        x0, col_w = cols[2]
+        template = re.sub(r"\d", "8", right)
+        size = _header_trt_size_px(template, max(48, int(col_w) - 24), CAST_ACTOR_SIZE_PX)
+        fill_rgb = tuple(reversed(self._effective_np_theme().ui_bgr))
+        patch = _matching_hhmm_patch(right, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
+        a = patch[:, :, 3] > 8
+        rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
+        if rows.size == 0:
+            return
+        patch = patch[int(rows.min()) : int(rows.max()) + 1, int(pcols.min()) : int(pcols.max()) + 1]
+        ph, pw = patch.shape[:2]
+        _paste_patch_bgra(
+            out,
+            patch,
+            int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0)),
+            int(round(mid_y - ph / 2.0)),
+        )
+
     def _draw_tt_countdowns(self, out: np.ndarray, *, part: str = "all") -> None:
         assignments = self._assignments()
+        if self._zone11_on(assignments):
+            if part in ("all", "art"):
+                self._draw_zone11_art(out)
+            if part in ("all", "time"):
+                self._draw_zone11_info(out)
+            return
         for z in (1, 2, 3):
             if assignments[z - 1] == "tt_countdown":
                 self._draw_tt_countdown(out, zone=z, part=part)
@@ -6609,7 +6693,7 @@ class ViewCirclesWidget:
         self._draw_zone4_overlay_text(out)
         if (
             self.content_mode == _CONTENT_MODE_MUSIC or self._state.is_youtube
-        ) and self._assignments()[3] != ZONE4_VISUALIZER_WIDGET:
+        ) and self._assignments()[3] not in (ZONE4_VISUALIZER_WIDGET, "zone11_info"):
             self._draw_track_titles(out)
         # Status bar is stamped by _overlay_ticking; the static sig ignores its
         # timecodes, so baking it here would leave stale digits under the live ones.

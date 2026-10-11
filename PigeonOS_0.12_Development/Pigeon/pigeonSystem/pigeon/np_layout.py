@@ -69,6 +69,12 @@ NOW_PLAYING_ZONES: dict[int, NowPlayingZone] = {
     ),
 }
 
+# Zone 11 is zones 1–3 combined (TT across the top three columns), used by the
+# option5 = zone11 layout. Not a numbered slot: nothing is assigned to it by index.
+ZONE11 = NowPlayingZone(
+    11, 44.5, 34.0, 1190.0, _ZONE_PORTRAIT_H, (1, 2, 3, 6, 7, 8, 10)
+)
+
 # Widget-local geometry (SVG viewBox space) for zones 1–3.
 CLOCK_LOCAL_CX = 200.0
 CLOCK_LOCAL_CY = 288.11

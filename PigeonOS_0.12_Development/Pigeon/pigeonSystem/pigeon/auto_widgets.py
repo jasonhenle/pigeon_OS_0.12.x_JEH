@@ -35,6 +35,9 @@ CLOCK_SAVER = "clock_saver"
 PAUSESAVER = "pausesaver"
 VISUALIZER_Z6 = "visualizer_zone6"
 CLOCK = "clock"  # zone 3 shows the analog face in the visualizer layout
+# option5 = zone11: TT across zones 1-3 (zone 11), input / volume / TRT in zone 4.
+TT_ZONE11 = "tt_zone11"
+INFO_ZONE11 = "zone11_info"
 
 DEFAULT_NP_ASSIGNMENTS: tuple[str, str, str, str, str] = (
     TT,
@@ -64,6 +67,7 @@ class AutoWidgetSignals:
     paused_for_s: float = 0.0
     pausesaver_art: bool = False
     visualizer_mode: bool = False
+    zone11: bool = False
 
 
 @dataclass(frozen=True)
@@ -282,6 +286,12 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
         if meta == METADATA_OK:
             # A known title stays on now-playing even when the receiver or
             # meters briefly drop. Clocksaver is only for absent / idle content.
+            if sig.zone11:
+                return _plan(
+                    layout=LAYOUT_NP,
+                    assignments=(TT_ZONE11, "", "", INFO_ZONE11, STATUS),
+                    sig=sig,
+                )
             z3 = _zone3_widget(sig) or VOLUME
             return _plan(
                 layout=LAYOUT_NP,
