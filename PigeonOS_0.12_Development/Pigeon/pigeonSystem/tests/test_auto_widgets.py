@@ -390,6 +390,22 @@ class AutoWidgetHelperTests(unittest.TestCase):
         self.assertFalse(pausesaver_hold_from_metadata_class(METADATA_OK))
 
 
+class Zone11Tests(unittest.TestCase):
+    def _sig(self, **kw):
+        base = dict(wan_ok=True, wan_ok_at_startup=True, lan_ok=True, reliable_clock=True,
+                    receiver_ok=True, player_metadata=METADATA_OK, audio_levels=True)
+        base.update(kw)
+        return AutoWidgetSignals(**base)
+
+    def test_zone11_playing_title_layout(self) -> None:
+        plan = resolve_auto_widgets(self._sig(zone11=True))
+        self.assertEqual(plan.assignments, ("tt_zone11", "", "", "zone11_info", "status_bar"))
+
+    def test_zone6_is_the_default(self) -> None:
+        plan = resolve_auto_widgets(self._sig())
+        self.assertEqual(plan.assignments[0], "tt_countdown_16x9")
+
+
 if __name__ == "__main__":
     unittest.main()
 

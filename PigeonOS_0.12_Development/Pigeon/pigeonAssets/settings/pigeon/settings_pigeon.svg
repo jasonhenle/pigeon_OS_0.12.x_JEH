@@ -115,8 +115,8 @@
     <g id="option5_zone6_group">
       <rect id="option5_zone6_button" x="1311.64" y="1130.89" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
       <path id="option5_zone6_shape_ui_color" d="M1407.19,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option5_zone6_b_visualizer_text_white" transform="translate(1337.7564 1278.9484) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">visualizer</tspan></text>
-      <text id="option5_zone6_a_now_playing_text_white" transform="translate(1324.93 1155.5211)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">now playing</tspan></text>
+      <text id="option5_zone6_b_visualizer_text_white" transform="translate(1388.4300 1278.9484) scale(1 1.0638)" text-anchor="middle" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">zone11</tspan></text>
+      <text id="option5_zone6_a_now_playing_text_white" transform="translate(1388.4300 1155.5211)" text-anchor="middle" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">zone6</tspan></text>
       <path id="option5_zone6_toggle_b_shape_white" d="M1403.55,1187.35c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
       <path id="option5_zone6_toggle_a_shape_white" d="M1403.55,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
     </g>
