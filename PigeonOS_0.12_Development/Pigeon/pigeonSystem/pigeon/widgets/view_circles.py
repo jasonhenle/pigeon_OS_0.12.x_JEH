@@ -4574,7 +4574,15 @@ class ViewCirclesWidget:
         zone4_info = zones[3] == "cast_info" or (youtube and zones[3] == "")
         if zone4_info and self._zone4_eq_on() and not self._zone6_viz_on(zones):
             zones = (zones[0], zones[1], zones[2], ZONE4_VISUALIZER_WIDGET, zones[4])
-        if self.volume_takeover_active() and self._state.chrome_visible:
+        # Zone 11 reserves zones 1–3 as one continuous TT canvas and already
+        # reports receiver volume in its zone-4 info strip. Reassigning zone 3
+        # during the temporary volume takeover would paint the volume disc over
+        # the title treatment.
+        if (
+            self.volume_takeover_active()
+            and self._state.chrome_visible
+            and not self._zone11_on(zones)
+        ):
             return (zones[0], zones[1], "volume", zones[3], zones[4])
         return zones
 
