@@ -6249,6 +6249,9 @@ class ViewCirclesWidget:
             out, patch, bx + (bw - pw) // 2, by + (bh - ph) // 2
         )
 
+    # Larger than the cast-info names (CAST_ACTOR_SIZE_PX): the strip has no second line.
+    _ZONE11_INFO_PX = 68
+
     def _draw_zone11_info(self, out: np.ndarray) -> None:
         """Zone 4 strip: input name | volume | TRT in the title's UI color."""
         zone = _zone_spec(4)
@@ -6264,7 +6267,7 @@ class ViewCirclesWidget:
         cols = strip_cast_columns(zone)
         for (x0, col_w), text in zip(cols[:2], (left, mid)):
             patch = _cast_line_patch(
-                text, size_px=CAST_ACTOR_SIZE_PX, max_width_px=max(48, int(col_w) - 24)
+                text, size_px=self._ZONE11_INFO_PX, max_width_px=max(48, int(col_w) - 24)
             )
             if patch is not None:
                 _paste_ink_centered(
@@ -6277,7 +6280,7 @@ class ViewCirclesWidget:
             return
         x0, col_w = cols[2]
         template = re.sub(r"\d", "8", right)
-        size = _header_trt_size_px(template, max(48, int(col_w) - 24), CAST_ACTOR_SIZE_PX)
+        size = _header_trt_size_px(template, max(48, int(col_w) - 24), self._ZONE11_INFO_PX)
         fill_rgb = tuple(reversed(self._effective_np_theme().ui_bgr))
         patch = _matching_hhmm_patch(right, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
         a = patch[:, :, 3] > 8
