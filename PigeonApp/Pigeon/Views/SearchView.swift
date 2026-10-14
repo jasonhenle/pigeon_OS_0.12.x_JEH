@@ -148,7 +148,10 @@ struct SearchView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.always)  // short lists still drag-dismiss the keyboard
         }
+        .contentShape(Rectangle())
+        .onTapGesture { focused = false }
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 8)
     }

@@ -150,6 +150,48 @@ final class ClientTests: XCTestCase {
         catch { XCTAssertTrue(error is PigeonError) }
     }
 
+    func testRoomsDecodeAndRenameRequest() async throws {
+        var seen: [String] = []
+        StubURLProtocol.handler = { req in
+            seen.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            return (200, #"{"current":"loc-1","rooms":[{"id":"loc-1","slot":1,"name":"Theater","current":true},{"id":"loc-2","slot":2,"name":"ROOM 2","current":false}],"presets":["Theater","Office"]}"#.data(using: .utf8)!)
+        }
+        let c = client()
+        let r = try await c.rooms()
+        XCTAssertEqual(r.rooms.map(\.name), ["Theater", "ROOM 2"])
+        XCTAssertEqual(r.rooms.first(where: \.current)?.id, "loc-1")
+        _ = try await c.switchRoom("loc-2")
+        _ = try await c.renameRoom("loc-2", to: "Den")
+        XCTAssertEqual(seen, ["GET /api/v1/rooms", "PUT /api/v1/rooms/current", "PATCH /api/v1/rooms/loc-2"])
+    }
+
+    func testPigeonSettingsDecodeAndPatchOmitsNil() async throws {
+        StubURLProtocol.handler = { req in
+            if req.httpMethod == "PATCH" {
+                let body = req.httpBodyStream.map { s -> Data in
+                    s.open(); defer { s.close() }
+                    var d = Data(); var buf = [UInt8](repeating: 0, count: 1024)
+                    while s.hasBytesAvailable { let n = s.read(&buf, maxLength: 1024); if n <= 0 { break }; d.append(buf, count: n) }
+                    return d
+                } ?? req.httpBody ?? Data()
+                let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+                XCTAssertEqual(Set(obj?.keys.map { $0 } ?? []), ["options", "ui_color"])
+                XCTAssertEqual((obj?["options"] as? [String: String])?["time_format"], "24")
+            }
+            return (200, """
+            {"version":"0.12.15","zip":"21710","timezone":"America/New_York","timezone_choices":["America/New_York"],
+             "options":{"time_format":"24"},"option_values":{"time_format":["12","24"]},
+             "ui_color":"green","ui_color_choices":["blue","green"]}
+            """.data(using: .utf8)!)
+        }
+        let c = client()
+        let s = try await c.pigeonSettings()
+        XCTAssertEqual(s.zip, "21710")
+        XCTAssertEqual(s.optionValues["time_format"], ["12", "24"])
+        XCTAssertEqual(s.uiColor, "green")
+        _ = try await c.patchPigeonSettings(.init(zip: nil, timezone: nil, options: ["time_format": "24"], uiColor: "green"))
+    }
+
     func testSuggestionSubtitle() {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")

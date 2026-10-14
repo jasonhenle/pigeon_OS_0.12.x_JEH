@@ -47,6 +47,8 @@ class ControlService:
         metadata_provider: Callable[[], Mapping[str, Any] | None] | None = None,
         fetch_provider: Callable[[], dict[str, Any]] | None = None,
         respawn: Callable[[str, str], object] | None = None,
+        apply_location: Callable[[], object] | None = None,
+        apply_settings: Callable[[], object] | None = None,
     ) -> None:
         self.auth = auth or AuthStore()
         self.hub = hub or EventHub()
@@ -56,6 +58,8 @@ class ControlService:
         self._metadata = metadata_provider or (lambda: None)
         self._fetch = fetch_provider or (lambda: {})
         self._respawn = respawn
+        self._apply_location = apply_location
+        self._apply_settings = apply_settings
         # Called with the new TXT record whenever it changes (claimed, renamed).
         self.txt_listeners: list[Callable[[dict[str, str]], object]] = []
 
@@ -146,6 +150,10 @@ class ControlService:
             return self._search(method, route, query, body)
         elif route.startswith("/now-playing"):
             return self._now_playing(method, route, body)
+        elif route.startswith("/rooms"):
+            return self._rooms(method, route, body)
+        elif route == "/pigeon-settings":
+            return self._pigeon_settings(method, body)
         elif route == "/controllers":
             if method == "GET":
                 return 200, {"controllers": self.auth.controllers()}
@@ -331,6 +339,63 @@ class ControlService:
                 self._do_respawn(detected, str(md.get("prefer") or "auto"))
             self.hub.publish("override", {"active": False})
             return 200, self._override_detail()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    # ------------------------------------------------------- rooms / settings
+    def _on_ui(self, fn: Callable[[], object] | None) -> None:
+        if fn is not None:
+            self._run_on_ui(fn)
+
+    def _rooms(self, method: str, route: str, body: Any) -> Response:
+        from pigeon.control_api import device_settings as ds
+
+        if not profile.has_capability("rooms"):
+            return _err(422, "unsupported", "rooms not supported on this device.")
+        if route == "/rooms" and method == "GET":
+            return 200, ds.read_rooms()
+        if route == "/rooms/current" and method == "PUT":
+            rid = body.get("id") if isinstance(body, dict) else None
+            if not rid:
+                return _err(400, "bad_request", "id is required.", fields=["id"])
+            try:
+                ds.switch_room(str(rid))
+            except KeyError:
+                return _err(404, "not_found", "Unknown room.")
+            self._on_ui(self._apply_location)
+            self.hub.publish("settings", {"changed": ["rooms"]})
+            return 200, ds.read_rooms()
+        m = re.fullmatch(r"/rooms/([^/]+)", route)
+        if m and method == "PATCH":
+            if not isinstance(body, dict) or "name" not in body:
+                return _err(400, "bad_request", "Expected {\"name\": ...}.", fields=["name"])
+            try:
+                ds.rename_room(m.group(1), body["name"])
+            except ValueError as exc:
+                return _err(400, "bad_request", str(exc), fields=["name"])
+            except KeyError:
+                return _err(404, "not_found", "Unknown room.")
+            self._on_ui(self._apply_location)
+            self.hub.publish("settings", {"changed": ["rooms"]})
+            return 200, ds.read_rooms()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    def _pigeon_settings(self, method: str, body: Any) -> Response:
+        from pigeon.control_api import device_settings as ds
+
+        if not profile.has_capability("pigeon_settings"):
+            return _err(422, "unsupported", "pigeon_settings not supported on this device.")
+        if method == "GET":
+            return 200, ds.read_pigeon_settings()
+        if method == "PATCH":
+            if not isinstance(body, dict) or not body:
+                return _err(400, "bad_request", "JSON object required.")
+            try:
+                ds.patch_pigeon_settings(body)
+            except ValueError as exc:
+                return _err(400, "bad_request", "Invalid value.", fields=str(exc).split(","))
+            self._on_ui(self._apply_settings)
+            self.hub.publish("settings", {"changed": sorted(body)})
+            return 200, ds.read_pigeon_settings()
         return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _do_respawn(self, query: str, prefer: str) -> None:
