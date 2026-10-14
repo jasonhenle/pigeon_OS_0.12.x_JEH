@@ -1,8 +1,12 @@
 """User corrections for what Pigeon searches TMDb for (companion app).
 
-Two kinds of correction, both tied to the content that is playing *now* (they
-drop themselves when the content changes, so a fix never leaks onto the next
-show):
+A correction is **remembered**: it is stored on disk against the title keys the
+content was detected under, so the same wrongly-detected title is fixed every
+time it plays (and after a restart). It applies whenever the detected metadata
+shares a title key with a stored correction, and never to different content.
+``DELETE`` (Reset) forgets it.
+
+Two kinds of correction:
 
 * **edited fields** — the metadata that feeds the query (title, series, episode,
   Apple TV search text, year, movie/tv) is replaced, then the normal query
@@ -16,6 +20,7 @@ place the pipeline sees an override.
 
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
@@ -36,14 +41,13 @@ INPUT_FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("album", "Album", False),
 )
 EDITABLE = frozenset(k for k, _l, ed in INPUT_FIELDS if ed)
-_SIG_KEYS = ("app_id", "app_name", "title", "series_name", "episode_title", "query")
 _YEAR_RE = re.compile(r"\((19|20)\d{2}\)\s*$")
 _KINDS = ("auto", "movie", "tv")
 
 
 @dataclass
 class Override:
-    sig: str
+    keys: list[str]
     query: str
     prefer: str = "auto"
     fields: dict[str, str] = field(default_factory=dict)
@@ -66,9 +70,78 @@ _LOCK = threading.RLock()
 _CURRENT: Override | None = None
 
 
-def signature(md: Mapping[str, Any] | None) -> str:
+_FILE = "now_playing_corrections.json"
+_MAX_STORED = 200
+
+
+def _norm(s: Any) -> str:
+    try:
+        from pigeon.tmdb_poster import _norm_query
+
+        return _norm_query(str(s or ""))
+    except Exception:
+        return " ".join(str(s or "").casefold().split())
+
+
+def content_keys(md: Mapping[str, Any] | None) -> list[str]:
+    """Normalized title strings this content is known by (any shared key = same content).
+
+    Mirrors how the pipeline decides two polls are the same title: Apple TV may
+    alternate the show name and the episode title, so every candidate counts.
+    """
     md = md or {}
-    return "\x1f".join(str(md.get(k) or "").strip().casefold() for k in _SIG_KEYS)
+    raw: list[str] = [str(md.get(k) or "") for k in ("title", "series_name", "episode_title", "query")]
+    try:
+        from pigeon.raw_title import tmdb_query_candidates_from_metadata
+
+        raw += list(tmdb_query_candidates_from_metadata(md))
+    except Exception:
+        pass
+    out: list[str] = []
+    for r in raw:
+        n = _norm(r)
+        if len(n) >= 3 and n not in out:
+            out.append(n)
+    return out
+
+
+def _same_content(a: list[str], b: list[str]) -> bool:
+    return bool(set(a) & set(b))
+
+
+def _store_path():
+    from pigeon.runtime_paths import pigeon_state_dir
+
+    return pigeon_state_dir() / _FILE
+
+
+def _load_store() -> list[dict[str, Any]]:
+    try:
+        raw = json.loads(_store_path().read_text(encoding="utf-8"))
+        rows = raw.get("corrections") if isinstance(raw, dict) else None
+        return [r for r in rows if isinstance(r, dict) and r.get("keys")] if isinstance(rows, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _save_store(rows: list[dict[str, Any]]) -> None:
+    try:
+        p = _store_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"corrections": rows[-_MAX_STORED:]}), encoding="utf-8")
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
+def _log(msg: str) -> None:
+    try:
+        from pigeon.pi_diagnostics import append_pigeon_log
+
+        append_pigeon_log(f"correction: {msg}")
+    except Exception:
+        pass
 
 
 def input_rows(md: Mapping[str, Any] | None) -> list[dict[str, Any]]:
@@ -118,7 +191,8 @@ def get() -> Override | None:
         return _CURRENT
 
 
-def clear() -> None:
+def _deactivate() -> None:
+    """Stop applying the active correction (it stays stored)."""
     global _CURRENT
     with _LOCK:
         _CURRENT = None
@@ -130,6 +204,54 @@ def clear() -> None:
         pass
 
 
+def clear(md: Mapping[str, Any] | None = None, *, forget: bool = False) -> None:
+    """Stop applying the correction; with ``forget`` also delete it from disk.
+
+    ``forget`` removes every stored correction that shares a title key with
+    ``md`` (the content on screen) or with the active correction.
+    """
+    ov = get()
+    keys = set(content_keys(md)) | set(ov.keys if ov else [])
+    _deactivate()
+    if forget and keys:
+        rows = _load_store()
+        keep = [r for r in rows if not (keys & set(r.get("keys") or []))]
+        if len(keep) != len(rows):
+            _save_store(keep)
+            _log(f"forgot {len(rows) - len(keep)} stored correction(s)")
+
+
+def _activate(ov: Override) -> None:
+    global _CURRENT
+    if ov.pick:
+        from pigeon.tmdb_poster import set_forced_pick
+
+        set_forced_pick(ov.pick["kind"], int(ov.pick["tmdb_id"]), ov.query, str(ov.pick.get("title") or ""))
+    with _LOCK:
+        _CURRENT = ov
+
+
+def _remember(ov: Override) -> None:
+    rows = _load_store()
+    mine = set(ov.keys)
+    rows = [r for r in rows if not (mine & set(r.get("keys") or []))]
+    rows.append({
+        "keys": list(ov.keys), "query": ov.query, "prefer": ov.prefer, "fields": ov.fields,
+        "year": ov.year, "pick": ov.pick, "created": ov.created,
+    })
+    _save_store(rows)
+
+
+def _from_row(row: Mapping[str, Any]) -> Override:
+    return Override(
+        keys=list(row.get("keys") or []), query=str(row.get("query") or ""),
+        prefer=_prefer(row.get("prefer")),
+        fields=dict(row.get("fields") or {}), year=str(row.get("year") or ""),
+        pick=dict(row["pick"]) if isinstance(row.get("pick"), dict) else None,
+        created=float(row.get("created") or time.time()),
+    )
+
+
 def set_fields(
     md: Mapping[str, Any] | None,
     fields: Mapping[str, Any] | None,
@@ -137,20 +259,23 @@ def set_fields(
     year: str | int | None = None,
     kind: Any = "auto",
 ) -> Override:
-    """Replace metadata fields and search with the result."""
-    global _CURRENT
+    """Replace metadata fields and search with the result (remembered)."""
     changed = any(k in EDITABLE and str(v).strip() for k, v in (fields or {}).items())
     if not changed and not str(year or "").strip() and _prefer(kind) == "auto":
         raise ValueError("no changes to apply")
     q = derive_query(md, fields, year)
     if not q:
         raise ValueError("nothing to search for")
+    keys = content_keys(md)
+    if not keys:
+        raise ValueError("nothing is playing")
     clean = {k: str(v).strip() for k, v in (fields or {}).items() if k in EDITABLE}
-    ov = Override(sig=signature(md), query=q, prefer=_prefer(kind), fields=clean,
+    ov = Override(keys=keys, query=q, prefer=_prefer(kind), fields=clean,
                   year=str(year or "").strip())
-    clear()
-    with _LOCK:
-        _CURRENT = ov
+    _deactivate()
+    _activate(ov)
+    _remember(ov)
+    _log(f"saved edit for {keys[:2]} -> {q!r} prefer={ov.prefer}")
     return ov
 
 
@@ -162,31 +287,30 @@ def set_pick(
     tmdb_id: int,
     year: str | int | None = None,
 ) -> Override:
-    """Force one specific TMDb title for the current content."""
-    global _CURRENT
-    from pigeon.tmdb_poster import set_forced_pick
-
+    """Force one specific TMDb title for this content (remembered)."""
     title = " ".join(str(title or "").split())
     if not title:
         raise ValueError("title is required")
     if kind not in ("movie", "tv"):
         raise ValueError("kind must be movie or tv")
+    if int(tmdb_id) <= 0:
+        raise ValueError("tmdb_id must be positive")
+    keys = content_keys(md)
+    if not keys:
+        raise ValueError("nothing is playing")
     y = str(year or "").strip()
     q = f"{title} ({y})" if y.isdigit() and len(y) == 4 else title
-    clear()
-    set_forced_pick(kind, int(tmdb_id), q, title)
-    ov = Override(sig=signature(md), query=q, prefer=kind, year=y,
+    ov = Override(keys=keys, query=q, prefer=kind, year=y,
                   pick={"title": title, "kind": kind, "tmdb_id": int(tmdb_id), "year": y or None})
-    with _LOCK:
-        _CURRENT = ov
+    _deactivate()
+    _activate(ov)
+    _remember(ov)
+    _log(f"saved pick for {keys[:2]} -> {title!r} tmdb={tmdb_id} {kind}")
     return ov
 
 
 def apply_override(query: str, prefer: str, md: Mapping[str, Any] | None) -> tuple[str, str]:
-    """Hook for ``spawn_tmdb_poster_fetch``: swap in the user's correction if it still applies."""
-    ov = get()
-    if ov is None:
-        return query, prefer
+    """Hook for ``spawn_tmdb_poster_fetch``: swap in a remembered correction if it applies."""
     try:
         from pigeon import manual_search
 
@@ -194,7 +318,19 @@ def apply_override(query: str, prefer: str, md: Mapping[str, Any] | None) -> tup
             return query, prefer  # manual SEARCH spawns are not detected content
     except Exception:
         pass
-    if signature(md) != ov.sig:
-        clear()  # different content now: the fix was for the previous one
+    keys = content_keys(md)
+    ov = get()
+    if ov is not None:
+        if not keys or _same_content(ov.keys, keys):
+            return ov.query, ov.prefer
+        _log(f"content changed, stopped applying {ov.query!r}")
+        _deactivate()
+    if not keys:
         return query, prefer
-    return ov.query, ov.prefer
+    for row in reversed(_load_store()):
+        if _same_content(list(row.get("keys") or []), keys):
+            found = _from_row(row)
+            _activate(found)
+            _log(f"re-applied remembered correction {found.query!r} for {keys[:2]}")
+            return found.query, found.prefer
+    return query, prefer

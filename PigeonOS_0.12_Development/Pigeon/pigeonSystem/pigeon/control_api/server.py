@@ -319,8 +319,8 @@ class ControlService:
             self.hub.publish("override", ov.summary())
             return 200, self._override_detail()
         if route == "/now-playing/override" and method == "DELETE":
-            npo.clear()
             md = self._metadata() or {}
+            npo.clear(md, forget=True)
             try:
                 from pigeon.raw_title import resolve_metadata_tmdb_query
 
