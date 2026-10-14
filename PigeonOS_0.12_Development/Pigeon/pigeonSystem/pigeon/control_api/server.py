@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pigeon import manual_search as ms
 from pigeon.control_api import profile
-from pigeon.control_api.auth import AuthStore
+from pigeon.control_api.auth import DISPLAY_TTL_S, AuthStore
 from pigeon.control_api.events import EventHub, format_event
 
 PREFIX = "/api/v1"
@@ -109,6 +109,13 @@ class ControlService:
             return 200, self._hello_body()
         if route == "/claim" and method == "POST":
             return self._claim(body)
+        if route == "/pair/start" and method == "POST":
+            if not self.auth.request_display():
+                return _err(403, "already_claimed", "Device already has a controller.")
+            return 200, {"expires_in_s": int(DISPLAY_TTL_S)}
+        if route == "/pair/cancel" and method == "POST":
+            self.auth.cancel_display()
+            return 204, None
 
         if self.auth.verify(token) is None:
             return _err(401, "unauthorized", "Missing or invalid token.")

@@ -48,6 +48,12 @@ def claim_code_to_show() -> str:
         return ""
 
 
+def display_code() -> str:
+    """Code the device should be showing full screen now (phone is mid-pairing), or ``""``."""
+    svc = _service
+    return svc.auth.display_code() if svc is not None else ""
+
+
 def start(
     *,
     status_provider: Callable[[], dict[str, Any]] | None = None,

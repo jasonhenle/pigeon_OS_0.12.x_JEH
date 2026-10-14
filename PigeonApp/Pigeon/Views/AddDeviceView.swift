@@ -81,7 +81,20 @@ struct AddDeviceView: View {
             manualError = "Couldn't reach \(d.name). Try adding it by address."
             return
         }
-        target = Target(host: r.host, port: r.port, name: d.name, product: d.product, deviceID: d.id)
+        await begin(Target(host: r.host, port: r.port, name: d.name, product: d.product, deviceID: d.id))
+    }
+
+    /// Make the device put its code on its own screen, then open the code entry sheet.
+    private func begin(_ t: Target) async {
+        do {
+            try await PigeonClient(host: t.host, port: t.port).pairStart()
+            manualError = nil
+            target = t
+        } catch PigeonError.api(_, "already_claimed", _) {
+            manualError = "\(t.name) already has a controller. Use Invite from the phone it's paired with."
+        } catch {
+            manualError = error.localizedDescription
+        }
     }
 
     private func pickManual() async {
@@ -91,8 +104,7 @@ struct AddDeviceView: View {
         let port = parts.count > 1 ? Int(parts[1]) ?? 8780 : 8780
         do {
             let hello = try await PigeonClient(host: host, port: port).hello()
-            manualError = nil
-            target = Target(host: host, port: port, name: hello.name, product: hello.product, deviceID: hello.id)
+            await begin(Target(host: host, port: port, name: hello.name, product: hello.product, deviceID: hello.id))
         } catch { manualError = error.localizedDescription }
     }
 }
@@ -113,7 +125,7 @@ struct ClaimView: View {
             Theme.canvas.ignoresSafeArea()
             VStack(spacing: 22) {
                 LCDLabel(text: target.name, size: 34)
-                Text("Enter the code on your Pigeon's screen.\nSettings → Pigeon → App code")
+                Text("Enter the code now showing on \(target.name)'s screen.")
                     .font(Theme.ui(16)).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.center)
                 TextField("000000", text: $code)
                     .font(Theme.lcd(64))
@@ -133,6 +145,10 @@ struct ClaimView: View {
             .padding(.top, 32)
         }
         .task { focused = true }
+        .onDisappear {
+            // Backing out (or finishing) clears the on-screen code. A successful claim already did.
+            Task { await PigeonClient(host: target.host, port: target.port).pairCancel() }
+        }
         .presentationDetents([.medium])
     }
 
