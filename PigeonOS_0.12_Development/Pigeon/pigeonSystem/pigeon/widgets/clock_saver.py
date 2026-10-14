@@ -1890,6 +1890,8 @@ def clock_saver_composite_bgra(
     return (frame, full_rect), (_EMPTY_PATCH.copy(), (0, 0, 1, 1))
 
 
+# Brightest channel below this is backdrop, not clock ink (backdrop is ~#0F0F10).
+_CLOCK_INK_MIN_CHANNEL = 48
 _POSTER_SPLIT_MARGIN = 40
 _POSTER_SPLIT_GAP = 40
 _POSTER_ASPECT = 2.0 / 3.0
@@ -1922,7 +1924,12 @@ def compose_clock_with_poster(
     fh, fw = int(frame.shape[0]), int(frame.shape[1])
     clock_box, (px, py, pw, ph) = clock_saver_poster_split_boxes(fw, fh)
     out = np.zeros_like(frame)
-    _contain_patch(out, frame, clock_box)
+    # The face layer carries a faint dark backdrop (alpha ~30%) behind the
+    # digits. Full-frame it is invisible, but cropped and shrunk it becomes a
+    # visible box with an edge. Keep only the lit ink.
+    clock = frame.copy()
+    clock[clock[:, :, :3].max(axis=2) < _CLOCK_INK_MIN_CHANNEL, 3] = 0
+    _contain_patch(out, clock, clock_box)
 
     sh, sw = int(poster_bgr.shape[0]), int(poster_bgr.shape[1])
     if sh < 1 or sw < 1:
