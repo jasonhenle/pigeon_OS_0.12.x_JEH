@@ -153,6 +153,8 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 | `now_playing` | ✓ | ✓ | `/status` playback fields |
 | `manual_search` | ✓ | ✓ | `/search/*` |
 | `now_playing_override` | ✓ | ✓ | `/now-playing/*` |
+| `rooms` | ✓ | ✓ | `/rooms*` |
+| `pigeon_settings` | ✓ | – | `/pigeon-settings` |
 | `clock` | ✓ | – | `/clock` |
 | `locations` | ✓ | ✓ | `/locations`, `/location/room` |
 | `wifi` | ✓ | ✓ | `/wifi*` |
@@ -327,6 +329,48 @@ A **location** groups saved devices, Wi-Fi and room name, mirroring the v2 locat
 
 `room` is a free string; `GET /location/rooms` returns the preset names (`LOCATION_PRESET_ROOM_NAMES`) the UI offers as suggestions.
 
+### 6.3a Rooms and Pigeon-page settings *(capabilities `rooms`, `pigeon_settings`)* — implemented
+
+These mirror what `settings_main` and `settings_pigeon` offer on the device. A **room** is one of three fixed slots (the same three the screens show); players, receivers and Wi-Fi belong to a room. This supersedes the more general `/locations` sketch in 6.3 for the clock product.
+
+`GET /rooms`
+
+```json
+{
+  "current": "d0dd6e66ac6d4d47a0ab23ccec16beda",
+  "rooms": [
+    { "id": "d0dd6e66...", "slot": 1, "name": "Theater", "current": true },
+    { "id": "d433b0...",   "slot": 2, "name": "ROOM 2",  "current": false },
+    { "id": "ffc0db...",   "slot": 3, "name": "ROOM 3",  "current": false }
+  ],
+  "presets": ["Living room", "Bedroom", "Office", "Kitchen", "Basement", "Theater"]
+}
+```
+
+`PUT /rooms/current` with `{ "id": "..." }` switches room. The device reloads that room's players, receivers and Wi-Fi exactly as the on-screen switch does. `404` for an unknown id.
+
+`PATCH /rooms/{id}` with `{ "name": "Theater" }` renames (1–24 characters). Both return the `GET /rooms` body.
+
+`GET /pigeon-settings`
+
+```json
+{
+  "version": "0.12.16",
+  "zip": "21710",
+  "timezone": "America/New_York",
+  "timezone_choices": ["America/New_York", "America/Chicago"],
+  "options": { "time_format": "12", "temp_format": "f", "color_format": "color",
+               "zone4_mode": "info", "zone6_mode": "now_playing" },
+  "option_values": { "time_format": ["12", "24"], "temp_format": ["f", "c"],
+                     "color_format": ["color", "dark"], "zone4_mode": ["info", "visualizer"],
+                     "zone6_mode": ["now_playing", "zone11"] },
+  "ui_color": "blue",
+  "ui_color_choices": ["blue", "green", "yellow", "orange", "red", "grey", "white"]
+}
+```
+
+`PATCH /pigeon-settings` accepts any subset of `zip` (5 digits), `timezone` (one of `timezone_choices`), `options` (a map of option → allowed value) and `ui_color`. Validation is all-or-nothing: on `400` nothing is changed and `error.details.fields` names the offenders (`options.temp_format`, `zip`, ...). Setting `zip` also looks the timezone up in the background, so re-read after a few seconds. The response is the new `GET` body. On the device the on-screen settings reload immediately.
+
 ### 6.4 Wi-Fi *(capability `wifi`)*
 
 | Method & path | Purpose |
@@ -453,6 +497,10 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | GET | `/now-playing/detail` | token | `now_playing_override` |
 | POST | `/now-playing/preview` | token | `now_playing_override` |
 | PUT, DELETE | `/now-playing/override` | token | `now_playing_override` |
+| GET | `/rooms` | token | `rooms` |
+| PUT | `/rooms/current` | token | `rooms` |
+| PATCH | `/rooms/{id}` | token | `rooms` |
+| GET, PATCH | `/pigeon-settings` | token | `pigeon_settings` |
 | GET, PATCH | `/clock` | token | `clock` |
 | GET, POST | `/locations` | token | `locations` |
 | PATCH, DELETE | `/locations/{id}` | token | `locations` |

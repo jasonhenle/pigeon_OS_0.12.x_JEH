@@ -143,6 +143,24 @@ struct PigeonClient {
         try await send("DELETE", "/now-playing/override")
     }
 
+    // MARK: Rooms and Pigeon-page settings
+
+    func rooms() async throws -> RoomsResponse { try await send("GET", "/rooms") }
+
+    func switchRoom(_ id: String) async throws -> RoomsResponse {
+        try await send("PUT", "/rooms/current", body: RoomIDRequest(id: id))
+    }
+
+    func renameRoom(_ id: String, to name: String) async throws -> RoomsResponse {
+        try await send("PATCH", "/rooms/\(id)", body: RoomNameRequest(name: name))
+    }
+
+    func pigeonSettings() async throws -> PigeonSettings { try await send("GET", "/pigeon-settings") }
+
+    func patchPigeonSettings(_ patch: PigeonSettingsPatch) async throws -> PigeonSettings {
+        try await send("PATCH", "/pigeon-settings", body: patch)
+    }
+
     // MARK: Events (SSE)
 
     func events() -> AsyncThrowingStream<DeviceEvent, Error> {

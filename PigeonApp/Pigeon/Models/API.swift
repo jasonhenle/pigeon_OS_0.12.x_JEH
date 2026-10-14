@@ -183,3 +183,39 @@ struct OverrideRequest: Codable {
     var kind: String?
     var pick: Pick?
 }
+
+// MARK: Rooms and Pigeon-page settings
+
+struct Room: Codable, Equatable, Identifiable {
+    var id: String
+    var slot: Int
+    var name: String
+    var current: Bool
+}
+
+struct RoomsResponse: Codable, Equatable {
+    var current: String
+    var rooms: [Room]
+    var presets: [String]
+}
+
+struct PigeonSettings: Codable, Equatable {
+    var version: String
+    var zip: String?
+    var timezone: String?
+    var timezoneChoices: [String]
+    var options: [String: String]
+    var optionValues: [String: [String]]
+    var uiColor: String?
+    var uiColorChoices: [String]
+}
+
+struct PigeonSettingsPatch: Codable {
+    var zip: String?
+    var timezone: String?
+    var options: [String: String]?
+    var uiColor: String?
+}
+
+struct RoomIDRequest: Codable { var id: String }
+struct RoomNameRequest: Codable { var name: String }

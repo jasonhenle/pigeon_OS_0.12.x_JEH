@@ -836,6 +836,57 @@ def run(ctx) -> None:
                 "display_title": (active_tmdb_display_title[0] or "").strip() or None,
             }
 
+        def _control_api_widget():
+            w = main_settings_widget_holder[0]
+            return w if w is not None else None
+
+        def _control_api_repaint() -> None:
+            w = _control_api_widget()
+            if w is not None:
+                w.invalidate()
+            skip_cache[0] = None
+            try:
+                ctx.render_once()
+            except Exception:
+                pass
+
+        def _control_api_apply_location() -> None:
+            """A room was switched or renamed over the API: mirror what the screen does."""
+            try:
+                _apply_persisted_location_to_runtime()
+            except Exception:
+                pass
+            w = _control_api_widget()
+            if w is not None:
+                from pigeon.app_state import read_current_location_name
+
+                st = w.state
+                for step in (
+                    lambda: st.load_saved_box_devices(),
+                    lambda: setattr(st, "location_name", read_current_location_name()),
+                    lambda: st.reload_location_wifi(),
+                    lambda: st.refresh_location_slots(),
+                ):
+                    try:
+                        step()
+                    except Exception:
+                        pass
+            _control_api_repaint()
+
+        def _control_api_apply_settings() -> None:
+            """Pigeon-page values changed over the API: reload the screen's copy."""
+            w = _control_api_widget()
+            if w is not None:
+                try:
+                    from pigeon.widgets.options_settings import load_options_into_state
+                    from pigeon.widgets.ui_color_settings import load_persisted_theme_into_state
+
+                    load_options_into_state(w.state)
+                    load_persisted_theme_into_state(w.state)
+                except Exception:
+                    pass
+            _control_api_repaint()
+
         def _control_api_respawn(query: str, prefer: str) -> None:
             spawn_tmdb_poster_fetch(query, prefer=prefer or "auto", force=True)
 
@@ -845,6 +896,8 @@ def run(ctx) -> None:
             metadata_provider=_control_api_metadata,
             fetch_provider=_control_api_fetch,
             respawn=_control_api_respawn,
+            apply_location=_control_api_apply_location,
+            apply_settings=_control_api_apply_settings,
         ) is not None:
             from pigeon.control_api.pairing_overlay import PairingOverlay
 
