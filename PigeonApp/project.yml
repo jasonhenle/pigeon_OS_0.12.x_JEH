@@ -1,0 +1,52 @@
+name: Pigeon
+options:
+  bundleIdPrefix: com.jasonhenle
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Pigeon:
+    type: application
+    platform: iOS
+    sources: [Pigeon]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jasonhenle.pigeon
+        PRODUCT_NAME: Pigeon
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Pigeon/Info.plist
+    info:
+      path: Pigeon/Info.plist
+      properties:
+        CFBundleDisplayName: Pigeon
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIAppFonts: [Digital-7.ttf, SharpSansMedium.otf, SharpSansSemibold.otf]
+        NSLocalNetworkUsageDescription: Pigeon finds and controls the Pigeon devices on your home network.
+        NSBonjourServices: [_pigeon._tcp]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+  PigeonTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [PigeonTests]
+    dependencies:
+      - target: Pigeon
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.jasonhenle.pigeon.tests
+schemes:
+  Pigeon:
+    build:
+      targets:
+        Pigeon: all
+    test:
+      targets: [PigeonTests]
