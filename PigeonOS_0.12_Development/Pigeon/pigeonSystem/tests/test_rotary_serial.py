@@ -322,3 +322,22 @@ class DispatchReceiveStampTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NavEncoderDirectionDefaultTests(unittest.TestCase):
+    def test_nav_gpio_default_is_not_inverted_and_volume_is_unchanged(self) -> None:
+        import os
+        from unittest import mock
+
+        from pigeon import rotary_serial as rs
+
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("PIGEON_ROTARY_GPIO_INVERT", "PIGEON_VOLUME_GPIO_INVERT")
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertFalse(rs._env_gpio_invert())
+            self.assertTrue(rs._env_volume_gpio_invert())
+        with mock.patch.dict(os.environ, {**env, "PIGEON_ROTARY_GPIO_INVERT": "1"}, clear=True):
+            self.assertTrue(rs._env_gpio_invert())
