@@ -426,7 +426,7 @@ struct NowPlayingFixView: View {
             }
             if d.override.active {
                 HStack {
-                    LCDLabel(text: d.override.pick != nil ? "Picked by you" : "Edited by you", size: 16, color: Theme.ok)
+                    LCDLabel(text: d.override.pick != nil ? "Picked by you · remembered" : "Edited by you · remembered", size: 16, color: Theme.ok)
                     Spacer()
                     Button("Reset") { Task { await model.reset() } }.font(Theme.uiBold(15))
                 }

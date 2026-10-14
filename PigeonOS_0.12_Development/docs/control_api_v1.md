@@ -244,7 +244,7 @@ Query must be ≥ 2 characters (`400` otherwise). `limit` 1–6, default 3 (the 
 
 ### 6.1a Now playing: inspect and correct the match *(capability `now_playing_override`)*
 
-Shows the metadata that fed the TMDb query and lets the user correct it when Pigeon picked the wrong title. A correction applies **only to the content playing now**: when the content changes, it drops itself (so a fix never leaks onto the next show). It is held in memory and does not survive a restart.
+Shows the metadata that fed the TMDb query and lets the user correct it when Pigeon picked the wrong title. A correction is **remembered**: it is stored on the device against the title keys the content was detected under (the title, series, episode and Apple TV search text, normalized), so the same wrongly-detected title is corrected every time it plays, and after a restart. It applies whenever the detected metadata shares a key with a stored correction, so Apple TV alternating between the show name and an episode title does not lose it. It never applies to different content. `DELETE` forgets it.
 
 `GET /now-playing/detail`
 

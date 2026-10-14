@@ -65,12 +65,54 @@ class DeriveTests(_Base):
 
 
 class OverrideLifecycleTests(_Base):
-    def test_applies_while_content_matches_then_drops(self) -> None:
+    def test_applies_to_same_content_not_to_different_content(self) -> None:
         npo.set_fields(MD, {"query": "Heat"}, year=1995, kind="movie")
         self.assertEqual(npo.apply_override("The Final Show", "auto", MD), ("Heat (1995)", "movie"))
         other = {**MD, "title": "Something Else", "query": "Something Else"}
         self.assertEqual(npo.apply_override("Something Else", "auto", other), ("Something Else", "auto"))
+        self.assertIsNone(npo.get())  # stopped applying, but still remembered
+
+    def test_correction_is_remembered_across_content_and_restart(self) -> None:
+        npo.set_pick(MD, title="Heat", kind="movie", tmdb_id=949, year=1995)
+        other = {**MD, "title": "Something Else", "query": "Something Else"}
+        npo.apply_override("Something Else", "auto", other)
         self.assertIsNone(npo.get())
+        # the original content comes back: re-applied from disk, forced id restored
+        self.assertEqual(npo.apply_override("The Final Show", "auto", MD), ("Heat (1995)", "movie"))
+        self.assertEqual(npo.get().pick["tmdb_id"], 949)
+        # process restart: nothing in memory, the store still has it
+        npo._CURRENT = None
+        tp.clear_forced_picks()
+        self.assertEqual(npo.apply_override("The Final Show", "auto", MD), ("Heat (1995)", "movie"))
+        detail = {"id": 949, "title": "Heat", "poster_path": "/h.jpg"}
+        with mock.patch.object(tp, "_tmdb_movie_detail", return_value=detail):
+            item, kind = tp._forced_pick_item("Heat (1995)")
+        self.assertEqual((item["id"], kind), (949, "movie"))
+
+    def test_survives_apple_tv_alternating_show_and_episode_titles(self) -> None:
+        npo.set_pick(MD, title="Heat", kind="movie", tmdb_id=949, year=1995)
+        # poll N+1: Apple TV reports the episode line as the title, same query
+        alt = {**MD, "title": "A Totally Different Episode Line"}
+        self.assertEqual(npo.apply_override("The Final Show", "auto", alt), ("Heat (1995)", "movie"))
+        # idle poll with no metadata does not drop it either
+        self.assertEqual(npo.apply_override("", "auto", None), ("Heat (1995)", "movie"))
+        self.assertIsNotNone(npo.get())
+
+    def test_reset_forgets_for_good(self) -> None:
+        npo.set_fields(MD, {"query": "Heat"})
+        npo.clear(MD, forget=True)
+        self.assertEqual(npo.apply_override("The Final Show", "auto", MD), ("The Final Show", "auto"))
+        self.assertEqual(npo._load_store(), [])
+
+    def test_new_correction_replaces_old_for_same_content(self) -> None:
+        npo.set_fields(MD, {"query": "Heat"})
+        npo.set_pick(MD, title="Taylor Swift: The Eras Tour", kind="movie", tmdb_id=1114513, year=2023)
+        self.assertEqual(len(npo._load_store()), 1)
+        self.assertEqual(npo.apply_override("The Final Show", "auto", MD)[0], "Taylor Swift: The Eras Tour (2023)")
+
+    def test_needs_something_playing(self) -> None:
+        with self.assertRaises(ValueError):
+            npo.set_pick({}, title="Heat", kind="movie", tmdb_id=949)
 
     def test_not_applied_to_manual_search_spawns(self) -> None:
         npo.set_fields(MD, {"query": "Heat"})
