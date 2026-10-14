@@ -21,7 +21,8 @@ Transports:
 Optional: ``PIGEON_ROTARY_INVERT=1`` swaps forward/backward.
 Optional: ``PIGEON_ROTARY_GPIO=0`` disables direct Pi GPIO input.
 Optional: ``PIGEON_ROTARY_GPIO_A/B/BUTTON`` override GPIO pins.
-Optional: ``PIGEON_ROTARY_GPIO_INVERT=0`` restores raw GPIO A/B direction.
+Optional: ``PIGEON_ROTARY_GPIO_INVERT=1`` swaps the navigation encoder's GPIO direction
+(default 0: CCW advances forward, CW goes backward).
 Optional: ``PIGEON_ROTARY_HOLD_S`` long-press time for the GPIO encoder button
 (default 0.6 s). A short press is reported on release; a hold, once, while held.
 Optional: ``PIGEON_VOLUME_GPIO=0`` disables direct Pi GPIO volume input.
@@ -184,7 +185,9 @@ def _env_gpio_enabled() -> bool:
 
 
 def _env_gpio_invert() -> bool:
-    return _env_flag("PIGEON_ROTARY_GPIO_INVERT", default=True)
+    # Navigation encoder only (volume has its own flag). Default flipped so the
+    # knob advances forward on CCW and backward on CW.
+    return _env_flag("PIGEON_ROTARY_GPIO_INVERT", default=False)
 
 
 def _env_volume_gpio_enabled() -> bool:
