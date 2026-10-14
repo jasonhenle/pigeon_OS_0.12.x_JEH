@@ -107,65 +107,103 @@ _FOCUS_LAYER: dict[str, int] = {
     "main_search_clear_button": 5,
 }
 
-# SEARCH / CLEAR (zone 5): standalone buttons styled like the column cards
-# (one #1A1A1A rounded plate that turns white when selected) rather than the
-# dual bar's plate-and-pill. CLEAR only exists while a title is pinned.
-_SEARCH_BTN_W = 320.0
-_SEARCH_BTN_H = 76.0
-_SEARCH_BTN_GAP = 28.0
+# SEARCH bar (zone 5): the dual bar's chrome (dark plate, white/black pills,
+# "|" divider) but narrower. One pill (SEARCH) until a title is pinned; then
+# two: the pinned title (re-opens search) | CLEAR.
+_SEARCH_BAR_H = 90.0
+_SEARCH_PAD = 13.5
+_SEARCH_GAP = 20.0
+_SEARCH_PILL_W = 356.0
+_SEARCH_PILL_H = 63.0
+
+
+def _search_plate_w(double: bool) -> float:
+    pills = 2 if double else 1
+    return pills * _SEARCH_PILL_W + (pills - 1) * _SEARCH_GAP + 2.0 * _SEARCH_PAD
 
 
 def _search_bar_geometry(double: bool) -> dict[str, tuple[int, int, int, int]]:
-    """Canvas rects for the SEARCH button and (when pinned) the CLEAR button."""
+    """Canvas rects for the plate and its pill(s)."""
     zone = SETTINGS_MAIN_ZONES[5]
-    y = zone.y + (zone.h - _SEARCH_BTN_H) * 0.5
-    cx = zone.x + zone.w * 0.5
+    plate_w = _search_plate_w(double)
+    px = zone.x + (zone.w - plate_w) * 0.5
+    py = zone.y
+    pill_y = py + _SEARCH_PAD
+    a = (px + _SEARCH_PAD, pill_y, _SEARCH_PILL_W, _SEARCH_PILL_H)
     if double:
-        ax = cx - _SEARCH_BTN_GAP * 0.5 - _SEARCH_BTN_W
-        bx = cx + _SEARCH_BTN_GAP * 0.5
-        a = (ax, y, _SEARCH_BTN_W, _SEARCH_BTN_H)
-        b = (bx, y, _SEARCH_BTN_W, _SEARCH_BTN_H)
+        b = (a[0] + _SEARCH_PILL_W + _SEARCH_GAP, pill_y, _SEARCH_PILL_W, _SEARCH_PILL_H)
     else:
-        a = (cx - _SEARCH_BTN_W * 0.5, y, _SEARCH_BTN_W, _SEARCH_BTN_H)
         b = (0.0, 0.0, 0.0, 0.0)
+    plate = (px, py, plate_w, _SEARCH_BAR_H)
     return {
+        "plate": tuple(int(round(v)) for v in plate),
         "a": tuple(int(round(v)) for v in a),
         "b": tuple(int(round(v)) for v in b),
     }
 
 
-def _search_button_root(*, w: int, h: int, selected: bool, stroke: str) -> ET.Element:
-    fill = _COLOR_WHITE if selected else _COLOR_COLUMN_OFF
-    return ET.fromstring(
-        f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w} {h}">'
-        f'<rect x="3.5" y="3.5" width="{w - 7}" height="{h - 7}" rx="15" ry="15" '
-        f'fill="{fill}" stroke="{stroke}" stroke-width="7"/></svg>'
-    )
+def _search_bar_root(*, double: bool, a_on: bool, b_on: bool, stroke: str) -> ET.Element:
+    """Dual-bar styled plate drawn as SVG so it rasters like the other widgets."""
+    w = _search_plate_w(double)
+    h = _SEARCH_BAR_H
+    pad = _SEARCH_PAD
+    a_fill = _COLOR_WHITE if a_on else _COLOR_SLOT_OFF
+    b_fill = _COLOR_WHITE if b_on else _COLOR_SLOT_OFF
+    parts = [
+        f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w:g} {h:g}">',
+        f'<rect x="3.5" y="3.5" width="{w - 7:g}" height="{h - 7:g}" '
+        f'rx="15" ry="15" fill="#202020" stroke="{stroke}" stroke-width="7"/>',
+        f'<rect x="{pad:g}" y="{pad:g}" width="{_SEARCH_PILL_W:g}" '
+        f'height="{_SEARCH_PILL_H:g}" rx="10.8" ry="10.8" fill="{a_fill}"/>',
+    ]
+    if double:
+        bx = pad + _SEARCH_PILL_W + _SEARCH_GAP
+        parts.append(
+            f'<rect x="{bx:g}" y="{pad:g}" width="{_SEARCH_PILL_W:g}" '
+            f'height="{_SEARCH_PILL_H:g}" rx="10.8" ry="10.8" fill="{b_fill}"/>'
+        )
+        # "|" divider, as on the dual bar (centered in the gap between pills).
+        cx = bx - _SEARCH_GAP * 0.5
+        parts.append(
+            f'<rect x="{cx - 2:g}" y="{h / 2 - 19:g}" width="4" height="38" rx="2" '
+            f'fill="{_COLOR_WHITE}"/>'
+        )
+    parts.append("</svg>")
+    return ET.fromstring("".join(parts))
 
 
 def _draw_search_bar(canvas: np.ndarray, st, *, focused: str, stroke: str) -> None:
-    double = bool(str(getattr(st, "manual_search_title", "") or "").strip())
+    title = str(getattr(st, "manual_search_title", "") or "").strip()
+    double = bool(title)
+    a_on = focused == "main_search_button"
+    b_on = focused == "main_search_clear_button"
     geo = _search_bar_geometry(double)
-    buttons = [("a", "SEARCH", focused == "main_search_button")]
+    px, py, pw, ph = geo["plate"]
+    _place_widget(
+        canvas,
+        _search_bar_root(double=double, a_on=a_on, b_on=b_on, stroke=stroke),
+        x=px,
+        y=py,
+        w=pw,
+        h=ph,
+        cache_key=("search_bar2", pw, ph, double, a_on, b_on, stroke),
+    )
+    # The pinned title takes the SEARCH pill so it is obvious what CLEAR drops.
+    _draw_centered_text(
+        canvas,
+        title.upper() if double else "SEARCH",
+        box=geo["a"],
+        size=46,
+        fill=(0, 0, 0) if a_on else (255, 255, 255),
+        fit=True,
+    )
     if double:
-        buttons.append(("b", "CLEAR", focused == "main_search_clear_button"))
-    for key, label, on in buttons:
-        x, y, w, h = geo[key]
-        _place_widget(
-            canvas,
-            _search_button_root(w=w, h=h, selected=on, stroke=stroke),
-            x=x,
-            y=y,
-            w=w,
-            h=h,
-            cache_key=("search_btn", w, h, on, stroke),
-        )
         _draw_centered_text(
             canvas,
-            label,
-            box=(x, y, w, h),
+            "CLEAR",
+            box=geo["b"],
             size=46,
-            fill=(0, 0, 0) if on else (255, 255, 255),
+            fill=(0, 0, 0) if b_on else (255, 255, 255),
         )
 
 
