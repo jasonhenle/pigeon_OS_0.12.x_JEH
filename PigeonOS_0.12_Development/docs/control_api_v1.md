@@ -232,10 +232,10 @@ Query must be ≥ 2 characters (`400` otherwise). `limit` 1–6, default 3 (the 
 `PUT /search/current`: pin a title.
 
 ```json
-{ "title": "Blade Runner 2049", "kind": "movie", "tmdb_id": 335984 }
+{ "title": "Blade Runner 2049", "kind": "movie", "tmdb_id": 335984, "year": "2017" }
 ```
 
-`title` is required; `kind` is `movie` or `tv`; `tmdb_id` optional but preferred. Persists on the device until cleared.
+`title` is required; `kind` is `movie` or `tv`; `tmdb_id` optional but preferred; `year` optional and improves the on-device TMDb match. Persists on the device until cleared.
 
 `DELETE /search/current`: clears the pinned title. `204`.
 
