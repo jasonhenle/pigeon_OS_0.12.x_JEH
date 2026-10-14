@@ -316,6 +316,29 @@ class ClockSaverSplitTests(unittest.TestCase):
         self.assertLess(py + ph, DESIGN_H)
         self.assertAlmostEqual(pw / ph, 2.0 / 3.0, places=2)
 
+    def test_faint_backdrop_does_not_become_an_outline(self) -> None:
+        from pigeon.design import DESIGN_H, DESIGN_W
+        from pigeon.widgets.clock_saver import (
+            clock_saver_poster_split_boxes,
+            compose_clock_with_poster,
+        )
+
+        frame = np.zeros((DESIGN_H, DESIGN_W, 4), dtype=np.uint8)
+        frame[:, :, :3] = 15  # faint translucent backdrop behind the digits
+        frame[:, :, 3] = 80
+        frame[300:500, 200:1000] = (255, 255, 0, 255)  # lit ink
+        poster = np.full((600, 400, 3), 90, dtype=np.uint8)
+        out = compose_clock_with_poster(frame, poster)
+        (cx, cy, cw, ch), _ = clock_saver_poster_split_boxes()
+        clock = out[cy : cy + ch, cx : cx + cw]
+        lit = clock[:, :, 3] > 0
+        ys, xs = np.where(lit)
+        self.assertGreater(xs.size, 0)
+        # Ink is 800x200 in the source and scales to ~680x170; the whole
+        # backdrop (1280x800 -> ~680x425) must not survive as a box around it.
+        self.assertLess(int(lit.sum()), int(680 * 170 * 1.1))
+        self.assertLess(int(ys.max() - ys.min()), 200)
+
     def test_compose_places_poster_right_and_shrinks_clock(self) -> None:
         from pigeon.design import DESIGN_H, DESIGN_W
         from pigeon.widgets.clock_saver import (
