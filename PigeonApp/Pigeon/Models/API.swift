@@ -107,3 +107,79 @@ enum DeviceEvent: Equatable {
 struct PairStartResponse: Codable {
     var expiresInS: Int
 }
+
+// MARK: Now playing: inspect and correct the match
+
+struct OverrideInput: Codable, Equatable, Identifiable {
+    var key: String
+    var label: String
+    var value: String
+    var editable: Bool
+    var id: String { key }
+}
+
+struct QueryInfo: Codable, Equatable {
+    var appleTv: String?
+    var resolved: String?
+    var candidates: [String]
+    var searched: String?
+    var prefer: String?
+    var inFlight: Bool
+}
+
+struct MatchInfo: Codable, Equatable {
+    var title: String?
+    var kind: String?
+    var tmdbId: Int?
+    var year: String?
+    var outcome: String?
+    var forced: Bool
+}
+
+struct PickInfo: Codable, Equatable {
+    var title: String
+    var kind: String
+    var tmdbId: Int
+    var year: String?
+}
+
+struct OverrideState: Codable, Equatable {
+    var active: Bool
+    var query: String?
+    var prefer: String?
+    var fields: [String: String]?
+    var year: String?
+    var pick: PickInfo?
+}
+
+struct NowPlayingDetail: Codable, Equatable {
+    var contentActive: Bool
+    var app: String?
+    var inputs: [OverrideInput]
+    var query: QueryInfo
+    var match: MatchInfo?
+    var `override`: OverrideState
+}
+
+struct PreviewResponse: Codable {
+    var query: String
+    var candidates: [Suggestion]
+}
+
+struct PreviewRequest: Codable {
+    var fields: [String: String]
+    var year: String?
+}
+
+struct OverrideRequest: Codable {
+    struct Pick: Codable {
+        var title: String
+        var kind: String
+        var tmdbId: Int
+        var year: String?
+    }
+    var fields: [String: String]?
+    var year: String?
+    var kind: String?
+    var pick: Pick?
+}

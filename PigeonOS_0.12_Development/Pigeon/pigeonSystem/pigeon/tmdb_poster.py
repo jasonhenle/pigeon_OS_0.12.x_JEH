@@ -3326,6 +3326,42 @@ def fetch_tmdb_poster_to_pulled(
     return ok_p, msg_p, path_p
 
 
+# Titles the user picked by hand (companion app). Keyed by normalized search
+# query; consulted by :func:`apply_tmdb_movie_query` before searching, so the
+# chosen TMDb id wins over whatever the text search would rank first.
+_FORCED_PICKS: dict[str, tuple[str, int]] = {}
+
+
+def _forced_key(query: str) -> str:
+    return _norm_query(refine_tmdb_search_query(query) or query or "")
+
+
+def set_forced_pick(kind: str, tmdb_id: int, *queries: str) -> None:
+    """Force ``kind``/``tmdb_id`` whenever one of ``queries`` is searched."""
+    if kind not in ("movie", "tv") or int(tmdb_id) <= 0:
+        raise ValueError("kind must be movie|tv and tmdb_id positive")
+    for q in queries:
+        for key in {_norm_query(q or ""), _forced_key(q or "")}:
+            if key:
+                _FORCED_PICKS[key] = (kind, int(tmdb_id))
+
+
+def clear_forced_picks() -> None:
+    _FORCED_PICKS.clear()
+
+
+def _forced_pick_item(query: str) -> tuple[dict | None, MediaKind | None]:
+    hit = _FORCED_PICKS.get(_norm_query(query or "")) or _FORCED_PICKS.get(_forced_key(query))
+    if hit is None:
+        return None, None
+    kind, tmdb_id = hit
+    detail = _tmdb_movie_detail(tmdb_id) if kind == "movie" else _tmdb_tv_detail(tmdb_id)
+    if not isinstance(detail, dict) or not detail.get("id"):
+        return None, None
+    _trace_fetch(forced_pick=True)
+    return detail, kind  # type: ignore[return-value]
+
+
 def apply_tmdb_movie_query(
     query: str,
     *,
@@ -3385,15 +3421,17 @@ def apply_tmdb_movie_query(
 
     try:
         with player_duration_hint(duration):
-            item, kind = search_best_media(
-                q,
-                prefer=pref,
-                forgiving=forgiving,
-                service_hint=hint,
-                kids_bias=kids,
-                app_name=app_name,
-                app_id=app_id,
-            )
+            item, kind = _forced_pick_item(q)
+            if item is None:
+                item, kind = search_best_media(
+                    q,
+                    prefer=pref,
+                    forgiving=forgiving,
+                    service_hint=hint,
+                    kids_bias=kids,
+                    app_name=app_name,
+                    app_id=app_id,
+                )
             if item is None and not fg:
                 variants = _service_augmented_search_queries(
                     q, service_hint=hint, forgiving=True, service_first=service_first

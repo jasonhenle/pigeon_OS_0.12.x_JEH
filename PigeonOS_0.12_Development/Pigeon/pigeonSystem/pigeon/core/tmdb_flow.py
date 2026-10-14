@@ -1068,6 +1068,15 @@ def spawn_tmdb_poster_fetch(
 
     del force  # kept for call-site compat; queueing replaces concurrent force
 
+    # Companion-app override: while it is active for this content, the edited
+    # fields / hand-picked title replace what the metadata would have searched.
+    try:
+        from pigeon.control_api.now_playing_override import apply_override
+
+        query, prefer = apply_override(query, prefer, apple_tv_auto_state.get("last_metadata"))
+    except Exception:
+        pass
+
     if _vv_is_music() or _vv_is_youtube():
         # Music / YouTube metadata is still auto-detected content: a title that
         # differs from the manual SEARCH title suppresses the clocksaver poster.

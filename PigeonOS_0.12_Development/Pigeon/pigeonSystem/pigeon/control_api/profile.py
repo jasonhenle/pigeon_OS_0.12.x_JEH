@@ -18,11 +18,11 @@ _LOCK = threading.Lock()
 # Capabilities by product. Marquee column is a working assumption (see docs).
 _CAPABILITIES: dict[str, tuple[str, ...]] = {
     "clock": (
-        "now_playing", "manual_search", "clock", "locations", "wifi",
+        "now_playing", "manual_search", "now_playing_override", "clock", "locations", "wifi",
         "pairing_player", "pairing_receiver", "viz", "rotary", "update",
     ),
     "marquee": (
-        "now_playing", "manual_search", "locations", "wifi",
+        "now_playing", "manual_search", "now_playing_override", "locations", "wifi",
         "pairing_player", "pairing_receiver", "update",
     ),
 }
@@ -35,7 +35,7 @@ def product() -> str:
 
 def capabilities() -> list[str]:
     """Capabilities implemented by *this build* for this product (Phase 1 subset)."""
-    implemented = {"now_playing", "manual_search"}
+    implemented = {"now_playing", "manual_search", "now_playing_override"}
     return [c for c in _CAPABILITIES[product()] if c in implemented]
 
 

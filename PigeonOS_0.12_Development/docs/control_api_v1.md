@@ -152,6 +152,7 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 |---|---|---|---|
 | `now_playing` | ✓ | ✓ | `/status` playback fields |
 | `manual_search` | ✓ | ✓ | `/search/*` |
+| `now_playing_override` | ✓ | ✓ | `/now-playing/*` |
 | `clock` | ✓ | – | `/clock` |
 | `locations` | ✓ | ✓ | `/locations`, `/location/room` |
 | `wifi` | ✓ | ✓ | `/wifi*` |
@@ -240,6 +241,57 @@ Query must be ≥ 2 characters (`400` otherwise). `limit` 1–6, default 3 (the 
 `title` is required; `kind` is `movie` or `tv`; `tmdb_id` optional but preferred; `year` optional and improves the on-device TMDb match. Persists on the device until cleared.
 
 `DELETE /search/current`: clears the pinned title. `204`.
+
+### 6.1a Now playing: inspect and correct the match *(capability `now_playing_override`)*
+
+Shows the metadata that fed the TMDb query and lets the user correct it when Pigeon picked the wrong title. A correction applies **only to the content playing now**: when the content changes, it drops itself (so a fix never leaks onto the next show). It is held in memory and does not survive a restart.
+
+`GET /now-playing/detail`
+
+```json
+{
+  "content_active": true,
+  "app": "Disney+",
+  "inputs": [
+    { "key": "title", "label": "Title", "value": "The Final Show", "editable": true },
+    { "key": "series_name", "label": "Series", "value": "", "editable": true },
+    { "key": "episode_title", "label": "Episode title", "value": "", "editable": true },
+    { "key": "query", "label": "Apple TV search text", "value": "The Final Show", "editable": true },
+    { "key": "app_name", "label": "App", "value": "Disney+", "editable": false }
+  ],
+  "query": {
+    "apple_tv": "The Final Show",
+    "resolved": "The Final Show",
+    "candidates": ["The Final Show"],
+    "searched": "The Final Show",
+    "prefer": "auto",
+    "in_flight": false
+  },
+  "match": { "title": "Taylor Swift | The Eras Tour", "kind": "movie", "tmdb_id": 1114513,
+             "year": "2023", "outcome": "matched", "forced": false },
+  "override": { "active": false }
+}
+```
+
+`inputs` lists the metadata fields the query is built from, in display order; only `editable` ones may be sent back. `match` is `null` until a title has been matched.
+
+`POST /now-playing/preview` takes `{ "fields": {...}, "year": "2023" }` and returns `{ "query", "candidates": [{tmdb_id, kind, title, year}] }`: the query the edits would produce and TMDb's top results for it. Nothing is applied.
+
+`PUT /now-playing/override` applies a correction and re-runs the match. Send either edited fields:
+
+```json
+{ "fields": { "title": "Taylor Swift The Eras Tour" }, "year": "2023", "kind": "movie" }
+```
+
+or a hand-picked TMDb title (forces that exact id, regardless of how the text search would rank):
+
+```json
+{ "pick": { "title": "Taylor Swift: The Eras Tour", "kind": "movie", "tmdb_id": 1114513, "year": "2023" } }
+```
+
+`kind` is `auto`, `movie` or `tv`. `400` when nothing would change, the title is empty, or the id is invalid. The response is the new detail body.
+
+`DELETE /now-playing/override` removes the correction and goes back to what was detected. Returns the detail body.
 
 ### 6.2 Clock *(capability `clock`)*
 
@@ -398,6 +450,9 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | GET | `/media/poster/{tmdb_id}` | token | `now_playing` |
 | GET | `/search/suggest` | token | `manual_search` |
 | GET, PUT, DELETE | `/search/current` | token | `manual_search` |
+| GET | `/now-playing/detail` | token | `now_playing_override` |
+| POST | `/now-playing/preview` | token | `now_playing_override` |
+| PUT, DELETE | `/now-playing/override` | token | `now_playing_override` |
 | GET, PATCH | `/clock` | token | `clock` |
 | GET, POST | `/locations` | token | `locations` |
 | PATCH, DELETE | `/locations/{id}` | token | `locations` |
