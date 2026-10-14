@@ -870,24 +870,16 @@ class NowPlayingFrameTests(unittest.TestCase):
         portrait = _poster_geometry("video", zone=2)
         self.assertNotEqual((px, py, pw, ph), portrait[:4])
 
-    def test_settings_main_keeps_np_status_bar_gate(self) -> None:
+    def test_settings_main_never_keeps_np_status_bar(self) -> None:
         from pigeon.widgets.view_circles import settings_main_keeps_np_status_bar
 
-        self.assertTrue(
-            settings_main_keeps_np_status_bar(
-                show_pigeon_settings=False, content_playing=True
-            )
-        )
-        self.assertFalse(
-            settings_main_keeps_np_status_bar(
-                show_pigeon_settings=False, content_playing=False
-            )
-        )
-        self.assertFalse(
-            settings_main_keeps_np_status_bar(
-                show_pigeon_settings=True, content_playing=True
-            )
-        )
+        for pigeon_page in (False, True):
+            for playing in (False, True):
+                self.assertFalse(
+                    settings_main_keeps_np_status_bar(
+                        show_pigeon_settings=pigeon_page, content_playing=playing
+                    )
+                )
 
     def test_overlay_status_bar_paints_zone5(self) -> None:
         from pigeon.np_layout import NOW_PLAYING_ZONES

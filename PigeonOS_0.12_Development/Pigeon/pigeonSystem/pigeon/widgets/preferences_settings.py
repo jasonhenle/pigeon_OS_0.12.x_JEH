@@ -24,6 +24,7 @@ import numpy as np
 from pigeon.design import DESIGN_H, DESIGN_W
 from pigeon.pigeon_locale import pigeon_now
 from pigeon.np_layout import canonical_zone_widget, is_status_bar_widget
+from pigeon.widgets.settings_svg_text import center_label_on_pill
 from pigeon.widgets.main_settings import (
     MainSettingsState,
     _composite_bgra_over_bgra,
@@ -590,6 +591,13 @@ def _sync_preferences_back_button(root: ET.Element) -> None:
         text.set("font-family", "Digital-7, Digital-7")
         text.set("font-size", "29")
         _set_text_content(text, "BACK")
+        text.attrib.pop("text-anchor", None)
+        center_label_on_pill(
+            text,
+            button if button is not None else accent,
+            viewbox=_PREFS_VIEWBOX,
+            canvas=(DESIGN_W, DESIGN_H),
+        )
 
 
 def _prefs_color_group(root: ET.Element) -> ET.Element | None:

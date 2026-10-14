@@ -783,6 +783,26 @@ def run(ctx) -> None:
         use_backdrop_scene=use_backdrop_scene,
     )
 
+    def _manual_search_redraw() -> None:
+        """A suggestion list / poster finished loading off-thread — repaint."""
+        skip_cache[0] = None
+        try:
+            root.after(0, lambda: ctx.render_once())
+        except Exception:
+            pass
+
+    def _manual_search_clear_display() -> None:
+        """SEARCH title cleared while shown — fall back to the idle landing."""
+        _return_to_landing_if_atv_idle(apple_tv_auto_state.get("last_metadata") or {})
+
+    from pigeon import manual_search as _manual_search
+
+    _manual_search.install_hooks(
+        spawn=lambda q, **kw: spawn_tmdb_poster_fetch(q, **kw),
+        refresh=_manual_search_redraw,
+        clear_display=_manual_search_clear_display,
+    )
+
     _apply_hdmi_frame_check = _bind_deps(
         _core_device_control._apply_hdmi_frame_check,
         _bump_clock_saver_significant_device=_bump_clock_saver_significant_device,

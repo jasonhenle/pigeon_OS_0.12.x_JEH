@@ -24,6 +24,7 @@ from pigeon.local_ip import local_ipv4_address
 from pigeon.settings_layout import (
     DUAL_SLOT_A,
     DUAL_SLOT_B,
+    MENU_PLATE_XYWH,
     SETTINGS_MAIN_ZONES,
     dual_slot_design,
     settings_widget_path,
@@ -102,7 +103,102 @@ _FOCUS_LAYER: dict[str, int] = {
     "main_network_picker_button": 3,
     "main_box3_button": 4,
     "main_box3_device_results": 4,
+    "main_search_button": 5,
+    "main_search_clear_button": 5,
 }
+
+# SEARCH bar (zone 5): same chrome as the dual bar, one pill wide until a
+# manual title exists, then two pills (SEARCH | CLEAR).
+_SEARCH_BAR_H = 90.0
+_SEARCH_SINGLE_W = 582.5
+_SEARCH_PAD = 13.5
+_SEARCH_GAP = 20.0
+_SEARCH_PILL_H = 63.0
+
+
+def _search_bar_geometry(double: bool) -> dict[str, tuple[int, int, int, int]]:
+    """Canvas rects for the bar plate and its pill(s)."""
+    zone = SETTINGS_MAIN_ZONES[5]
+    full_w = float(zone.w)
+    plate_w = full_w if double else _SEARCH_SINGLE_W
+    px = zone.x + (full_w - plate_w) * 0.5
+    inner = plate_w - 2.0 * _SEARCH_PAD
+    pill_y = zone.y + _SEARCH_PAD
+    if double:
+        pill_w = (inner - _SEARCH_GAP) * 0.5
+        a = (px + _SEARCH_PAD, pill_y, pill_w, _SEARCH_PILL_H)
+        b = (px + _SEARCH_PAD + pill_w + _SEARCH_GAP, pill_y, pill_w, _SEARCH_PILL_H)
+    else:
+        a = (px + _SEARCH_PAD, pill_y, inner, _SEARCH_PILL_H)
+        b = (0.0, 0.0, 0.0, 0.0)
+    plate = (px, zone.y, plate_w, _SEARCH_BAR_H)
+    return {
+        "plate": tuple(int(round(v)) for v in plate),
+        "a": tuple(int(round(v)) for v in a),
+        "b": tuple(int(round(v)) for v in b),
+    }
+
+
+def _search_bar_root(*, double: bool, a_on: bool, b_on: bool, stroke: str) -> ET.Element:
+    """Dual-bar styled plate drawn as SVG so it rasters like the other widgets."""
+    w = 1165.0 if double else _SEARCH_SINGLE_W
+    h = _SEARCH_BAR_H
+    pad = _SEARCH_PAD
+    inner = w - 2.0 * pad
+    pill_w = (inner - _SEARCH_GAP) * 0.5 if double else inner
+    a_fill = _COLOR_WHITE if a_on else _COLOR_SLOT_OFF
+    b_fill = _COLOR_WHITE if b_on else _COLOR_SLOT_OFF
+    parts = [
+        f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w:g} {h:g}">',
+        f'<rect id="search_container" x="3.5" y="3.5" width="{w - 7:g}" height="{h - 7:g}" '
+        f'rx="15" ry="15" fill="#202020" stroke="{stroke}" stroke-width="7"/>',
+        f'<rect id="search_button_a" x="{pad:g}" y="{pad:g}" width="{pill_w:g}" '
+        f'height="{_SEARCH_PILL_H:g}" rx="10.8" ry="10.8" fill="{a_fill}"/>',
+    ]
+    if double:
+        bx = pad + pill_w + _SEARCH_GAP
+        parts.append(
+            f'<rect id="search_button_b" x="{bx:g}" y="{pad:g}" width="{pill_w:g}" '
+            f'height="{_SEARCH_PILL_H:g}" rx="10.8" ry="10.8" fill="{b_fill}"/>'
+        )
+    parts.append("</svg>")
+    return ET.fromstring("".join(parts))
+
+
+def _draw_search_bar(canvas: np.ndarray, st, *, focused: str, stroke: str) -> None:
+    title = str(getattr(st, "manual_search_title", "") or "").strip()
+    double = bool(title)
+    a_on = focused == "main_search_button"
+    b_on = focused == "main_search_clear_button"
+    geo = _search_bar_geometry(double)
+    px, py, pw, ph = geo["plate"]
+    root = _search_bar_root(double=double, a_on=a_on, b_on=b_on, stroke=stroke)
+    _place_widget(
+        canvas,
+        root,
+        x=px,
+        y=py,
+        w=pw,
+        h=ph,
+        cache_key=("search_bar", pw, ph, double, a_on, b_on, stroke),
+    )
+    _draw_centered_text(
+        canvas,
+        "SEARCH",
+        box=geo["a"],
+        size=46,
+        fill=(0, 0, 0) if a_on else (255, 255, 255),
+    )
+    if double:
+        label = f"CLEAR  {title.upper()}"
+        _draw_centered_text(
+            canvas,
+            label,
+            box=geo["b"],
+            size=46,
+            fill=(0, 0, 0) if b_on else (255, 255, 255),
+            fit=True,
+        )
 
 
 def _hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
@@ -769,6 +865,24 @@ def _draw_yes_no_above_zone1(canvas: np.ndarray, keyboard) -> None:
         )
 
 
+# widget_general_0_exit.svg ``exit_button`` path bbox (viewBox 125×90): the pill
+# is not centered in the artboard, so the label centers on the pill itself.
+_EXIT_PILL_SVG = (7.36, 16.38, 118.06, 77.06)
+
+
+def _exit_button_box() -> tuple[int, int, int, int]:
+    zone = SETTINGS_MAIN_ZONES[0]
+    sx = zone.w / 125.0
+    sy = zone.h / 90.0
+    x0, y0, x1, y1 = _EXIT_PILL_SVG
+    return (
+        int(round(zone.x + x0 * sx)),
+        int(round(zone.y + y0 * sy)),
+        int(round((x1 - x0) * sx)),
+        int(round((y1 - y0) * sy)),
+    )
+
+
 def _exit_root(state, *, assets_dir, selected: bool, label: str) -> ET.Element:
     root = _load_widget("exit", assets_dir=assets_dir)
     btn = _find(root, "exit_button")
@@ -1168,6 +1282,8 @@ def _settings_main_structure_sig(
         str(assets_dir or ""),
         str(local_ipv4_address() or ""),
         int(getattr(st, "wifi_level", 0) or 0),
+        str(getattr(st, "manual_search_title", "") or ""),
+        bool(st.search_bar_visible()) if hasattr(st, "search_bar_visible") else False,
         _ui_bright(),
     )
 
@@ -1300,7 +1416,7 @@ def render_settings_main_1280_bgra(
         _draw_centered_text(
             canvas,
             "EXIT",
-            box=SETTINGS_MAIN_ZONES[0].xywh,
+            box=_exit_button_box(),
             size=46,
             fill=(0, 0, 0) if exit_sel else (255, 255, 255),
         )
@@ -1334,6 +1450,14 @@ def render_settings_main_1280_bgra(
             h=zh,
             cache_key=("dual", zw, zh, a_on, b_on, _ui_bright()),
         )
+
+    if (
+        _want(5)
+        and not st.keyboard_open
+        and hasattr(st, "search_bar_visible")
+        and st.search_bar_visible()
+    ):
+        _draw_search_bar(canvas, st, focused=focused, stroke=_chrome_stroke())
 
     loc_box = dual_slot_design(DUAL_SLOT_A)
     net_box = dual_slot_design(DUAL_SLOT_B)
@@ -1740,3 +1864,106 @@ def draw_settings_main_text_entry(bgra: np.ndarray, state) -> None:
         shown = ("*" * len(buffer)) if target == "network" else buffer.upper()
         _wifi_box, net_text_box = _network_field_boxes(net_box)
         _draw_centered_text(bgra, shown, box=net_text_box, size=48, fill=(0, 0, 0))
+
+
+# --- search keyboard overlay -------------------------------------------------
+# While the search keyboard is up the dual bar becomes one full-width text field
+# and the black band above the plate lists TMDb suggestions (best match nearest
+# the field). Painted per frame on a copy, so chrome caches stay untouched.
+_SUGGEST_ROW_H = 48
+_SUGGEST_ROW_GAP = 8
+_SUGGEST_TOP_MARGIN = 20
+
+
+def _field_root(w: int, h: int, *, fill: str, stroke: str, pad: float) -> ET.Element:
+    parts = [
+        f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w} {h}">',
+        f'<rect x="3.5" y="3.5" width="{w - 7}" height="{h - 7}" rx="15" ry="15" '
+        f'fill="#202020" stroke="{stroke}" stroke-width="7"/>',
+        f'<rect x="{pad:g}" y="{pad:g}" width="{w - 2 * pad:g}" height="{h - 2 * pad:g}" '
+        f'rx="10.8" ry="10.8" fill="{fill}"/>',
+        "</svg>",
+    ]
+    return ET.fromstring("".join(parts))
+
+
+def search_suggestion_rects(rows: int) -> list[tuple[int, int, int, int]]:
+    """Row 0 (best) sits lowest, directly above the plate."""
+    zone = SETTINGS_MAIN_ZONES[1]
+    x, w = int(round(zone.x)), int(round(zone.w))
+    plate_top = int(round(MENU_PLATE_XYWH[1]))
+    bottom = plate_top - 8
+    out = []
+    for i in range(rows):
+        y = bottom - _SUGGEST_ROW_H - i * (_SUGGEST_ROW_H + _SUGGEST_ROW_GAP)
+        out.append((x, max(_SUGGEST_TOP_MARGIN // 2, y), w, _SUGGEST_ROW_H))
+    return out
+
+
+def draw_search_overlay(bgra: np.ndarray, state, *, caret_on: bool) -> None:
+    """Paint the search text field + suggestion rows onto ``bgra`` (in place)."""
+    from pigeon.widgets.settings_keyboard import KeyAction, SEARCH_ROWS
+
+    kb = state.keyboard
+    if kb is None or str(getattr(kb, "target", "") or "") != "search":
+        return
+    h_img, w_img = int(bgra.shape[0]), int(bgra.shape[1])
+    plate_top = int(round(MENU_PLATE_XYWH[1]))
+
+    # Clear the EXIT button + anything else above the plate.
+    bgra[0 : max(0, plate_top - 2), :, :3] = 0
+    bgra[0 : max(0, plate_top - 2), :, 3] = 255
+
+    stroke = _chrome_stroke()
+    zone = SETTINGS_MAIN_ZONES[1]
+    fx, fy, fw, fh = (int(round(v)) for v in zone.xywh)
+    root = _field_root(fw, fh, fill=_COLOR_WHITE, stroke=stroke, pad=13.5)
+    _place_widget(
+        bgra, root, x=fx, y=fy, w=fw, h=fh, cache_key=("search_field", fw, fh, stroke)
+    )
+    buffer = str(getattr(kb, "buffer", "") or "")
+    box = (fx + 30, fy + 14, fw - 60, fh - 28)
+    if buffer:
+        _draw_centered_text(
+            bgra, buffer.upper(), box=box, size=56, fill=(0, 0, 0), fit=True
+        )
+    else:
+        _draw_centered_text(
+            bgra, "SEARCH TITLES", box=box, size=48, fill=(128, 128, 128), fit=True
+        )
+    if caret_on:
+        text_w = 0
+        if buffer:
+            _f, text_w, _th, _top, _left = _fit_font(
+                buffer.upper(), max_w=box[2], max_h=box[3], start=56, digital=True
+            )
+        cx = box[0] + (box[2] + text_w) // 2 + 4 if buffer else box[0] + box[2] // 2
+        cx = max(box[0] + 4, min(box[0] + box[2] - 4, cx))
+        y0, y1 = fy + 24, fy + fh - 24
+        bgra[y0:y1, cx : cx + 2, :3] = 0
+        bgra[y0:y1, cx : cx + 2, 3] = 255
+
+    rows = list(getattr(kb, "suggestions", ()) or ())[:SEARCH_ROWS]
+    try:
+        focused = kb.focused
+        focus_row = int(focused.char) if focused.action == KeyAction.SUGGEST else -1
+    except Exception:
+        focus_row = -1
+    for i, rect in enumerate(search_suggestion_rects(len(rows))):
+        rx, ry, rw, rh = rect
+        on = i == focus_row
+        row_root = _field_root(
+            rw, rh, fill=_COLOR_WHITE if on else _COLOR_SLOT_OFF, stroke=stroke, pad=8.0
+        )
+        _place_widget(
+            bgra, row_root, x=rx, y=ry, w=rw, h=rh,
+            cache_key=("search_row", rw, rh, on, stroke),
+        )
+        _draw_centered_text(
+            bgra,
+            str(rows[i]).upper(),
+            box=(rx + 24, ry + 6, rw - 48, rh - 12),
+            size=38,
+            fill=(0, 0, 0) if on else (255, 255, 255),
+            fit=True,
+        )

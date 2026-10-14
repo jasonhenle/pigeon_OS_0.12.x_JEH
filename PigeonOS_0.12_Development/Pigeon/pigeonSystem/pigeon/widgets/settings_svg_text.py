@@ -540,8 +540,85 @@ def rasterize_settings_svg_bgra(
     return bgra
 
 
+def center_label_on_pill(
+    text_el: ET.Element | None,
+    pill_el: ET.Element | None,
+    *,
+    content: str | None = None,
+    viewbox: tuple[float, float, float, float] | None = None,
+    canvas: tuple[int, int] | None = None,
+) -> bool:
+    """Place a Digital-7 label so its *ink* is centered on a path pill.
+
+    ``viewbox``/``canvas`` are for pages whose viewBox aspect differs from the
+    canvas: PyMuPDF letterboxes shapes uniformly while the text overlay scales
+    x/y independently, so a label centered in SVG units lands off its pill.
+    Passing them solves the translate in overlay space instead.
+
+    Authored EXIT / BACK labels carry a fixed left inset (and a baseline picked
+    by eye), so they sit off center — worse once the string changes. This moves
+    the label's translate so the glyph bounding box lands on the pill's center.
+    Returns False (no change) when geometry or the font cannot be resolved.
+    """
+    if text_el is None or pill_el is None:
+        return False
+    from pigeon.widgets.settings_keyboard import _path_bbox
+
+    m = _TRANSLATE_RE.search(text_el.get("transform") or "")
+    try:
+        size = float(text_el.get("font-size") or 0)
+    except ValueError:
+        size = 0.0
+    if m is None or size <= 0:
+        return False
+    x0, y0, x1, y1 = _path_bbox(pill_el.get("d") or "")
+    if x1 <= x0 or y1 <= y0:
+        return False
+    label = content if content is not None else "".join(text_el.itertext()).strip()
+    path = resolve_digital7_font()
+    if not label or not path:
+        return False
+    try:
+        from pigeon.font_cache import load_font
+
+        # Measure at a large size, then scale: avoids integer-size rounding.
+        probe = 200
+        font = load_font(path, probe)
+        l, t, r, b = font.getbbox(label, anchor="ls")
+    except Exception:
+        return False
+    k = size / float(probe)
+    cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
+    tx = cx - (l + r) * 0.5 * k
+    ty = cy - (t + b) * 0.5 * k
+    if viewbox is not None and canvas is not None:
+        vx, vy, vw, vh = viewbox
+        cw, ch = float(canvas[0]), float(canvas[1])
+        sx, sy = cw / vw, ch / vh
+        u = min(sx, sy)  # uniform scale PyMuPDF used for shapes
+        off_x, off_y = (cw - vw * u) * 0.5, (ch - vh * u) * 0.5
+        # Desired overlay-space origin: pill center (letterboxed) minus ink center.
+        px_cx = off_x + (cx - vx) * u
+        px_cy = off_y + (cy - vy) * u
+        ink_cx = (l + r) * 0.5 * k * u
+        ink_cy = (t + b) * 0.5 * k * u
+        tx = vx + (px_cx - ink_cx) / sx
+        ty = vy + (px_cy - ink_cy) / sy
+        # Overlay font size scales by sy; shapes by u.
+        text_el.set("font-size", f"{size * u / sy:.3f}")
+    text_el.set("transform", f"translate({tx:.3f} {ty:.3f})")
+    if "text-anchor" in text_el.attrib:
+        del text_el.attrib["text-anchor"]
+    for span in text_el.iter():
+        if span.tag.endswith("tspan"):
+            span.set("x", "0")
+            span.set("y", "0")
+    return True
+
+
 __all__ = [
     "SettingsFontRole",
+    "center_label_on_pill",
     "SettingsTextDrawOp",
     "collect_settings_text_ops",
     "draw_settings_text_ops_bgra",

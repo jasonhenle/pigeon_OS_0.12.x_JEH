@@ -1890,6 +1890,66 @@ def clock_saver_composite_bgra(
     return (frame, full_rect), (_EMPTY_PATCH.copy(), (0, 0, 1, 1))
 
 
+_POSTER_SPLIT_MARGIN = 40
+_POSTER_SPLIT_GAP = 40
+_POSTER_ASPECT = 2.0 / 3.0
+_POSTER_SCALE_CACHE: dict[tuple[int, int, int, int], np.ndarray] = {}
+
+
+def clock_saver_poster_split_boxes(
+    canvas_w: int = DESIGN_W, canvas_h: int = DESIGN_H
+) -> tuple[tuple[int, int, int, int], tuple[int, int, int, int]]:
+    """``(clock_box, poster_box)``: clock left, TMDb poster right, edge padding."""
+    m = int(_POSTER_SPLIT_MARGIN)
+    ph = int(canvas_h) - 2 * m
+    pw = int(round(ph * _POSTER_ASPECT))
+    px = int(canvas_w) - m - pw
+    clock = (m, m, max(1, px - int(_POSTER_SPLIT_GAP) - m), ph)
+    return clock, (px, m, pw, ph)
+
+
+def compose_clock_with_poster(
+    frame: np.ndarray,
+    poster_bgr: np.ndarray,
+    *,
+    opacity: float = 1.0,
+) -> np.ndarray:
+    """Shrink the clocksaver into the left half and place ``poster_bgr`` on the right."""
+    import cv2
+
+    from pigeon.compositing import cv_resize_interp
+
+    fh, fw = int(frame.shape[0]), int(frame.shape[1])
+    clock_box, (px, py, pw, ph) = clock_saver_poster_split_boxes(fw, fh)
+    out = np.zeros_like(frame)
+    _contain_patch(out, frame, clock_box)
+
+    sh, sw = int(poster_bgr.shape[0]), int(poster_bgr.shape[1])
+    if sh < 1 or sw < 1:
+        return out
+    scale = min(pw / float(sw), ph / float(sh))
+    nw, nh = max(1, int(round(sw * scale))), max(1, int(round(sh * scale)))
+    key = (id(poster_bgr), sw, nw, nh)
+    scaled = _POSTER_SCALE_CACHE.get(key)
+    if scaled is None:
+        scaled = cv2.resize(
+            poster_bgr, (nw, nh), interpolation=cv_resize_interp(sw, sh, nw, nh)
+        )
+        _POSTER_SCALE_CACHE.clear()
+        _POSTER_SCALE_CACHE[key] = scaled
+    x0 = px + (pw - nw) // 2
+    y0 = py + (ph - nh) // 2
+    roi = out[y0 : y0 + nh, x0 : x0 + nw]
+    if roi.shape[0] != nh or roi.shape[1] != nw:
+        return out
+    op = max(0.0, min(1.0, float(opacity)))
+    roi[:, :, :3] = scaled[:, :, :3]
+    roi[:, :, 3] = int(round(255 * op))
+    if op < 1.0:
+        roi[:, :, :3] = (roi[:, :, :3].astype(np.float32) * op).astype(np.uint8)
+    return out
+
+
 def _crop_bgra(
     src: np.ndarray, rect: tuple[int, int, int, int]
 ) -> np.ndarray:
@@ -1961,4 +2021,5 @@ def render_scaled_clock_saver_bgra(
 
 
 def clear_clock_saver_render_caches() -> None:
+    _POSTER_SCALE_CACHE.clear()
     _SVG_TREE_TEMPLATES.clear()

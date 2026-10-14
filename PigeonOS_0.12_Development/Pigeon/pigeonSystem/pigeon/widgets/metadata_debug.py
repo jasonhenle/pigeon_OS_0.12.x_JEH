@@ -37,10 +37,15 @@ from pigeon.widgets.main_settings import (
     _truncate_text_to_width,
 )
 from pigeon.settings_layout import SETTINGS_BACKGROUND_SHIFT_Y, SETTINGS_CANVAS_ORIGIN
+from pigeon.widgets.settings_svg_text import center_label_on_pill
 
 # Same Illustrator board crop as settings_pigeon.svg so the panel lines up
 # with the shared code-drawn theme background.
-_METADATA_VIEWBOX = (363.7, 441.8, 800.0, 480.0)
+# 800×500 matches the 1280×800 canvas aspect (1.6). The old 800×480 box made
+# PyMuPDF letterbox the shapes (uniform 1.6, +16 px) while the Pillow text
+# overlay stretched y by 1.667, so labels drifted up to ~10 px off their pills
+# (visible on EXIT). y0 moves up 10 units so shapes stay exactly where they were.
+_METADATA_VIEWBOX = (363.7, 431.8, 800.0, 500.0)
 
 _COLOR_STATUS_OK = "#0DFF00"
 _COLOR_STATUS_BAD = "#FF0013"
@@ -320,6 +325,7 @@ def _sync_back_button(root: ET.Element, *, selected: bool) -> None:
     if accent is not None:
         _set_paint(accent, fill="none", stroke=_COLOR_BLACK if selected else _COLOR_WHITE)
     _paint_text(text, _COLOR_BLACK if selected else _COLOR_WHITE)
+    center_label_on_pill(text, button)
 
 
 def _sync_version_text(root: ET.Element, state: MainSettingsState) -> None:

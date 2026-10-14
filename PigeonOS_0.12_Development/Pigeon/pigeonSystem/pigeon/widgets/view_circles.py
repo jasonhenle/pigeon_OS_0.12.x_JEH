@@ -1089,8 +1089,9 @@ def configured_status_bar_zone(
 def settings_main_keeps_np_status_bar(
     *, show_pigeon_settings: bool, content_playing: bool
 ) -> bool:
-    """Keep the NP bar on settings_main while content is up; never on settings_pigeon."""
-    return bool(content_playing) and not bool(show_pigeon_settings)
+    """Never: the SEARCH bar owns the bottom strip of settings_main."""
+    del show_pigeon_settings, content_playing
+    return False
 
 
 def _zone_widget_visibility(
