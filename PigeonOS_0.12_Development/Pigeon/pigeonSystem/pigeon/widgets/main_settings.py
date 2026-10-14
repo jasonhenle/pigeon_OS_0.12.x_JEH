@@ -67,6 +67,14 @@ _LOCATION_SLOT_DEFAULT_NAMES: tuple[str, ...] = ("ROOM 1", "ROOM 2", "ROOM 3")
 _NEST_OR_ROOM_RE = re.compile(r"^(?:nest|room)\s*(\d+)$", re.IGNORECASE)
 
 
+def location_name_is_default(name: str) -> bool:
+    """True for placeholder room names (ROOM N / nest N / blank) — never renamed."""
+    raw = str(name or "").strip()
+    if not raw or raw.lower() in ("room", "nest"):
+        return True
+    return _NEST_OR_ROOM_RE.fullmatch(raw) is not None
+
+
 def location_room_label(name: str, *, slot_index: int | None = None) -> str:
     """Show ROOM N for leftover nest/room placeholders; keep custom names."""
     raw = str(name or "").strip()
@@ -7985,7 +7993,11 @@ class MainSettingsWidget:
             self._draw_wifi_search_spinner(frame)
 
     def _activate_location_picker_slot(self, box_num: int) -> str:
-        """Select a room card, or open rename if that room is already current."""
+        """Select a room card, or open rename if that room is already current.
+
+        Renamed rooms return to settings_main right after the switch; rooms that
+        still carry a placeholder name stay in the picker (rename on next press).
+        """
         st = self._state
         if st.location_switching:
             return "location_switch:busy"
@@ -8012,6 +8024,12 @@ class MainSettingsWidget:
                 self.invalidate()
                 return "keyboard_open:location"
         if st.select_location_slot(box_num):
+            if slot is not None and not location_name_is_default(slot[1]):
+                # A renamed room is a finished choice: confirm the switch and drop
+                # straight back to settings_main with it active (no BACK needed).
+                # Rooms still on their placeholder name stay in the picker so
+                # activating again can rename them.
+                st.exit_location_picker()
             self.invalidate()
             return "location_switch"
         return ""
