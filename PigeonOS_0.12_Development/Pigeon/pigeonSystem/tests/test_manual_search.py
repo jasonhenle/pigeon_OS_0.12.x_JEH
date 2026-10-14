@@ -159,6 +159,26 @@ class SearchBarTests(unittest.TestCase):
         # Nothing above the SEARCH strip changed.
         np.testing.assert_array_equal(idle[: zy - 10], titled[: zy - 10])
 
+    def test_column_focus_changes_do_not_erase_search_bar(self) -> None:
+        from pigeon.settings_layout import SETTINGS_MAIN_ZONES
+        from pigeon.widgets.settings_main_1280 import (
+            clear_settings_main_compose_cache,
+            render_settings_main_1280_bgra,
+        )
+
+        zx, zy, zw, zh = SETTINGS_MAIN_ZONES[5].xywh
+        clear_settings_main_compose_cache()
+        st = self._state()
+        reference = None
+        for focus in ("main_box1_button", "main_box2_button", "main_box3_button",
+                      "main_box2_button", "main_box1_button"):
+            st.focus_main_button(focus)
+            frame = render_settings_main_1280_bgra(st, assets_dir=ASSETS)
+            strip = frame[zy : zy + zh, zx : zx + zw, :3].copy()
+            if reference is None:
+                reference = strip
+            np.testing.assert_array_equal(strip, reference, err_msg=focus)
+
     def test_focus_moves_between_search_and_clear(self) -> None:
         st = self._state("The Office")
         self.assertTrue(st.focus_main_button("main_search_clear_button"))
@@ -222,6 +242,32 @@ class SearchKeyboardTests(unittest.TestCase):
             self.assertEqual(w.activate(), "manual_search:clear")
             self.assertEqual(st.manual_search_title, "")
             self.assertEqual(ms.current_title(), "")
+        finally:
+            runtime_paths._CACHED = prev
+            tmp.cleanup()
+
+    def test_search_overlay_is_painted_while_nav_scrubbing(self) -> None:
+        from pigeon.widgets.main_settings import MainSettingsWidget
+
+        tmp = tempfile.TemporaryDirectory()
+        prev = runtime_paths._CACHED
+        try:
+            _reset_module(Path(tmp.name))
+            w = MainSettingsWidget(assets_dir=ASSETS)
+            st = w.state
+            st.selected_wifi_ssid = st.live_wifi_ssid = "HomeNet"
+            st.ensure_focus_ring()
+            st.open_keyboard("search", assets_dir=ASSETS)
+            st.keyboard.buffer = "THE OFFICE"
+            w._nav_scrub = False
+            a = np.zeros((800, 1280, 3), dtype=np.uint8)
+            w.render(a)
+            w._nav_scrub = True
+            b = np.zeros((800, 1280, 3), dtype=np.uint8)
+            w.render(b)
+            # Field strip (dual bar rows) identical apart from the blinking caret.
+            fa, fb = a[200:305, 60:1220].astype(int), b[200:305, 60:1220].astype(int)
+            self.assertLess(int((np.abs(fa - fb).sum(axis=2) > 0).sum()), 400)
         finally:
             runtime_paths._CACHED = prev
             tmp.cleanup()

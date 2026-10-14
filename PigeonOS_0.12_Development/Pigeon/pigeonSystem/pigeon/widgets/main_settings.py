@@ -8680,14 +8680,23 @@ class MainSettingsWidget:
         frame = self.bgra_frame()
         if frame is None or canvas_bgr is None or canvas_bgr.size == 0:
             return
-        if self._state.keyboard is not None and not self._nav_scrub:
+        kb_open = self._state.keyboard is not None
+        search_kb = kb_open and (
+            str(getattr(self._state.keyboard, "target", "") or "") == "search"
+        )
+        if kb_open and (search_kb or not self._nav_scrub):
             frame = frame.copy()
-            _draw_text_entry_cursor(frame, self._state)
-            if str(getattr(self._state.keyboard, "target", "") or "") == "search":
+            if not self._nav_scrub:
+                _draw_text_entry_cursor(frame, self._state)
+            if search_kb:
+                # Painted even while nav-scrubbing: the cached frame underneath
+                # still shows the dual bar, which flashed white on every step.
                 from pigeon.widgets.settings_main_1280 import draw_search_overlay
 
                 draw_search_overlay(
-                    frame, self._state, caret_on=not int(time.monotonic() * 2) % 2
+                    frame,
+                    self._state,
+                    caret_on=not self._nav_scrub and not int(time.monotonic() * 2) % 2,
                 )
             self._paste_fully_opaque = None
         ch, cw = int(canvas_bgr.shape[0]), int(canvas_bgr.shape[1])
