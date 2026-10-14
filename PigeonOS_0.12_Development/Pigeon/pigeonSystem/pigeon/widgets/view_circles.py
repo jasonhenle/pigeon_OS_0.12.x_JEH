@@ -5153,10 +5153,10 @@ class ViewCirclesWidget:
         if svc.lower() in ("", "unknown", "none", "n/a", "na", "--"):
             svc = ""
         if self._zone11_on():
-            # Zone 11: app id moved to the top-right and elapsed / TRT live in
-            # the strip above the bar. The input id takes the service slot.
+            # Zone 11: app id / input id moved to the top-right and elapsed / TRT
+            # live in the strip above the bar; nothing is drawn under the bar.
             et, rt = "", ""
-            svc = self._receiver_readout()
+            svc = ""
 
         sx, sy = _bar_xy(STATUS_BAR_SERVICE_LOCAL)
         _, ey = _bar_xy(STATUS_BAR_ELAPSED_LOCAL)
@@ -6319,64 +6319,119 @@ class ViewCirclesWidget:
         _paste_patch_bgra(out, patch, x, y)
         return (x, y, int(pw), int(ph))
 
+    def _zone11_bar_track(self) -> tuple[int, int] | None:
+        """``(track_x, track_w)`` of the status bar the elapsed time rides along."""
+        for i, name in enumerate(self._assignments()[:5]):
+            if is_status_bar_widget(name, i + 1):
+                zone = _zone_spec(i + 1)
+                tx, _ty, tw, _th, _trx = design_rect_from_local(
+                    zone,
+                    STATUS_BAR_TRACK,
+                    view_w=STATUS_BAR_VIEW_W,
+                    view_h=STATUS_BAR_VIEW_H,
+                )
+                return int(tx), int(tw)
+        return None
+
     def _draw_zone11_info(self, out: np.ndarray) -> None:
-        """Zone 4 strip: elapsed | (blank) | TRT in the title's UI color; volume and
-        app id sit in the top-right corner, input id under the status bar."""
+        """Top-right: volume, app id, input id (stacked). Zone 4 strip: elapsed
+        riding the status bar's playhead (gray, fading before it meets the TRT) and
+        the TRT in the title's UI color."""
         zone = _zone_spec(4)
         zx, zy, zw, zh = (int(v) for v in zone.xywh)
         self._tt_time_paint_rects.append((zx, zy, zw, zh))
         recv = self._has_receiver_connection()
         vol = _receiver_volume_display_line(self._state.volume) if recv else ""
 
-        # Top-right: volume, then the app id directly beneath it.
+        # Top-right stack. The input id takes the app id's row when there is no
+        # app id, so the stack never has a gap.
         rect = self._paste_zone11_corner_text(
             out, vol, left=False, fill_rgb=_look_chrome_rgb()
         )
         if rect is not None:
             self._tt_time_paint_rects.append(rect)
-        app = self._zone11_service_label()
-        if app:
+        z = ZONE11
+        right_x = float(z.x) + float(z.w)
+        y = float(header_clock_baseline_y()) + float(self._ZONE11_APP_ID_GAP)
+        for label in (self._zone11_service_label(), self._receiver_readout()):
+            if not label:
+                continue
             patch = _cast_line_patch(
-                app, size_px=self._ZONE11_APP_ID_PX, max_width_px=420
+                label, size_px=self._ZONE11_APP_ID_PX, max_width_px=420
             )
-            if patch is not None:
-                ph, pw = patch.shape[:2]
-                z = ZONE11
-                px = int(round(float(z.x) + float(z.w) - pw))
-                py = int(round(float(header_clock_baseline_y()) + self._ZONE11_APP_ID_GAP))
-                _paste_patch_bgra(out, patch, px, py)
-                self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
+            if patch is None:
+                continue
+            ph, pw = patch.shape[:2]
+            px, py = int(round(right_x - pw)), int(round(y))
+            _paste_patch_bgra(out, patch, px, py)
+            self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
+            y = py + ph + 8.0
 
-        # Strip: elapsed (left column) and TRT (right column), same size and color.
-        elapsed = ""
-        right = ""
-        if self.content_mode != _CONTENT_MODE_MUSIC:
-            elapsed = format_status_bar_timecode(self._state.elapsed_text, remaining=False)
-            if elapsed.upper() == "LIVE":
-                elapsed = ""
-            right = format_countdown_timecode(self._state.remaining_text) or ""
+        # Strip: TRT (right column) and the traveling elapsed time.
+        if self.content_mode == _CONTENT_MODE_MUSIC:
+            return
         mid_y = float(zy) + float(zh) * 0.5
         cols = strip_cast_columns(zone)
-        for idx, text in ((0, elapsed), (2, right)):
-            if not text or len(cols) <= idx:
-                continue
-            x0, col_w = cols[idx]
-            template = re.sub(r"\d", "8", text)
+        trt_left: float | None = None
+        trt_bottom = mid_y
+        right = format_countdown_timecode(self._state.remaining_text) or ""
+        if right and len(cols) >= 3:
+            x0, col_w = cols[2]
+            template = re.sub(r"\d", "8", right)
             size = _header_trt_size_px(template, max(48, int(col_w) - 24), self._ZONE11_INFO_PX)
             fill_rgb = tuple(reversed(self._effective_np_theme().ui_bgr))
-            patch = _matching_hhmm_patch(text, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
+            patch = _matching_hhmm_patch(right, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
             a = patch[:, :, 3] > 8
             rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
-            if rows.size == 0:
-                continue
-            patch = patch[int(rows.min()) : int(rows.max()) + 1, int(pcols.min()) : int(pcols.max()) + 1]
-            ph, pw = patch.shape[:2]
-            _paste_patch_bgra(
-                out,
-                patch,
-                int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0)),
-                int(round(mid_y - ph / 2.0)),
-            )
+            if rows.size:
+                patch = patch[
+                    int(rows.min()) : int(rows.max()) + 1,
+                    int(pcols.min()) : int(pcols.max()) + 1,
+                ]
+                ph, pw = patch.shape[:2]
+                px = int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0))
+                py = int(round(mid_y - ph / 2.0))
+                _paste_patch_bgra(out, patch, px, py)
+                trt_left = float(px)
+                trt_bottom = float(py + ph)
+
+        elapsed = format_status_bar_timecode(self._state.elapsed_text, remaining=False)
+        track = self._zone11_bar_track()
+        if not elapsed or elapsed.upper() == "LIVE" or track is None:
+            return
+        # Same size and gray as the volume readout in the top-right corner.
+        patch = _matching_hhmm_patch(
+            elapsed, size_px=_header_digital7_size_px(), fill_rgb=_look_chrome_rgb()
+        )
+        a = patch[:, :, 3] > 8
+        rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
+        if rows.size == 0:
+            return
+        patch = patch[int(rows.min()) : int(rows.max()) + 1, int(pcols.min()) : int(pcols.max()) + 1]
+        ph, pw = patch.shape[:2]
+        tx, tw = track
+        pf = max(0.0, min(1.0, float(self._state.progress)))
+        left = status_bar_elapsed_left_x(
+            track_x=float(tx),
+            track_w=float(tw),
+            progress=pf,
+            elapsed_w=float(pw),
+            remaining_left_x=trt_left,
+        )
+        alpha = status_bar_elapsed_opacity(
+            track_x=float(tx),
+            track_w=float(tw),
+            progress=pf,
+            elapsed_w=float(pw),
+            remaining_left_x=trt_left,
+        )
+        if alpha <= 0.01:
+            return
+        if alpha < 0.999:
+            patch = _fade_bgra(patch, alpha)
+        _paste_patch_bgra(
+            out, patch, int(round(left)), int(round(trt_bottom - ph))
+        )
 
     def _draw_tt_countdowns(self, out: np.ndarray, *, part: str = "all") -> None:
         assignments = self._assignments()

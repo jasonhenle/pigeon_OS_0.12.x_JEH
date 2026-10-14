@@ -94,14 +94,74 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertGreater(ay, vy)
         self.assertLess(ay - vy, 40)
 
-    def test_elapsed_above_bar_and_input_id_below(self) -> None:
-        frame = self._frame(self._widget())
-        elapsed = self._ink(frame, 60, 540, 420, 636)
-        self.assertTrue(elapsed.any(), "elapsed time missing above the status bar")
-        below = self._ink(frame, 40, 716, 420, 790)
-        self.assertTrue(below.any(), "input id missing under the status bar")
-        # No white TRT / elapsed under the bar on the right or middle.
-        self.assertFalse(self._ink(frame, 420, 716, DESIGN_W, 790).any())
+    def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
+        w = self._widget()
+        w.update_state(
+            progress=progress,
+            elapsed_text="0:41:12",
+            remaining_text="1:12:30",
+            volume_text="-22.5 dB",
+            has_now_playing=True,
+            has_position=True,
+            content_active=True,
+            service_name=service,
+            content_mode="video",
+            receiver_input="APPLE TV",
+            has_receiver=True,
+        )
+        return w
+
+    def _elapsed_cols(self, frame: np.ndarray) -> tuple[int, int] | None:
+        # Gray ink (not the UI-colored TRT) in the strip's left/middle, above the bar.
+        reg = frame[540:640, 60:870].astype(int)
+        gray = (reg.max(axis=2) > 90) & ((reg.max(axis=2) - reg.min(axis=2)) < 25)
+        if not gray.any():
+            return None
+        xs = np.where(gray.any(axis=0))[0]
+        return int(xs.min()) + 60, int(xs.max()) + 60
+
+    def test_elapsed_rides_the_playhead_and_fades_before_the_trt(self) -> None:
+        early = self._elapsed_cols(self._frame(self._widget_at(0.10)))
+        mid = self._elapsed_cols(self._frame(self._widget_at(0.45)))
+        self.assertIsNotNone(early)
+        self.assertIsNotNone(mid)
+        assert early is not None and mid is not None
+        self.assertGreater(mid[0], early[0] + 200)  # moved right with the bar
+        # Near the end it would collide with the TRT: gone.
+        self.assertIsNone(self._elapsed_cols(self._frame(self._widget_at(0.97))))
+
+    def test_elapsed_uses_the_volume_gray_and_size(self) -> None:
+        frame = self._frame(self._widget_at(0.30))
+        vol = frame[0:66, 900:DESIGN_W].astype(int)
+        el = frame[540:640, 60:870].astype(int)
+        vol_mask = vol.max(axis=2) > 90
+        el_mask = (el.max(axis=2) > 90) & ((el.max(axis=2) - el.min(axis=2)) < 25)
+        self.assertTrue(vol_mask.any() and el_mask.any())
+        self.assertLessEqual(abs(int(vol[vol_mask].max()) - int(el[el_mask].max())), 12)
+        vh = np.where(vol_mask.any(axis=1))[0]
+        eh = np.where(el_mask.any(axis=1))[0]
+        self.assertLessEqual(abs(int(vh.max() - vh.min()) - int(eh.max() - eh.min())), 4)
+
+    def test_input_id_stacks_under_app_id_and_takes_its_place_when_missing(self) -> None:
+        def rows(frame: np.ndarray) -> list[int]:
+            reg = frame[66:200, 1000:DESIGN_W].astype(int)
+            band = reg.max(axis=2) > 90
+            ys = np.where(band.any(axis=1))[0]
+            groups: list[int] = []
+            prev = -10
+            for y in ys:
+                if y - prev > 3:
+                    groups.append(int(y) + 66)
+                prev = int(y)
+            return groups
+
+        both = rows(self._frame(self._widget_at(0.3, "peacock")))
+        only_input = rows(self._frame(self._widget_at(0.3, "")))
+        self.assertEqual(len(both), 2, both)  # app id, then input id
+        self.assertEqual(len(only_input), 1, only_input)  # input id, no gap
+        self.assertLessEqual(abs(only_input[0] - both[0]), 3)
+        # Nothing is drawn under the status bar any more.
+        self.assertFalse(self._ink(self._frame(self._widget_at(0.3)), 40, 716, DESIGN_W, 790).any())
 
     def test_volume_adjustment_never_brings_up_zone3_volume(self) -> None:
         w = self._widget()
