@@ -202,3 +202,51 @@ class ClaimCodeDrawTests(_Base):
         from pigeon import control_api
 
         self.assertEqual(control_api.claim_code_to_show(), "")
+
+
+class PairingDisplayTests(_Base):
+    def test_start_shows_code_and_claim_clears_it(self) -> None:
+        a = AuthStore()
+        self.assertEqual(a.display_code(), "")
+        self.assertTrue(a.request_display())
+        self.assertEqual(a.display_code(), a.pairing_code)
+        code = a.pairing_code
+        self.assertTrue(a.claim(code, "p", "c1"))
+        self.assertEqual(a.display_code(), "")
+
+    def test_cancel_and_expiry(self) -> None:
+        a = AuthStore()
+        a.request_display()
+        a.cancel_display()
+        self.assertEqual(a.display_code(), "")
+        a.request_display(ttl_s=-1)
+        self.assertEqual(a.display_code(), "")
+
+    def test_cannot_request_when_claimed(self) -> None:
+        a = AuthStore()
+        a.claim(a.pairing_code, "p", "c1")
+        self.assertFalse(a.request_display())
+        a.invite()
+        self.assertTrue(a.request_display())
+
+    def test_routes(self) -> None:
+        svc = ControlService(run_on_ui=lambda fn: fn())
+        st, body = svc.handle("POST", "/api/v1/pair/start", {}, "", None)
+        self.assertEqual((st, body["expires_in_s"]), (200, 120))
+        self.assertEqual(svc.auth.display_code(), svc.auth.pairing_code)
+        self.assertEqual(svc.handle("POST", "/api/v1/pair/cancel", {}, "", None)[0], 204)
+        self.assertEqual(svc.auth.display_code(), "")
+        svc.auth.claim(svc.auth.pairing_code, "p", "c1")
+        st, body = svc.handle("POST", "/api/v1/pair/start", {}, "", None)
+        self.assertEqual((st, body["error"]["code"]), (403, "already_claimed"))
+
+    def test_render_image(self) -> None:
+        from pigeon.control_api.pairing_overlay import render_pairing_image
+
+        img = render_pairing_image("482913", 1280, 800)
+        self.assertEqual(img.size, (1280, 800))
+        # center band holds the white code; corners stay black
+        self.assertGreater(max(img.crop((200, 340, 1080, 460)).convert("L").getdata()), 200)
+        self.assertEqual(img.getpixel((5, 5)), (0, 0, 0))
+        small = render_pairing_image("000000", 320, 200)
+        self.assertEqual(small.size, (320, 200))

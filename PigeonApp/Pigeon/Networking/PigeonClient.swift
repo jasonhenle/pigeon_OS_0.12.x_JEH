@@ -85,6 +85,16 @@ struct PigeonClient {
             code: code, controller: .init(name: controllerName, id: controllerID)))
     }
 
+    /// Ask the device to show its pairing code full screen (open endpoint, unclaimed devices only).
+    func pairStart() async throws {
+        let _: PairStartResponse = try await send("POST", "/pair/start")
+    }
+
+    /// Dismiss the on-screen code, e.g. when the user backs out. Best effort.
+    func pairCancel() async {
+        try? await sendNoContent("POST", "/pair/cancel")
+    }
+
     func device() async throws -> DeviceInfo { try await send("GET", "/device") }
     func capabilities() async throws -> Capabilities { try await send("GET", "/capabilities") }
     func status() async throws -> DeviceStatus { try await send("GET", "/status") }

@@ -14,6 +14,7 @@ from pigeon.runtime_paths import pigeon_state_dir
 _FILE = "control_api_auth.json"
 MAX_FAILS = 5
 LOCKOUT_S = 60.0
+DISPLAY_TTL_S = 120.0
 
 
 def _hash(token: str) -> str:
@@ -30,6 +31,7 @@ class AuthStore:
         self._fails = 0
         self._locked_until = 0.0
         self._invite_until = 0.0
+        self._display_until = 0.0
 
     # ---- persistence
     def _file(self):
@@ -103,6 +105,7 @@ class AuthStore:
             self._save(rows)
             self._code = self._new_code()
             self._fails = 0
+            self._display_until = 0.0
             return token
 
     def invite(self, ttl_s: float = 300.0) -> str:
@@ -116,6 +119,24 @@ class AuthStore:
         """Claims are accepted while unclaimed, or during an invite window."""
         with self._lock:
             return not self._load() or time.monotonic() < self._invite_until
+
+    # ---- on-screen code (the phone asks the device to show it)
+    def request_display(self, ttl_s: float = DISPLAY_TTL_S) -> bool:
+        """Ask the device to show the code big on its own screen. False if it can't be claimed."""
+        with self._lock:
+            if not (not self._load() or time.monotonic() < self._invite_until):
+                return False
+            self._display_until = time.monotonic() + ttl_s
+            return True
+
+    def cancel_display(self) -> None:
+        with self._lock:
+            self._display_until = 0.0
+
+    def display_code(self) -> str:
+        """The code to draw full screen right now, or ``""``."""
+        with self._lock:
+            return self._code if time.monotonic() < self._display_until else ""
 
     # ---- verify / revoke
     def verify(self, token: str) -> dict | None:

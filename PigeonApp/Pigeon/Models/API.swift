@@ -103,3 +103,7 @@ enum DeviceEvent: Equatable {
     case device
     case other(String)
 }
+
+struct PairStartResponse: Codable {
+    var expiresInS: Int
+}

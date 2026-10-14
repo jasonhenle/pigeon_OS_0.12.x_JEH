@@ -823,10 +823,14 @@ def run(ctx) -> None:
     try:
         from pigeon import control_api as _control_api
 
-        _control_api.start(
+        if _control_api.start(
             status_provider=_control_api_status,
             run_on_ui=lambda fn: root.after(0, fn),
-        )
+        ) is not None:
+            from pigeon.control_api.pairing_overlay import PairingOverlay
+
+            # Full-screen code while a phone is mid-pairing (Apple TV PIN style).
+            PairingOverlay(root, _control_api.display_code).start()
     except Exception:
         pass  # the companion API must never block startup
 

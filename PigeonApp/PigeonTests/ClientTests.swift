@@ -78,6 +78,29 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(ev, .manualSearch(ManualSearchState(active: true, entry: ManualEntry(title: "Heat", kind: nil, tmdbId: 949, year: nil))))
     }
 
+    func testPairStartAndCancel() async throws {
+        var paths: [String] = []
+        StubURLProtocol.handler = { req in
+            paths.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            XCTAssertNil(req.value(forHTTPHeaderField: "Authorization"))
+            return req.url?.path.hasSuffix("start") == true
+                ? (200, #"{"expires_in_s":120}"#.data(using: .utf8)!) : (204, Data())
+        }
+        let c = client(token: nil)
+        try await c.pairStart()
+        await c.pairCancel()
+        XCTAssertEqual(paths, ["POST /api/v1/pair/start", "POST /api/v1/pair/cancel"])
+    }
+
+    func testPairStartRefusedWhenClaimed() async {
+        StubURLProtocol.handler = { _ in
+            (403, #"{"error":{"code":"already_claimed","message":"Device already has a controller.","details":{}}}"#.data(using: .utf8)!)
+        }
+        do { try await client(token: nil).pairStart(); XCTFail() } catch {
+            XCTAssertEqual(error as? PigeonError, .api(status: 403, code: "already_claimed", message: "Device already has a controller."))
+        }
+    }
+
     func testSuggestionSubtitle() {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")
