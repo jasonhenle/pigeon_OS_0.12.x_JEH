@@ -1394,6 +1394,9 @@ def render_settings_main_1280_bgra(
                 dirty = {0, 1, 2, 3, 4}
                 break
             dirty.add(layer)
+        # Column restores (pad 8) reach into the SEARCH strip below them.
+        if dirty & {2, 3, 4}:
+            dirty.add(5)
         canvas = last_frame.copy()
         for z in dirty:
             _restore_layer(canvas, bg, z)
