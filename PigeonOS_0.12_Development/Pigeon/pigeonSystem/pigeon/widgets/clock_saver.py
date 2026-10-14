@@ -1795,7 +1795,11 @@ def _contain_patch(
     canvas: np.ndarray,
     patch: np.ndarray | None,
     box: tuple[int, int, int, int],
+    *,
+    source_xywh: tuple[int, int, int, int] | None = None,
 ) -> None:
+    """Fit *patch* into *box*. With *source_xywh* the crop is a fixed rect so the
+    scale cannot change when glyph ink does (e.g. a narrow ``1`` in the seconds)."""
     if patch is None or patch.size == 0 or patch.ndim < 3:
         return
     import cv2
@@ -1803,7 +1807,11 @@ def _contain_patch(
     from pigeon.compositing import cv_resize_interp
     from pigeon.widgets.view_circles import _ink_crop_bgra, _paste_patch_bgra
 
-    cropped = _ink_crop_bgra(patch, pad=2)
+    if source_xywh is not None:
+        sx, sy, sw_, sh_ = (int(v) for v in source_xywh)
+        cropped = patch[max(0, sy) : sy + sh_, max(0, sx) : sx + sw_]
+    else:
+        cropped = _ink_crop_bgra(patch, pad=2)
     if cropped is None or cropped.size == 0:
         return
     x, y, w, h = (int(v) for v in box)
@@ -1929,7 +1937,18 @@ def compose_clock_with_poster(
     # visible box with an edge. Keep only the lit ink.
     clock = frame.copy()
     clock[clock[:, :, :3].max(axis=2) < _CLOCK_INK_MIN_CHANNEL, 3] = 0
-    _contain_patch(out, clock, clock_box)
+    source = None
+    try:
+        from pigeon.auto_widgets import auto_clocksaver_wants_digital
+        from pigeon.np_layout import clock_saver_scaled_source_xywh
+        from pigeon.widgets.options_settings import clock_widget_analog
+
+        if auto_clocksaver_wants_digital() or not clock_widget_analog():
+            # Digital face: fixed zone 8 + 5 crop; ink bbox shifts with digits.
+            source = clock_saver_scaled_source_xywh()
+    except Exception:
+        source = None
+    _contain_patch(out, clock, clock_box, source_xywh=source)
 
     sh, sw = int(poster_bgr.shape[0]), int(poster_bgr.shape[1])
     if sh < 1 or sw < 1:
