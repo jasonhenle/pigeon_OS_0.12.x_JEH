@@ -24,7 +24,7 @@ def _reset_module(state_dir: Path) -> None:
     runtime_paths._CACHED = state_dir
     ms._entry = None
     ms._loaded = False
-    ms._last_conflict_mono = 0.0
+    ms._conflict_active = False
     ms._auto_active = False
     ms._shown = False
     ms._manual_query = ""
@@ -63,17 +63,24 @@ class ManualSearchStateTests(unittest.TestCase):
         self.assertFalse(ms.titles_match("Severance", "The Office"))
         self.assertFalse(ms.titles_match("", "The Office"))
 
-    def test_conflict_hides_poster_for_ten_minutes(self) -> None:
+    def test_mismatching_metadata_hides_poster_only_while_detected(self) -> None:
         ms.set_entry({"title": "The Office"})
-        self.assertTrue(ms.poster_allowed(now=1000.0))
-        ms.note_detected_query("The Office", now=1000.0)  # matches: no conflict
-        self.assertTrue(ms.poster_allowed(now=1001.0))
-        ms.note_detected_query("Severance", now=2000.0)
-        self.assertFalse(ms.poster_allowed(now=2000.0 + 599.0))
-        self.assertTrue(ms.poster_allowed(now=2000.0 + 600.0))
-        # A fresh mismatch restarts the window.
-        ms.note_detected_query("Ted Lasso", now=2700.0)
-        self.assertFalse(ms.poster_allowed(now=2700.0 + 599.0))
+        self.assertTrue(ms.poster_allowed())
+        ms.note_detected_query("The Office")  # matches: no conflict
+        self.assertTrue(ms.poster_allowed())
+        ms.note_detected_query("Severance")  # metadata wins
+        self.assertFalse(ms.poster_allowed())
+        ms.note_detected_query("Ted Lasso")
+        self.assertFalse(ms.poster_allowed())
+        ms.on_content_idle()  # detection ended: poster is back immediately
+        self.assertTrue(ms.poster_allowed())
+
+    def test_matching_metadata_clears_an_earlier_conflict(self) -> None:
+        ms.set_entry({"title": "The Office"})
+        ms.note_detected_query("Severance")
+        self.assertFalse(ms.poster_allowed())
+        ms.note_detected_query("The Office")
+        self.assertTrue(ms.poster_allowed())
 
     def test_no_manual_title_never_conflicts(self) -> None:
         ms.note_detected_query("Severance", now=10.0)
