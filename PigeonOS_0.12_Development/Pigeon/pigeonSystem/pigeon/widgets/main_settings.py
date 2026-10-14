@@ -234,6 +234,8 @@ _ACTIVATE_ACTIONS: dict[str, str] = {
     "main_box2_device_results": "pick_box2_device",
     "main_box3_device_results": "pick_box3_device",
     "main_exit_button": "exit",
+    "main_search_button": "focus_search",
+    "main_search_clear_button": "clear_search",
     "main_network_picker_button": "focus_network_picker",
     "main_box2_add_search_icon": "wifi_search",
 }
@@ -514,6 +516,8 @@ class MainSettingsState:
     box3_devices: BoxDevicePanelState = field(default_factory=BoxDevicePanelState)
     box_pairing: BoxPairingSession | None = None
     manual_device_entry: ManualDeviceEntry | None = None
+    # Title pinned from the SEARCH button (persisted by ``pigeon.manual_search``).
+    manual_search_title: str = ""
     box2_ip_invalid: bool = False
     box3_ip_invalid: bool = False
     show_pigeon_settings: bool = False
@@ -967,6 +971,25 @@ class MainSettingsState:
         )
         return True
 
+    def search_bar_visible(self) -> bool:
+        """SEARCH bar shares the columns' rows, so it yields to any list view."""
+        if not self.wifi_configured or self.wifi_connecting or self.wifi_scanning:
+            return False
+        if self.show_location_picker or self.show_network_picker:
+            return False
+        if self.manual_device_entry is not None:
+            return False
+        for box_num in (2, 3):
+            panel = self._box_panel(box_num)
+            if (
+                panel.scanning
+                or panel.results_locked
+                or str(getattr(panel, "phase", "") or "") in ("scanning", "results")
+                or bool(getattr(panel, "active", False))
+            ):
+                return False
+        return True
+
     def ensure_focus_ring(self) -> None:
         locked_box = self.box_device_results_locked()
         if locked_box is not None:
@@ -989,6 +1012,10 @@ class MainSettingsState:
                     ring.insert(i, "main_network_picker_button")
                 else:
                     ring.append("main_network_picker_button")
+            if self.search_bar_visible():
+                ring.append("main_search_button")
+                if self.manual_search_title:
+                    ring.append("main_search_clear_button")
             self.focus_ring = tuple(ring)
         if not self.exit_enabled:
             self.focus_ring = tuple(
@@ -1669,6 +1696,10 @@ class MainSettingsState:
             from pigeon.widgets.settings_keyboard import KeyboardMode
 
             mode_override = KeyboardMode.NUMERIC_ALL
+        elif target == "search":
+            from pigeon.widgets.settings_keyboard import KeyboardMode
+
+            mode_override = KeyboardMode.QWERTY_UPPER
         self.keyboard = open_keyboard(
             target=target,
             initial_text=initial,
@@ -1718,6 +1749,45 @@ class MainSettingsState:
                 self.network_name = buffer
         self.keyboard = None
         return target, buffer
+
+    def sync_search_suggestions(self) -> bool:
+        """Mirror ``manual_search`` suggestions into the open search keyboard."""
+        kb = self.keyboard
+        if kb is None or str(getattr(kb, "target", "") or "") != "search":
+            return False
+        from pigeon.manual_search import suggestions
+
+        rows = tuple(
+            f"{r['title']} ({r['year']})" if r.get("year") else str(r["title"])
+            for r in suggestions()
+        )
+        if rows == tuple(getattr(kb, "suggestions", ()) or ()):
+            return False
+        kb.suggestions = rows
+        kb.clamp_focus_to_available()
+        return True
+
+    def commit_search(self, entry: dict | None) -> bool:
+        """Persist a manual title and return to the main ring on SEARCH."""
+        from pigeon import manual_search
+
+        saved = manual_search.set_entry(entry) if entry else None
+        self.keyboard = None
+        manual_search.reset_suggestions()
+        if saved is None:
+            return False
+        self.manual_search_title = str(saved["title"])
+        self.ensure_focus_ring()
+        self.focus_main_button("main_search_button")
+        return True
+
+    def clear_search(self) -> None:
+        from pigeon import manual_search
+
+        manual_search.clear()
+        self.manual_search_title = ""
+        self.ensure_focus_ring()
+        self.focus_main_button("main_search_button")
 
     def enter_wifi_onboarding(self) -> None:
         if self.wifi_configured:
@@ -6119,6 +6189,12 @@ class MainSettingsWidget:
         except Exception:
             pass
         self._state.load_saved_box_devices()
+        try:
+            from pigeon.manual_search import current_title
+
+            self._state.manual_search_title = current_title()
+        except Exception:
+            pass
         self._state.ensure_focus_ring()
         self._cached_bgra: np.ndarray | None = None
         self._cached_sig: tuple[object, ...] | None = None
@@ -7401,6 +7477,9 @@ class MainSettingsWidget:
         dt = max(0.0, now - self._last_tick_mono)
         self._last_tick_mono = now
         invalidated = False
+        if st.keyboard is not None:
+            # Overlay is painted per frame in render(); no chrome invalidation.
+            st.sync_search_suggestions()
         if st.wifi_scanning or st.wifi_connecting:
             st.wifi_scan_angle_deg = (st.wifi_scan_angle_deg + _WIFI_SCAN_ROTATION_DPS * dt) % 360.0
         if st.location_switching:
@@ -7937,6 +8016,50 @@ class MainSettingsWidget:
             return "location_switch"
         return ""
 
+    def _activate_search_keyboard(self, result: str) -> str | None:
+        """Search-target keyboard results; ``None`` falls through to the shared path."""
+        from pigeon import manual_search
+
+        st = self._state
+        kb = st.keyboard
+        if kb is None:
+            return None
+        if result == "typing":
+            manual_search.request_suggestions(str(getattr(kb, "buffer", "") or ""))
+            return None
+        if result == "cancel":
+            manual_search.reset_suggestions()
+            return None
+        if result.startswith("suggest:"):
+            rows = manual_search.suggestions()
+            try:
+                picked = rows[int(result.split(":", 1)[1])]
+            except (ValueError, IndexError):
+                return "typing"
+            st.commit_search(dict(picked))
+            self._clear_keyboard_focus_caches()
+            self.invalidate()
+            return "manual_search:set"
+        if result == "go":
+            typed = " ".join(str(getattr(kb, "buffer", "") or "").split())
+            if not typed:
+                st.keyboard = None
+                manual_search.reset_suggestions()
+                st.ensure_focus_ring()
+                st.focus_main_button("main_search_button")
+                self._clear_keyboard_focus_caches()
+                self.invalidate()
+                return "keyboard_cancel"
+            entry: dict = {"title": typed}
+            rows = manual_search.suggestions()
+            if rows and manual_search.titles_match(rows[0]["title"], typed):
+                entry = dict(rows[0])
+            st.commit_search(entry)
+            self._clear_keyboard_focus_caches()
+            self.invalidate()
+            return "manual_search:set"
+        return None
+
     def activate(self) -> str:
         """Return an action string for the focused control."""
         st = self._state
@@ -7944,6 +8067,10 @@ class MainSettingsWidget:
             from pigeon.widgets.settings_keyboard import activate_key
 
             result = activate_key(st.keyboard, assets_dir=self._assets_dir)
+            if str(getattr(st.keyboard, "target", "") or "") == "search":
+                search_action = self._activate_search_keyboard(result)
+                if search_action is not None:
+                    return search_action
             if result == "typing":
                 kb = st.keyboard
                 if (
@@ -8216,6 +8343,18 @@ class MainSettingsWidget:
             st.open_keyboard("wifi_logout", assets_dir=self._assets_dir)
             self.invalidate()
             return "keyboard_open:wifi_logout"
+        if action == "focus_search":
+            from pigeon import manual_search
+
+            manual_search.reset_suggestions()
+            st.open_keyboard("search", assets_dir=self._assets_dir)
+            self._clear_keyboard_focus_caches()
+            self.invalidate()
+            return "keyboard_open:search"
+        if action == "clear_search":
+            st.clear_search()
+            self.invalidate()
+            return "manual_search:clear"
         if action == "wifi_search":
             self._begin_wifi_scan()
             return "wifi_scan_start"
@@ -8544,6 +8683,12 @@ class MainSettingsWidget:
         if self._state.keyboard is not None and not self._nav_scrub:
             frame = frame.copy()
             _draw_text_entry_cursor(frame, self._state)
+            if str(getattr(self._state.keyboard, "target", "") or "") == "search":
+                from pigeon.widgets.settings_main_1280 import draw_search_overlay
+
+                draw_search_overlay(
+                    frame, self._state, caret_on=not int(time.monotonic() * 2) % 2
+                )
             self._paste_fully_opaque = None
         ch, cw = int(canvas_bgr.shape[0]), int(canvas_bgr.shape[1])
         fh, fw = int(frame.shape[0]), int(frame.shape[1])

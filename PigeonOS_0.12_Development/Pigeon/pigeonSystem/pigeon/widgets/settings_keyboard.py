@@ -70,6 +70,7 @@ class KeyAction(str, Enum):
     GO = "go"
     YES = "yes"
     NO = "no"
+    SUGGEST = "suggest"  # search suggestion row above the field (virtual key)
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,10 @@ _MODE_SVG: dict[KeyboardMode, str] = {
 }
 
 _BOTTOM_ROW_SVG = "keyboard_bottom_row.svg"
+
+# Suggestion rows shown above the search field.
+SEARCH_ROWS = 3
+SEARCH_MAX_CHARS = 48
 
 # Shared lower / numeric / bottom-row artboard (centered between box 1 and the NP bar).
 _CLUSTER_VB = (0.0, 0.0, 1202.99, 298.66)
@@ -168,6 +173,8 @@ class KeyboardState:
     # Cached focus ring for the active mode (char keys + bottom row).
     focus_ring: tuple[KeySpec, ...] = field(default_factory=tuple)
     include_bottom_row: bool = True
+    # Search target only: suggestion rows reachable after the bottom row.
+    suggestions: tuple[str, ...] = ()
 
     def rebuild_focus_ring(self, *, assets_dir: Path | str | None = None) -> None:
         if self.mode == KeyboardMode.YES_NO:
@@ -206,7 +213,17 @@ class KeyboardState:
                 self.focus_ring = tuple(char_keys)
         if not self.focus_ring:
             self.focus_ring = _bottom_row_keys(self.mode)
+        if self.target == "search":
+            # Virtual keys (no SVG button): wrap-around from Q lands on row 3.
+            self.focus_ring = tuple(self.focus_ring) + tuple(
+                KeySpec("", KeyAction.SUGGEST, char=str(i)) for i in range(SEARCH_ROWS)
+            )
         self.focus_index = int(self.focus_index) % len(self.focus_ring)
+
+    def _key_available(self, key: KeySpec) -> bool:
+        if key.action != KeyAction.SUGGEST:
+            return True
+        return int(key.char or 0) < len(self.suggestions)
 
     @property
     def focused(self) -> KeySpec:
@@ -219,7 +236,20 @@ class KeyboardState:
             self.rebuild_focus_ring()
         n = len(self.focus_ring)
         step = 1 if forward else -1
-        self.focus_index = (int(self.focus_index) + step) % n
+        idx = int(self.focus_index)
+        for _ in range(n):
+            idx = (idx + step) % n
+            if self._key_available(self.focus_ring[idx]):
+                break
+        self.focus_index = idx
+
+    def clamp_focus_to_available(self) -> None:
+        """Suggestions can shrink under the cursor — step back onto a real key."""
+        if not self.focus_ring:
+            return
+        if self._key_available(self.focused):
+            return
+        self.focus_index = max(0, len(self.focus_ring) - SEARCH_ROWS - 1)
 
     def set_mode(self, mode: KeyboardMode, *, assets_dir: Path | str | None = None) -> None:
         if mode == self.mode:
@@ -1815,6 +1845,13 @@ def activate_key(state: KeyboardState, *, assets_dir: Path | str | None = None) 
     key = state.focused
     act = key.action
 
+    if act == KeyAction.SUGGEST:
+        return f"suggest:{key.char}"
+
+    if state.target == "search" and act in (KeyAction.CHAR, KeyAction.SPACE):
+        if len(state.buffer) >= SEARCH_MAX_CHARS:
+            return "typing"
+
     if act == KeyAction.CHAR:
         if key.char:
             ch = key.char
@@ -1958,7 +1995,7 @@ def open_keyboard(
             mode = KeyboardMode.NUMERIC_IP
         elif target == "wifi_logout":
             mode = KeyboardMode.YES_NO
-        elif target == "location":
+        elif target in ("location", "search"):
             mode = KeyboardMode.QWERTY_UPPER
         else:
             mode = KeyboardMode.QWERTY_LOWER
@@ -1986,6 +2023,8 @@ __all__ = [
     "KeySpec",
     "KeyboardMode",
     "KeyboardState",
+    "SEARCH_MAX_CHARS",
+    "SEARCH_ROWS",
     "activate_key",
     "clear_keyboard_render_caches",
     "discover_char_keys",

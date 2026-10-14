@@ -744,10 +744,28 @@ def _toggle_clock_saver_force(event: tk.Event | None = None, *, _PIGEON_EXT, _bo
     return "break"
 
 
+def _manual_search_fallback() -> None:
+    """Nothing is detected any more: show the SEARCH title, if one is pinned."""
+    try:
+        from pigeon import manual_search
+
+        manual_search.on_content_idle()
+    except Exception:
+        pass
+
+
 def _return_to_landing_if_atv_idle(metadata: dict[str, object], *, _PIGEON_EXT, _atv_metadata_is_content_idle, _clear_playback_artwork_caches, _disp_fit, _program_audio_session, _refresh_content_indicator, _resolve_receiver_lines_for_now_playing, _sync_now_playing_screen_state, _sync_status_bar_visibility_for_playback, _view_one_uses_now_playing_screen, _warm_status_bar_blits, _warm_tmdb_logo_patch, active_tmdb_display_title, active_tmdb_title_key, apple_tv_auto_state, apple_tv_playback_clock, backdrop_app_logo_letterbox_fit, backdrop_master_bgr, landing_scene_design_bgr, last_frame, playing, receiver_standby_holder, render_once, scaled_display, scaled_version, scene_enabled, skip_cache, status_bar_widget, tmdb_logo_app_fallback_active, tmdb_logo_patch_bgra, tmdb_logo_widget, tmdb_logo_widget_view_six, use_backdrop_scene) -> None:
     """When Apple TV reports no playback, drop TMDb backdrop and show the static landing page."""
     if not _atv_metadata_is_content_idle(metadata):
         return
+    try:
+        from pigeon import manual_search
+
+        if manual_search.is_displaying():
+            # Manual SEARCH title is up; idle polls must not wipe it every tick.
+            return
+    except Exception:
+        pass
     try:
         from pigeon.display_confidence import (
             identity_displayable,
@@ -801,6 +819,7 @@ def _return_to_landing_if_atv_idle(metadata: dict[str, object], *, _PIGEON_EXT, 
         _sync_now_playing_screen_state()
         skip_cache[0] = None
         render_once()
+        _manual_search_fallback()
         return
     apple_tv_auto_state["content_key"] = None
     apple_tv_auto_state["tmdb_key"] = None
@@ -866,6 +885,7 @@ def _return_to_landing_if_atv_idle(metadata: dict[str, object], *, _PIGEON_EXT, 
 
     if had_art:
         render_once()
+    _manual_search_fallback()
 
 
 def _auto_widget_signals(*, _apple_tv_is_off, _clock_saver_receiver_off, _paused_screen_backdrop_bgr, _player_metadata_class, _program_audio_session, _refresh_paused_row_stamp, current_apple_tv, main_settings_widget, view_circles_widget):
@@ -1244,4 +1264,21 @@ def _clock_saver_layers(*, _clock_saver_volume_raw, _volume_lines, clock_saver_c
         if op is None:
             op = kwargs.get("layer_opacity", 1.0)
         return render_audio_meter_composite_bgra(layer_opacity=float(op))
-    return clock_saver_composite_bgra(**kwargs)
+    composite = clock_saver_composite_bgra(**kwargs)
+    try:
+        from pigeon import manual_search
+
+        if manual_search.current_title() and manual_search.poster_allowed():
+            poster = manual_search.poster_bgr()
+            if poster is not None:
+                from pigeon.widgets.clock_saver import compose_clock_with_poster
+
+                op = kwargs.get("time_layer_opacity")
+                if op is None:
+                    op = kwargs.get("layer_opacity", 1.0)
+                (frame, rect), date = composite
+                frame = compose_clock_with_poster(frame, poster, opacity=float(op))
+                return (frame, rect), date
+    except Exception:
+        pass
+    return composite

@@ -76,6 +76,9 @@ SETTINGS_MAIN_ZONES: dict[int, SettingsZone] = {
     2: SettingsZone(2, _COL_XS[0], _COL_Y, _COL_W, _COL_H),
     3: SettingsZone(3, _COL_XS[1], _COL_Y, _COL_W, _COL_H),
     4: SettingsZone(4, _COL_XS[2], _COL_Y, _COL_W, _COL_H),
+    # zone5: SEARCH bar under the columns (one dual pill wide; two pills once a
+    # manual title is set so CLEAR can sit beside it).
+    5: SettingsZone(5, (DESIGN_W - _DUAL_W) * 0.5, 618.0, _DUAL_W, 90.0),
 }
 
 # Dual inner pills (widget-local, widget_sm_01_dual.svg).

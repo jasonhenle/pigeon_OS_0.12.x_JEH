@@ -1069,6 +1069,14 @@ def spawn_tmdb_poster_fetch(
     del force  # kept for call-site compat; queueing replaces concurrent force
 
     if _vv_is_music() or _vv_is_youtube():
+        # Music / YouTube metadata is still auto-detected content: a title that
+        # differs from the manual SEARCH title suppresses the clocksaver poster.
+        try:
+            from pigeon import manual_search
+
+            manual_search.note_detected_query(query)
+        except Exception:
+            pass
         sys.stderr.write(
             f"pigeon: tmdb spawn exit: {'youtube' if _vv_is_youtube() else 'music'} "
             f"query={query!r}\n"
@@ -1096,6 +1104,12 @@ def spawn_tmdb_poster_fetch(
     if is_degenerate_tmdb_query(q):
         sys.stderr.write(f"pigeon: tmdb spawn exit: degenerate query {q!r}\n")
         return
+    try:
+        from pigeon import manual_search
+
+        manual_search.note_detected_query(q_in)
+    except Exception:
+        pass
     try:
         from pigeon.tmdb_poster import tmdb_is_configured
     except ImportError:

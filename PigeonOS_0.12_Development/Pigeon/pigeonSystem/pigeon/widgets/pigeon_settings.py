@@ -30,6 +30,7 @@ import numpy as np
 from pigeon.design import DESIGN_H, DESIGN_W
 from pigeon.settings_layout import SETTINGS_BACKGROUND_SHIFT_Y, SETTINGS_CANVAS_ORIGIN
 from pigeon.version import version_string
+from pigeon.widgets.settings_svg_text import center_label_on_pill
 from pigeon.widgets.main_settings import (
     MainSettingsState,
     _composite_bgra_over_bgra,
@@ -383,8 +384,7 @@ def apply_pigeon_settings_svg_state(root: ET.Element, state: MainSettingsState) 
 
     _sync_pill(root, button_id="exit_button", text_id="exit_text", selected=focused == "exit")
     _set_text_content(_by_id(root, "exit_text"), "BACK" if update_screen else "EXIT")
-    if update_screen:
-        _fit_text_in_pill(root, text_id="exit_text", button_id="exit_button")
+    center_label_on_pill(_by_id(root, "exit_text"), _by_id(root, "exit_button"))
     _sync_pill(
         root,
         button_id="zipcode_button",
