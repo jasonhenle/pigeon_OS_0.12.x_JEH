@@ -20,10 +20,14 @@ class Advertiser:
         if not ip:
             return False
         try:
-            safe = "".join(c for c in name if c.isalnum() or c in " -_")[:40] or "Pigeon"
+            # The device id is part of the instance name so two devices that share a
+            # display name (every new one is "Pigeon Clock") don't collide on the LAN.
+            safe = "".join(c for c in name if c.isalnum() or c in " -_")[:32].strip() or "Pigeon"
+            uid = "".join(c for c in str(txt.get("id", "")) if c.isalnum())[-6:]
+            instance = f"{safe} {uid}" if uid else safe
             self._info = ServiceInfo(
                 SERVICE,
-                f"{safe}.{SERVICE}",
+                f"{instance}.{SERVICE}",
                 addresses=[socket.inet_aton(ip)],
                 port=port,
                 properties={k: str(v).encode("utf-8") for k, v in txt.items()},

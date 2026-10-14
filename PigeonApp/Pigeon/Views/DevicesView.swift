@@ -97,6 +97,18 @@ struct DeviceDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading).tile()
                     }
 
+                    if status?.nowPlaying != nil {
+                        NavigationLink {
+                            NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
+                        } label: {
+                            HStack {
+                                Text("Fix what's showing").font(Theme.uiBold(16)).foregroundStyle(.white)
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
+                            }.tile()
+                        }.buttonStyle(.plain)
+                    }
+
                     if let errorText { Text(errorText).font(Theme.ui(14)).foregroundStyle(Theme.bad) }
 
                     Button(role: .destructive) { confirmRemove = true } label: {

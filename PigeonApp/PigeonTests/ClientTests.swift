@@ -101,6 +101,55 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testNowPlayingDetailDecoding() async throws {
+        StubURLProtocol.handler = { req in
+            XCTAssertEqual(req.url?.path, "/api/v1/now-playing/detail")
+            return (200, """
+            {"content_active":true,"app":"Disney+",
+             "inputs":[{"key":"title","label":"Title","value":"The Final Show","editable":true},
+                       {"key":"app_name","label":"App","value":"Disney+","editable":false}],
+             "query":{"apple_tv":"The Final Show","resolved":"The Final Show","candidates":["The Final Show"],
+                      "searched":"The Final Show","prefer":"auto","in_flight":false},
+             "match":{"title":"Taylor Swift | The Eras Tour","kind":"movie","tmdb_id":1114513,"year":"2023",
+                      "outcome":"matched","forced":false},
+             "override":{"active":true,"query":"Heat (1995)","prefer":"movie","fields":{"query":"Heat"},
+                         "year":"1995","pick":{"title":"Heat","kind":"movie","tmdb_id":949,"year":"1995"}}}
+            """.data(using: .utf8)!)
+        }
+        let d = try await client().nowPlayingDetail()
+        XCTAssertTrue(d.contentActive)
+        XCTAssertEqual(d.inputs.filter(\.editable).map(\.key), ["title"])
+        XCTAssertEqual(d.query.searched, "The Final Show")
+        XCTAssertEqual(d.match?.tmdbId, 1114513)
+        XCTAssertEqual(d.override.pick?.tmdbId, 949)
+        XCTAssertEqual(d.override.fields?["query"], "Heat")
+    }
+
+    func testApplyPickSendsSnakeCasePick() async throws {
+        StubURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "PUT")
+            let body = req.httpBodyStream.map { s -> Data in
+                s.open(); defer { s.close() }
+                var d = Data(); var buf = [UInt8](repeating: 0, count: 1024)
+                while s.hasBytesAvailable { let n = s.read(&buf, maxLength: 1024); if n <= 0 { break }; d.append(buf, count: n) }
+                return d
+            } ?? req.httpBody ?? Data()
+            let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let pick = obj?["pick"] as? [String: Any]
+            XCTAssertEqual(pick?["tmdb_id"] as? Int, 949)
+            XCTAssertEqual(pick?["kind"] as? String, "movie")
+            XCTAssertEqual(pick?["year"] as? String, "1995")
+            return (200, #"{"content_active":true,"inputs":[],"query":{"candidates":[],"in_flight":false},"match":null,"override":{"active":true}}"#.data(using: .utf8)!)
+        }
+        let d = try await client().applyPick(Suggestion(tmdbId: 949, kind: "movie", title: "Heat", year: 1995))
+        XCTAssertTrue(d.override.active)
+    }
+
+    func testApplyPickRequiresTMDbID() async {
+        do { _ = try await client().applyPick(Suggestion(tmdbId: nil, kind: nil, title: "X", year: nil)); XCTFail() }
+        catch { XCTAssertTrue(error is PigeonError) }
+    }
+
     func testSuggestionSubtitle() {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")

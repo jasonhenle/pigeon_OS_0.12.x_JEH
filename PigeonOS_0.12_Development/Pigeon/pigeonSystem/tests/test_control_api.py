@@ -250,3 +250,54 @@ class PairingDisplayTests(_Base):
         self.assertEqual(img.getpixel((5, 5)), (0, 0, 0))
         small = render_pairing_image("000000", 320, 200)
         self.assertEqual(small.size, (320, 200))
+
+
+class DiscoveryTests(_Base):
+    def test_txt_record_tracks_claim_and_name(self) -> None:
+        svc = ControlService()
+        before = svc.txt_record()
+        self.assertEqual(before["claimed"], "0")
+        svc.auth.claim(svc.auth.pairing_code, "p", "c1")
+        self.assertEqual(svc.txt_record()["claimed"], "1")
+        self.assertEqual(svc.txt_record()["id"], before["id"])
+
+    def test_poll_notifies_listeners_when_txt_changes(self) -> None:
+        import time
+
+        seen: list[dict] = []
+        svc = ControlService()
+        srv = ControlServer(svc, host="127.0.0.1", port=0)
+        svc.txt_listeners.append(seen.append)
+        import pigeon.control_api.server as server_mod
+
+        with mock.patch.object(server_mod, "POLL_S", 0.05):
+            srv.start()
+            self.addCleanup(srv.stop)
+            time.sleep(0.2)
+            svc.auth.claim(svc.auth.pairing_code, "p", "c1")
+            deadline = time.time() + 2
+            while not seen and time.time() < deadline:
+                time.sleep(0.05)
+        self.assertTrue(seen)
+        self.assertEqual(seen[-1]["claimed"], "1")
+
+    def test_instance_name_is_unique_per_device(self) -> None:
+        from pigeon.control_api.discovery import Advertiser
+
+        captured: list[str] = []
+
+        class FakeInfo:
+            def __init__(self, type_, name, **kw):
+                captured.append(name)
+
+        class FakeZC:
+            def register_service(self, info): pass
+
+        fake = types_ns = type("Z", (), {"ServiceInfo": FakeInfo, "Zeroconf": FakeZC})
+        with mock.patch.dict(sys.modules, {"zeroconf": fake}):
+            a, b = Advertiser(), Advertiser()
+            a.start(name="Pigeon Clock", port=8780, ip="10.0.0.1", txt={"id": "pgn-aaaaaa"})
+            b.start(name="Pigeon Clock", port=8780, ip="10.0.0.2", txt={"id": "pgn-bbbbbb"})
+        self.assertEqual(len(captured), 2)
+        self.assertNotEqual(captured[0], captured[1])
+        self.assertTrue(captured[0].startswith("Pigeon Clock "))

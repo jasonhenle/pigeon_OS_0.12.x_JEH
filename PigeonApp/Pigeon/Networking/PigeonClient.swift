@@ -115,6 +115,34 @@ struct PigeonClient {
 
     func clearCurrentSearch() async throws { try await sendNoContent("DELETE", "/search/current") }
 
+    // MARK: Now playing correction
+
+    func nowPlayingDetail() async throws -> NowPlayingDetail {
+        try await send("GET", "/now-playing/detail")
+    }
+
+    func previewOverride(fields: [String: String], year: String?) async throws -> PreviewResponse {
+        try await send("POST", "/now-playing/preview", body: PreviewRequest(fields: fields, year: year))
+    }
+
+    func applyFields(_ fields: [String: String], year: String?, kind: String) async throws -> NowPlayingDetail {
+        try await send("PUT", "/now-playing/override",
+                       body: OverrideRequest(fields: fields, year: year, kind: kind, pick: nil))
+    }
+
+    func applyPick(_ s: Suggestion) async throws -> NowPlayingDetail {
+        guard let id = s.tmdbId, let kind = s.kind else {
+            throw PigeonError.decoding("That result has no TMDb id.")
+        }
+        return try await send("PUT", "/now-playing/override", body: OverrideRequest(
+            fields: nil, year: nil, kind: nil,
+            pick: .init(title: s.title, kind: kind, tmdbId: id, year: s.year.map(String.init))))
+    }
+
+    func clearOverride() async throws -> NowPlayingDetail {
+        try await send("DELETE", "/now-playing/override")
+    }
+
     // MARK: Events (SSE)
 
     func events() -> AsyncThrowingStream<DeviceEvent, Error> {

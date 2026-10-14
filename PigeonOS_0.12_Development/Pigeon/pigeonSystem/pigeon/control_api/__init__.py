@@ -58,6 +58,9 @@ def start(
     *,
     status_provider: Callable[[], dict[str, Any]] | None = None,
     run_on_ui: Callable[[Callable[[], object]], object] | None = None,
+    metadata_provider: Callable[[], Any] | None = None,
+    fetch_provider: Callable[[], dict[str, Any]] | None = None,
+    respawn: Callable[[str, str], object] | None = None,
     port: int | None = None,
 ) -> ControlServer | None:
     """Start the API (and mDNS advertise) once. Returns the server, or ``None`` if disabled."""
@@ -68,7 +71,10 @@ def start(
         if not enabled():
             return None
         try:
-            svc = ControlService(status_provider=status_provider, run_on_ui=run_on_ui)
+            svc = ControlService(
+                status_provider=status_provider, run_on_ui=run_on_ui,
+                metadata_provider=metadata_provider, fetch_provider=fetch_provider, respawn=respawn,
+            )
             srv = ControlServer(svc, port=port or int(os.environ.get("PIGEON_CONTROL_PORT") or profile.DEFAULT_PORT))
             srv.start()
         except Exception:
@@ -81,6 +87,7 @@ def start(
             adv.start(name=profile.device_name(), port=srv.port,
                       ip=local_ipv4_address(), txt=svc.txt_record())
             _advertiser = adv
+            svc.txt_listeners.append(adv.update)
         except Exception:
             pass
         return srv

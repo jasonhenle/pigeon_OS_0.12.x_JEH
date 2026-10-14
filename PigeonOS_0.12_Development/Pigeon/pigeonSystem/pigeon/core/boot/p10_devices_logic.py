@@ -823,9 +823,28 @@ def run(ctx) -> None:
     try:
         from pigeon import control_api as _control_api
 
+        def _control_api_metadata():
+            md = apple_tv_auto_state.get("last_metadata")
+            return md if isinstance(md, dict) else None
+
+        def _control_api_fetch() -> dict:
+            return {
+                "input": apple_tv_auto_state.get("last_tmdb_fetch_input"),
+                "refined": apple_tv_auto_state.get("last_tmdb_fetch_refined"),
+                "prefer": apple_tv_auto_state.get("last_tmdb_fetch_prefer"),
+                "in_flight": bool(apple_tv_auto_state.get("tmdb_fetch_in_flight")),
+                "display_title": (active_tmdb_display_title[0] or "").strip() or None,
+            }
+
+        def _control_api_respawn(query: str, prefer: str) -> None:
+            spawn_tmdb_poster_fetch(query, prefer=prefer or "auto", force=True)
+
         if _control_api.start(
             status_provider=_control_api_status,
             run_on_ui=lambda fn: root.after(0, fn),
+            metadata_provider=_control_api_metadata,
+            fetch_provider=_control_api_fetch,
+            respawn=_control_api_respawn,
         ) is not None:
             from pigeon.control_api.pairing_overlay import PairingOverlay
 

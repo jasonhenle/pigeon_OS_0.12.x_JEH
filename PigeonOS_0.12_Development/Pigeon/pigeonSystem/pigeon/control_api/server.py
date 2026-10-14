@@ -14,7 +14,7 @@ import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlparse
 
 from pigeon import manual_search as ms
@@ -44,12 +44,20 @@ class ControlService:
         status_provider: Callable[[], dict[str, Any]] | None = None,
         run_on_ui: Callable[[Callable[[], object]], object] | None = None,
         on_manual_set: Callable[[], object] | None = None,
+        metadata_provider: Callable[[], Mapping[str, Any] | None] | None = None,
+        fetch_provider: Callable[[], dict[str, Any]] | None = None,
+        respawn: Callable[[str, str], object] | None = None,
     ) -> None:
         self.auth = auth or AuthStore()
         self.hub = hub or EventHub()
         self._status_provider = status_provider
         self._run_on_ui = run_on_ui or (lambda fn: fn())
         self._on_manual_set = on_manual_set or ms.show_in_now_playing
+        self._metadata = metadata_provider or (lambda: None)
+        self._fetch = fetch_provider or (lambda: {})
+        self._respawn = respawn
+        # Called with the new TXT record whenever it changes (claimed, renamed).
+        self.txt_listeners: list[Callable[[dict[str, str]], object]] = []
 
     # ------------------------------------------------------------------ status
     def _hello_body(self) -> dict[str, Any]:
@@ -136,6 +144,8 @@ class ControlService:
             return 200, self.status()
         elif route.startswith("/search"):
             return self._search(method, route, query, body)
+        elif route.startswith("/now-playing"):
+            return self._now_playing(method, route, body)
         elif route == "/controllers":
             if method == "GET":
                 return 200, {"controllers": self.auth.controllers()}
@@ -213,6 +223,121 @@ class ControlService:
                 self.hub.publish("manual_search", self._manual_body())
                 return 204, None
         return _err(404, "not_found", "Unknown endpoint or method.")
+
+
+    # ------------------------------------------------- now playing correction
+    def _override_detail(self) -> dict[str, Any]:
+        from pigeon.control_api import now_playing_override as npo
+
+        md = self._metadata() or {}
+        try:
+            from pigeon.raw_title import (
+                resolve_metadata_tmdb_query,
+                tmdb_query_candidates_from_metadata,
+            )
+
+            resolved = resolve_metadata_tmdb_query(md)
+            candidates = tmdb_query_candidates_from_metadata(md)
+        except Exception:
+            resolved, candidates = "", []
+        fetch = {}
+        try:
+            fetch = dict(self._fetch() or {})
+        except Exception:
+            pass
+        trace: dict[str, Any] = {}
+        try:
+            from pigeon.tmdb_poster import last_fetch_trace
+
+            trace = last_fetch_trace()
+        except Exception:
+            pass
+        tmdb_id = trace.get("tmdb_id")
+        match = None
+        if trace.get("tmdb_title") or fetch.get("display_title"):
+            match = {
+                "title": fetch.get("display_title") or trace.get("tmdb_title"),
+                "kind": trace.get("kind"),
+                "tmdb_id": int(tmdb_id) if isinstance(tmdb_id, int) else None,
+                "year": trace.get("tmdb_year") or None,
+                "outcome": trace.get("outcome") or ("matched" if tmdb_id else None),
+                "forced": bool(trace.get("forced_pick")),
+            }
+        ov = npo.get()
+        title = str(md.get("series_name") or md.get("title") or "").strip()
+        return {
+            "content_active": bool(title or md.get("query")),
+            "app": str(md.get("app_name") or "") or None,
+            "inputs": npo.input_rows(md),
+            "query": {
+                "apple_tv": str(md.get("query") or "") or None,
+                "resolved": resolved or None,
+                "candidates": candidates,
+                "searched": fetch.get("refined") or None,
+                "prefer": fetch.get("prefer") or None,
+                "in_flight": bool(fetch.get("in_flight")),
+            },
+            "match": match,
+            "override": ov.summary() if ov else {"active": False},
+        }
+
+    def _now_playing(self, method: str, route: str, body: Any) -> Response:
+        from pigeon.control_api import now_playing_override as npo
+
+        if not profile.has_capability("now_playing_override"):
+            return _err(422, "unsupported", "now_playing_override not supported on this device.")
+        if route == "/now-playing/detail" and method == "GET":
+            return 200, self._override_detail()
+        if route == "/now-playing/preview" and method == "POST":
+            if not isinstance(body, dict):
+                return _err(400, "bad_request", "JSON object required.")
+            fields = body.get("fields") if isinstance(body.get("fields"), dict) else {}
+            q = npo.derive_query(self._metadata(), fields, body.get("year"))
+            if not q:
+                return _err(400, "bad_request", "Nothing to search for.", fields=["fields"])
+            rows = ms.suggest_now(q, limit=SUGGEST_MAX)
+            return 200, {"query": q, "candidates": [
+                {"tmdb_id": r.get("tmdb_id") or None, "kind": r.get("kind"), "title": r.get("title"),
+                 "year": int(r["year"]) if str(r.get("year") or "").isdigit() else None}
+                for r in rows
+            ]}
+        if route == "/now-playing/override" and method == "PUT":
+            if not isinstance(body, dict):
+                return _err(400, "bad_request", "JSON object required.")
+            md = self._metadata()
+            try:
+                pick = body.get("pick")
+                if isinstance(pick, dict):
+                    ov = npo.set_pick(md, title=pick.get("title"), kind=str(pick.get("kind") or ""),
+                                      tmdb_id=int(pick.get("tmdb_id") or 0), year=pick.get("year"))
+                else:
+                    fields = body.get("fields") if isinstance(body.get("fields"), dict) else {}
+                    ov = npo.set_fields(md, fields, year=body.get("year"), kind=body.get("kind"))
+            except (ValueError, TypeError) as exc:
+                return _err(400, "bad_request", str(exc))
+            self._do_respawn(ov.query, ov.prefer)
+            self.hub.publish("override", ov.summary())
+            return 200, self._override_detail()
+        if route == "/now-playing/override" and method == "DELETE":
+            npo.clear()
+            md = self._metadata() or {}
+            try:
+                from pigeon.raw_title import resolve_metadata_tmdb_query
+
+                detected = resolve_metadata_tmdb_query(md)
+            except Exception:
+                detected = ""
+            if detected:
+                self._do_respawn(detected, str(md.get("prefer") or "auto"))
+            self.hub.publish("override", {"active": False})
+            return 200, self._override_detail()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    def _do_respawn(self, query: str, prefer: str) -> None:
+        if self._respawn is None:
+            return
+        fn = self._respawn
+        self._run_on_ui(lambda: fn(query, prefer))
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -324,7 +449,19 @@ class ControlServer:
 
     def _poll_loop(self) -> None:
         last: str | None = None
+        last_txt: dict[str, str] | None = None
         while not self._stop.wait(POLL_S):
+            try:
+                txt = self.service.txt_record()
+                if last_txt is not None and txt != last_txt:
+                    for fn in list(self.service.txt_listeners):
+                        try:
+                            fn(txt)
+                        except Exception:
+                            pass
+                last_txt = txt
+            except Exception:
+                pass
             try:
                 st = self.service.status()
                 key = json.dumps(st, sort_keys=True)
