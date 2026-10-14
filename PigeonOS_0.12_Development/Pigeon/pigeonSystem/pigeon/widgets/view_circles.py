@@ -348,7 +348,7 @@ _POSTER_MUSIC_X, _POSTER_MUSIC_Y, _POSTER_MUSIC_W, _POSTER_MUSIC_H, _POSTER_MUSI
     int(round(POSTER_1X1_LOCAL[4])),
 )
 
-_ARTWORK_BG_OPACITY = 0.17
+_ARTWORK_BG_OPACITY = 0.40
 # No-poster UI-color wash: opacity over black (darker than the poster blur), and a
 # luma ceiling (light mode treats darker as wash).
 _UI_WASH_OPACITY = 0.08
@@ -4575,7 +4575,14 @@ class ViewCirclesWidget:
         zone4_info = zones[3] == "cast_info" or (youtube and zones[3] == "")
         if zone4_info and self._zone4_eq_on() and not self._zone6_viz_on(zones):
             zones = (zones[0], zones[1], zones[2], ZONE4_VISUALIZER_WIDGET, zones[4])
-        if self.volume_takeover_active() and self._state.chrome_visible:
+        # Zone 11 reserves zones 1-3 as one continuous TT canvas and reports the
+        # receiver volume in its top-right corner. The zone-3 volume widget must
+        # never come up there, takeover or not.
+        if (
+            self.volume_takeover_active()
+            and self._state.chrome_visible
+            and not self._zone11_on(zones)
+        ):
             return (zones[0], zones[1], "volume", zones[3], zones[4])
         return zones
 
@@ -5145,6 +5152,11 @@ class ViewCirclesWidget:
             svc = str(st.incoming or "").strip()
         if svc.lower() in ("", "unknown", "none", "n/a", "na", "--"):
             svc = ""
+        if self._zone11_on():
+            # Zone 11: app id moved to the top-right and elapsed / TRT live in
+            # the strip above the bar. The input id takes the service slot.
+            et, rt = "", ""
+            svc = self._receiver_readout()
 
         sx, sy = _bar_xy(STATUS_BAR_SERVICE_LOCAL)
         _, ey = _bar_xy(STATUS_BAR_ELAPSED_LOCAL)
@@ -5379,6 +5391,17 @@ class ViewCirclesWidget:
         if _zone_clock_hides_header(self._assignments()):
             return
         if self._header_slot_ticks():
+            if self._zone11_on():
+                # Zone 11: clock in the top-left corner (volume / app id own
+                # the top-right).
+                self._paste_zone11_corner_text(
+                    out,
+                    now_playing_header_clock_text(now),
+                    left=True,
+                    fill_rgb=_look_chrome_rgb(),
+                    clock=True,
+                )
+                return
             # Digital-7 clock over zone 3; zone 6's header slot holds the TRT.
             z3 = NOW_PLAYING_ZONES[3]
             cx = float(z3.x) + float(z3.w) * 0.5
@@ -6252,50 +6275,108 @@ class ViewCirclesWidget:
 
     # Larger than the cast-info names (CAST_ACTOR_SIZE_PX): the strip has no second line.
     _ZONE11_INFO_PX = 68
+    _ZONE11_APP_ID_PX = 36
+    _ZONE11_APP_ID_GAP = 14
+
+    def _zone11_service_label(self) -> str:
+        """Streaming app / incoming source name (the status bar's service text)."""
+        st = self._state
+        svc = str(st.service_name or "").strip()
+        if svc.lower() in ("", "unknown", "none", "n/a", "na", "--"):
+            svc = str(st.incoming or "").strip()
+        if svc.lower() in ("", "unknown", "none", "n/a", "na", "--"):
+            return ""
+        return svc
+
+    def _paste_zone11_corner_text(
+        self,
+        out: np.ndarray,
+        label: str,
+        *,
+        left: bool,
+        fill_rgb: tuple[int, int, int],
+        clock: bool = False,
+    ) -> tuple[int, int, int, int] | None:
+        """Header-size Digital-7 pinned to a top corner, ink bottom on the header baseline."""
+        if not label:
+            return None
+        size = _header_digital7_size_px()
+        if clock:
+            patch = _matching_hhmm_patch(label, size_px=size, fill_rgb=fill_rgb)
+        else:
+            patch, _tw, _th = _text_patch_digital7(
+                label.upper(), size_px=size, fill_rgb=fill_rgb
+            )
+        a = patch[:, :, 3] > 8
+        rows, cols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
+        if rows.size == 0:
+            return None
+        patch = patch[int(rows.min()) : int(rows.max()) + 1, int(cols.min()) : int(cols.max()) + 1]
+        ph, pw = patch.shape[:2]
+        z = ZONE11
+        x = int(round(float(z.x))) if left else int(round(float(z.x) + float(z.w) - pw))
+        y = int(round(float(header_clock_baseline_y()) - ph))
+        _paste_patch_bgra(out, patch, x, y)
+        return (x, y, int(pw), int(ph))
 
     def _draw_zone11_info(self, out: np.ndarray) -> None:
-        """Zone 4 strip: input name | volume | TRT in the title's UI color."""
+        """Zone 4 strip: elapsed | (blank) | TRT in the title's UI color; volume and
+        app id sit in the top-right corner, input id under the status bar."""
         zone = _zone_spec(4)
         zx, zy, zw, zh = (int(v) for v in zone.xywh)
         self._tt_time_paint_rects.append((zx, zy, zw, zh))
         recv = self._has_receiver_connection()
-        left = self._receiver_readout() if recv else ""
-        mid = _receiver_volume_display_line(self._state.volume) if recv else ""
+        vol = _receiver_volume_display_line(self._state.volume) if recv else ""
+
+        # Top-right: volume, then the app id directly beneath it.
+        rect = self._paste_zone11_corner_text(
+            out, vol, left=False, fill_rgb=_look_chrome_rgb()
+        )
+        if rect is not None:
+            self._tt_time_paint_rects.append(rect)
+        app = self._zone11_service_label()
+        if app:
+            patch = _cast_line_patch(
+                app, size_px=self._ZONE11_APP_ID_PX, max_width_px=420
+            )
+            if patch is not None:
+                ph, pw = patch.shape[:2]
+                z = ZONE11
+                px = int(round(float(z.x) + float(z.w) - pw))
+                py = int(round(float(header_clock_baseline_y()) + self._ZONE11_APP_ID_GAP))
+                _paste_patch_bgra(out, patch, px, py)
+                self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
+
+        # Strip: elapsed (left column) and TRT (right column), same size and color.
+        elapsed = ""
         right = ""
         if self.content_mode != _CONTENT_MODE_MUSIC:
+            elapsed = format_status_bar_timecode(self._state.elapsed_text, remaining=False)
+            if elapsed.upper() == "LIVE":
+                elapsed = ""
             right = format_countdown_timecode(self._state.remaining_text) or ""
         mid_y = float(zy) + float(zh) * 0.5
         cols = strip_cast_columns(zone)
-        for (x0, col_w), text in zip(cols[:2], (left, mid)):
-            patch = _cast_line_patch(
-                text, size_px=self._ZONE11_INFO_PX, max_width_px=max(48, int(col_w) - 24)
+        for idx, text in ((0, elapsed), (2, right)):
+            if not text or len(cols) <= idx:
+                continue
+            x0, col_w = cols[idx]
+            template = re.sub(r"\d", "8", text)
+            size = _header_trt_size_px(template, max(48, int(col_w) - 24), self._ZONE11_INFO_PX)
+            fill_rgb = tuple(reversed(self._effective_np_theme().ui_bgr))
+            patch = _matching_hhmm_patch(text, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
+            a = patch[:, :, 3] > 8
+            rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
+            if rows.size == 0:
+                continue
+            patch = patch[int(rows.min()) : int(rows.max()) + 1, int(pcols.min()) : int(pcols.max()) + 1]
+            ph, pw = patch.shape[:2]
+            _paste_patch_bgra(
+                out,
+                patch,
+                int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0)),
+                int(round(mid_y - ph / 2.0)),
             )
-            if patch is not None:
-                _paste_ink_centered(
-                    out,
-                    patch,
-                    float(x0) + float(col_w) * 0.5,
-                    mid_y - int(patch.shape[0]) * 0.5,
-                )
-        if not right or len(cols) < 3:
-            return
-        x0, col_w = cols[2]
-        template = re.sub(r"\d", "8", right)
-        size = _header_trt_size_px(template, max(48, int(col_w) - 24), self._ZONE11_INFO_PX)
-        fill_rgb = tuple(reversed(self._effective_np_theme().ui_bgr))
-        patch = _matching_hhmm_patch(right, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2)
-        a = patch[:, :, 3] > 8
-        rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
-        if rows.size == 0:
-            return
-        patch = patch[int(rows.min()) : int(rows.max()) + 1, int(pcols.min()) : int(pcols.max()) + 1]
-        ph, pw = patch.shape[:2]
-        _paste_patch_bgra(
-            out,
-            patch,
-            int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0)),
-            int(round(mid_y - ph / 2.0)),
-        )
 
     def _draw_tt_countdowns(self, out: np.ndarray, *, part: str = "all") -> None:
         assignments = self._assignments()
