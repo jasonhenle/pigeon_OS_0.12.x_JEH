@@ -37,6 +37,13 @@ _suggest_results: tuple[dict, ...] = ()
 _suggest_version = 0
 _suggest_pending: str | None = None
 _suggest_thread_live = False
+# Bumped by every new request and every clear/reset. A fetch applies its
+# results only if the generation it started under is still current, so a slow
+# request can never repopulate suggestions for a query that is gone.
+_suggest_gen = 0
+# Query a worker is fetching right now (None when idle). A request for the
+# already-applied query must still invalidate an in-flight fetch of another one.
+_suggest_inflight: str | None = None
 
 _poster_bgr: np.ndarray | None = None
 _poster_key = ""
@@ -331,11 +338,13 @@ def suggest_now(query: str) -> tuple[dict, ...]:
 def request_suggestions(query: str) -> None:
     """Debounced async lookup; read ``suggestions()`` / ``suggestion_version()``."""
     global _suggest_pending, _suggest_thread_live, _suggest_results, _suggest_query
-    global _suggest_version
+    global _suggest_version, _suggest_gen
     q = " ".join(str(query or "").split())
     with _LOCK:
-        if q == _suggest_query and not _suggest_pending:
+        if q == _suggest_query and not _suggest_pending and _suggest_inflight is None:
             return
+        # Any change of query invalidates a fetch that is already in flight.
+        _suggest_gen += 1
         if len(q) < 2:
             _suggest_query = q
             _suggest_pending = None
@@ -352,19 +361,26 @@ def request_suggestions(query: str) -> None:
 
 def _suggest_worker() -> None:
     global _suggest_pending, _suggest_thread_live, _suggest_results, _suggest_query
-    global _suggest_version
+    global _suggest_version, _suggest_inflight
     while True:
         time.sleep(_DEBOUNCE_S)
         with _LOCK:
             q = _suggest_pending
             _suggest_pending = None
+            gen = _suggest_gen
             if q is None:
+                _suggest_inflight = None
                 _suggest_thread_live = False
                 return
-        results = suggest_now(q)
+            _suggest_inflight = q
+        try:
+            results = suggest_now(q)
+        except Exception:
+            results = ()
         with _LOCK:
-            if _suggest_pending is not None:
-                continue  # superseded while fetching
+            _suggest_inflight = None
+            if gen != _suggest_gen or _suggest_pending is not None:
+                continue  # cleared, reset or superseded while fetching
             _suggest_query = q
             _suggest_results = results
             _suggest_version += 1
@@ -382,7 +398,9 @@ def suggestion_version() -> int:
 
 def reset_suggestions() -> None:
     global _suggest_query, _suggest_results, _suggest_pending, _suggest_version
+    global _suggest_gen
     with _LOCK:
+        _suggest_gen += 1  # in-flight fetches must not repopulate after this
         _suggest_query = ""
         _suggest_pending = None
         if _suggest_results:
