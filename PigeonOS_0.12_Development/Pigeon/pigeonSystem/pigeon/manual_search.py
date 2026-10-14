@@ -4,9 +4,9 @@ The user can pin a title by hand when Pigeon cannot detect content. The title
 persists until cleared and feeds two places:
 
 * now playing — shown only while nothing is auto-detected;
-* the clocksaver — clock shrinks left, TMDb poster sits right, unless auto
-  detection reported a *different* title within the last
-  ``CONFLICT_WINDOW_S`` seconds.
+* the clocksaver — clock shrinks left, TMDb poster sits right, except while
+  auto detection is reporting a *different* title (metadata wins; the poster
+  returns the moment detection ends — no timed hold).
 
 This module owns persistence, TMDb title suggestions (debounced, off-thread),
 the poster raster, and the conflict clock. It has no UI imports.
@@ -22,9 +22,6 @@ from typing import Callable
 
 import numpy as np
 
-# An auto-detected title that differs from the manual one hides the clocksaver
-# poster for this long after it was last seen.
-CONFLICT_WINDOW_S = 10.0 * 60.0
 SUGGEST_ROWS = 3
 _SUGGEST_FETCH = 6
 _DEBOUNCE_S = 0.28
@@ -45,7 +42,7 @@ _poster_bgr: np.ndarray | None = None
 _poster_key = ""
 _poster_inflight = False
 
-_last_conflict_mono = 0.0
+_conflict_active = False
 _auto_active = False
 # True while the manual title is what now playing shows (nothing auto-detected
 # since it was spawned). ``_manual_query`` is the exact string we fed the
@@ -131,7 +128,7 @@ def current_title() -> str:
 
 def set_entry(raw: dict) -> dict | None:
     """Persist a manual title (suggestion pick or free text)."""
-    global _entry, _poster_bgr, _poster_key, _last_conflict_mono
+    global _entry, _poster_bgr, _poster_key, _conflict_active
     cleaned = _clean(raw)
     if cleaned is None:
         return None
@@ -140,14 +137,14 @@ def set_entry(raw: dict) -> dict | None:
         _entry = cleaned
         _poster_bgr = None
         _poster_key = ""
-        _last_conflict_mono = 0.0
+        _conflict_active = False
         _save()
     return dict(cleaned)
 
 
 def clear() -> None:
     """Forget the manual title and drop it from now playing if it is showing."""
-    global _entry, _poster_bgr, _poster_key, _shown, _manual_query, _last_conflict_mono
+    global _entry, _poster_bgr, _poster_key, _shown, _manual_query, _conflict_active
     _ensure_loaded()
     with _LOCK:
         was_shown = _shown
@@ -156,7 +153,7 @@ def clear() -> None:
         _poster_key = ""
         _shown = False
         _manual_query = ""
-        _last_conflict_mono = 0.0
+        _conflict_active = False
         _save()
     cb = _clear_display_hook
     if was_shown and cb is not None:
@@ -191,24 +188,22 @@ def titles_match(detected: str, manual: str) -> bool:
 # ----------------------------------------------------------------- conflict clock
 
 def note_detected_query(query: str, *, now: float | None = None) -> None:
-    """Auto-detection reported ``query``; stamp a conflict if it is not the manual title."""
-    global _last_conflict_mono, _auto_active, _shown
+    """Auto-detection reported ``query``; it wins while it differs from the manual title."""
+    global _conflict_active, _auto_active, _shown
+    del now  # kept for call-site compat
     q = str(query or "").strip()
     if not q or (_manual_query and q == _manual_query):
         return
     _auto_active = True
     _shown = False
     manual = current_title()
-    if manual and not titles_match(q, manual):
-        _last_conflict_mono = float(time.monotonic() if now is None else now)
+    _conflict_active = bool(manual) and not titles_match(q, manual)
 
 
 def poster_allowed(now: float | None = None) -> bool:
-    """False inside the conflict window after a mismatching auto-detected title."""
-    t = float(time.monotonic() if now is None else now)
-    if _last_conflict_mono <= 0.0:
-        return True
-    return (t - _last_conflict_mono) >= CONFLICT_WINDOW_S
+    """False only while a mismatching auto-detected title is being reported."""
+    del now
+    return not _conflict_active
 
 
 def auto_detected_active() -> bool:
@@ -258,8 +253,9 @@ def show_in_now_playing() -> bool:
 
 def on_content_idle() -> None:
     """Auto-detected content ended — fall back to the manual title."""
-    global _auto_active
+    global _auto_active, _conflict_active
     _auto_active = False
+    _conflict_active = False
     if not _shown:
         show_in_now_playing()
 
@@ -487,7 +483,6 @@ def poster_bgr() -> np.ndarray | None:
 
 
 __all__ = [
-    "CONFLICT_WINDOW_S",
     "SUGGEST_ROWS",
     "auto_detected_active",
     "clear",
