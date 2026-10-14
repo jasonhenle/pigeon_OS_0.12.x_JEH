@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -31,6 +33,8 @@ def _reset_module(state_dir: Path) -> None:
     ms._spawn_hook = None
     ms._clear_display_hook = None
     ms.reset_suggestions()
+    ms._suggest_thread_live = False
+    ms._suggest_inflight = None
 
 
 class ManualSearchStateTests(unittest.TestCase):
@@ -118,6 +122,82 @@ class ManualSearchStateTests(unittest.TestCase):
         ms.clear()
         self.assertEqual(dropped, [1])
         self.assertFalse(ms.is_displaying())
+
+
+class SuggestionRaceTests(unittest.TestCase):
+    """A fetch that finishes after the query is gone must not repopulate."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self._prev = runtime_paths._CACHED
+        _reset_module(Path(self._tmp.name))
+        self._saved = (ms.suggest_now, ms._DEBOUNCE_S)
+        ms._DEBOUNCE_S = 0.01
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.calls: list[str] = []
+
+        def gated(query: str):
+            self.calls.append(query)
+            if len(self.calls) == 1:
+                self.started.set()
+                self.release.wait(5.0)
+            return (
+                {"title": f"{query} result", "year": "", "kind": "tv",
+                 "tmdb_id": 1, "poster_path": ""},
+            )
+
+        ms.suggest_now = gated  # type: ignore[assignment]
+
+    def tearDown(self) -> None:
+        self.release.set()
+        self._wait_idle()
+        ms.suggest_now, ms._DEBOUNCE_S = self._saved  # type: ignore[assignment]
+        _reset_module(Path(self._tmp.name))
+        runtime_paths._CACHED = self._prev
+        self._tmp.cleanup()
+
+    def _wait_idle(self) -> None:
+        deadline = time.monotonic() + 5.0
+        while ms._suggest_thread_live and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(ms._suggest_thread_live, "worker did not finish")
+
+    def _start_in_flight(self, query: str) -> None:
+        ms.request_suggestions(query)
+        self.assertTrue(self.started.wait(5.0), "fetch never started")
+
+    def test_reset_during_fetch_discards_results(self) -> None:
+        self._start_in_flight("the office")
+        ms.reset_suggestions()
+        version = ms.suggestion_version()
+        self.release.set()
+        self._wait_idle()
+        self.assertEqual(ms.suggestions(), ())
+        self.assertEqual(ms.suggestion_version(), version)
+
+    def test_clearing_the_query_during_fetch_discards_results(self) -> None:
+        self._start_in_flight("the office")
+        ms.request_suggestions("")  # field cleared while the fetch is out
+        self.release.set()
+        self._wait_idle()
+        self.assertEqual(ms.suggestions(), ())
+
+    def test_newer_query_wins_over_a_slow_older_one(self) -> None:
+        self._start_in_flight("sever")
+        ms.request_suggestions("severance")
+        self.release.set()
+        self._wait_idle()
+        titles = [r["title"] for r in ms.suggestions()]
+        self.assertEqual(titles, ["severance result"])
+        self.assertEqual(self.calls, ["sever", "severance"])
+
+    def test_normal_request_still_applies_after_debounce(self) -> None:
+        self.release.set()
+        ms.request_suggestions("ted lasso")
+        self._wait_idle()
+        self.assertEqual([r["title"] for r in ms.suggestions()], ["ted lasso result"])
+        self.assertGreaterEqual(ms.suggestion_version(), 1)
 
 
 class SearchBarTests(unittest.TestCase):
