@@ -803,6 +803,33 @@ def run(ctx) -> None:
         clear_display=_manual_search_clear_display,
     )
 
+    def _control_api_status() -> dict:
+        """Read-only now-playing snapshot for the companion API (any thread)."""
+        title = str((active_tmdb_display_title[0] or "")).strip()
+        lm = apple_tv_auto_state.get("last_metadata")
+        if isinstance(lm, dict):
+            if not title:
+                for key in ("title", "series_name"):
+                    title = str(lm.get(key) or "").strip()
+                    if title:
+                        break
+            app = str(lm.get("app") or lm.get("app_name") or "").strip()
+        else:
+            app = ""
+        if not title or _manual_search.is_displaying():
+            return {}
+        return {"state": "playing", "now_playing": {"title": title, "source": "detected", "app": app or None}}
+
+    try:
+        from pigeon import control_api as _control_api
+
+        _control_api.start(
+            status_provider=_control_api_status,
+            run_on_ui=lambda fn: root.after(0, fn),
+        )
+    except Exception:
+        pass  # the companion API must never block startup
+
     _apply_hdmi_frame_check = _bind_deps(
         _core_device_control._apply_hdmi_frame_check,
         _bump_clock_saver_significant_device=_bump_clock_saver_significant_device,
