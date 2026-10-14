@@ -8461,7 +8461,7 @@ class MainSettingsWidget:
 
     def _pigeon_page_overlays(self, base: np.ndarray) -> np.ndarray:
         """settings_pigeon live layers over the cached page: clock + zip keypad."""
-        from pigeon.widgets.pigeon_settings import draw_pigeon_settings_clock
+        from pigeon.widgets.pigeon_settings import draw_companion_code, draw_pigeon_settings_clock
 
         st = self._state
         kb_sig = self._keyboard_overlay_sig()
@@ -8476,6 +8476,7 @@ class MainSettingsWidget:
             frame = draw_update_status_bar_bgra(frame, st)
         else:
             frame = draw_pigeon_settings_clock(frame)
+            frame = draw_companion_code(frame)
         if st.keyboard is not None and kb_sig is not None:
             from pigeon.widgets.settings_keyboard import render_keyboard_bgra
 

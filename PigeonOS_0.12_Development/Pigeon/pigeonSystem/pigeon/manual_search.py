@@ -309,7 +309,7 @@ def _search_multi(query: str) -> list[dict]:
     return out
 
 
-def suggest_now(query: str) -> tuple[dict, ...]:
+def suggest_now(query: str, limit: int = SUGGEST_ROWS) -> tuple[dict, ...]:
     """Blocking search (worker threads / tests). Title-prefix matches first."""
     q = " ".join(str(query or "").split())
     if len(q) < 2:
@@ -325,7 +325,7 @@ def suggest_now(query: str) -> tuple[dict, ...]:
             -float(r.get("_pop") or 0.0),
         )
     )
-    return tuple({k: v for k, v in r.items() if k != "_pop"} for r in rows[:SUGGEST_ROWS])
+    return tuple({k: v for k, v in r.items() if k != "_pop"} for r in rows[:max(1, int(limit))])
 
 
 def request_suggestions(query: str) -> None:

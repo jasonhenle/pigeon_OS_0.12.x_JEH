@@ -712,6 +712,51 @@ def draw_pigeon_settings_clock(frame: np.ndarray, now: datetime | None = None) -
     return out
 
 
+# Free strip under the toggle row, left of RESET (design px on the 1280x800 page).
+_COMPANION_CODE_XY = (70, 612)
+_COMPANION_CODE_FONT_PX = 34
+
+
+def draw_companion_code(frame: np.ndarray, code: str | None = None) -> np.ndarray:
+    """Paint ``APP CODE 123456`` while the companion app can claim this device.
+
+    ``code=None`` asks :mod:`pigeon.control_api`; empty means nothing to show
+    and ``frame`` is returned untouched.
+    """
+    if code is None:
+        try:
+            from pigeon.control_api import claim_code_to_show
+
+            code = claim_code_to_show()
+        except Exception:
+            code = ""
+    code = str(code or "").strip()
+    if not code:
+        return frame
+    from PIL import Image, ImageDraw, ImageFont
+
+    from pigeon.font_paths import resolve_digital7_font, resolve_ui_font_bold
+
+    path = resolve_digital7_font() or resolve_ui_font_bold()
+    try:
+        font = ImageFont.truetype(str(path), _COMPANION_CODE_FONT_PX)
+    except Exception:
+        font = ImageFont.load_default()
+    text = f"APP CODE {code}"
+    x, y = _COMPANION_CODE_XY
+    probe = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+    l, t, r, b = probe.textbbox((0, 0), text, font=font)
+    w, h = r - l + 4, b - t + 4
+    if y < 0 or x < 0 or y + h > frame.shape[0] or x + w > frame.shape[1]:
+        return frame
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((2 - l, 2 - t), text, font=font, fill=(255, 255, 255, 255))
+    patch = np.asarray(img)[:, :, [2, 1, 0, 3]]
+    out = frame.copy()
+    out[y : y + h, x : x + w] = _composite_bgra_over_bgra(out[y : y + h, x : x + w], patch)
+    return out
+
+
 def clear_pigeon_settings_render_caches() -> None:
     _SVG_TREE_TEMPLATES.clear()
     _THEME_BG_CACHE.clear()
@@ -806,6 +851,7 @@ __all__ = [
     "color_key_for_focus",
     "default_pigeon_settings_svg_path",
     "draw_pigeon_settings_clock",
+    "draw_companion_code",
     "factory_reset_pigeon_persisted_state",
     "normalize_pigeon_focus_id",
     "option_for_focus",
