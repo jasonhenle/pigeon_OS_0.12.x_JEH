@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -116,6 +117,63 @@ class PigeonSettingsTests(_Base):
         self.assertEqual(st, 200)
         self.assertEqual(d["timezone"], tz)
         self.assertEqual(d["zip"], "21710")
+
+    def test_zip_must_be_exactly_five_digits(self) -> None:
+        before = ds.read_pigeon_settings()["zip"]
+        for bad in ("123456", "abc12345", "1234", "12345-6789", "12 345", "", None, True, 12.5):
+            st, d = self.call("PATCH", "/pigeon-settings", {"zip": bad})
+            self.assertEqual(st, 400, bad)
+            self.assertEqual(d["error"]["details"]["fields"], ["zip"], bad)
+        self.assertEqual(ds.read_pigeon_settings()["zip"], before)
+        self.assertEqual(self.applied, [])
+
+    def test_zip_accepts_five_digits_with_surrounding_space(self) -> None:
+        with mock.patch.object(pigeon_locale, "set_zipcode_manual", return_value=True) as m:
+            st, _ = self.call("PATCH", "/pigeon-settings", {"zip": " 21710 "})
+        self.assertEqual(st, 200)
+        self.assertEqual(m.call_args.args[0].strip(), "21710")
+
+    def _patch_with_blocked_lookup(self, body, lookup_tz):
+        """PATCH while the zip->timezone lookup is parked; release it afterwards."""
+        gate = threading.Event()
+        threads: list[threading.Thread] = []
+        real_thread = threading.Thread
+
+        class _Recorded(real_thread):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                threads.append(self)
+
+        def slow_lookup(_zip):
+            gate.wait(5)
+            return lookup_tz
+
+        with mock.patch.object(pigeon_locale, "_lookup_zip_timezone", side_effect=slow_lookup), \
+             mock.patch.object(pigeon_locale.threading, "Thread", _Recorded), \
+             mock.patch("pigeon.weather.refresh_weather", create=True):
+            st, d = self.call("PATCH", "/pigeon-settings", body)
+            gate.set()  # the background lookup now finishes *after* the PATCH returned
+            for t in threads:
+                t.join(5)
+        return st, d
+
+    def test_manual_timezone_beats_late_zip_lookup(self) -> None:
+        choices = ds.read_pigeon_settings()["timezone_choices"]
+        manual, looked_up = choices[0], choices[1]
+        st, _ = self._patch_with_blocked_lookup({"zip": "21710", "timezone": manual}, looked_up)
+        self.assertEqual(st, 200)
+        d = ds.read_pigeon_settings()
+        self.assertEqual(d["zip"], "21710")
+        self.assertEqual(d["timezone"], manual)
+        self.assertEqual(pigeon_locale._read().get("tz_source"), "manual")
+
+    def test_zip_alone_sets_location_timezone(self) -> None:
+        choices = ds.read_pigeon_settings()["timezone_choices"]
+        looked_up = choices[1]
+        st, _ = self._patch_with_blocked_lookup({"zip": "21710"}, looked_up)
+        self.assertEqual(st, 200)
+        self.assertEqual(ds.read_pigeon_settings()["timezone"], looked_up)
+        self.assertEqual(pigeon_locale._read().get("tz_source"), "zip")
 
     def test_validation_is_all_or_nothing(self) -> None:
         before = self.call("GET", "/pigeon-settings")[1]["options"]
