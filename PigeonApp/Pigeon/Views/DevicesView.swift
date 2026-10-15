@@ -79,6 +79,9 @@ struct DeviceDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).tile()
 
+                    if caps?.capabilities.contains("display_brightness") == true {
+                        BrightnessCard(client: store.client(for: device))
+                    }
                     if caps?.capabilities.contains("rooms") == true {
                         RoomsCard(client: store.client(for: device))
                     }
@@ -381,6 +384,69 @@ struct PigeonSettingsCard: View {
                 Text("Pigeon \(d.version)").font(Theme.ui(12)).foregroundStyle(Theme.secondaryText)
             } else if model.errorText == nil {
                 ProgressView()
+            }
+            if let e = model.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tile()
+        .task { await model.load() }
+    }
+}
+
+// MARK: Brightness
+
+@MainActor
+final class BrightnessModel: ObservableObject {
+    @Published var level: Double = 100
+    @Published private(set) var info: DisplayInfo?
+    @Published var errorText: String?
+    private let client: PigeonClient
+    private var pending: Task<Void, Never>?
+    init(client: PigeonClient) { self.client = client }
+
+    func load() async {
+        do {
+            let d = try await client.display()
+            info = d
+            level = Double(d.brightness)
+            errorText = nil
+        } catch { errorText = error.localizedDescription }
+    }
+
+    /// Called while dragging: send at most one request every 150 ms so the screen follows live.
+    func levelChanged() {
+        pending?.cancel()
+        let target = Int(level.rounded())
+        pending = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let self else { return }
+            do { self.info = try await self.client.setBrightness(target); self.errorText = nil }
+            catch { self.errorText = error.localizedDescription }
+        }
+    }
+}
+
+struct BrightnessCard: View {
+    @StateObject private var model: BrightnessModel
+    init(client: PigeonClient) { _model = StateObject(wrappedValue: BrightnessModel(client: client)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                LCDLabel(text: "Brightness", size: 18, color: Theme.accent)
+                Spacer()
+                LCDLabel(text: "\(Int(model.level.rounded()))%", size: 22)
+            }
+            HStack(spacing: 12) {
+                Image(systemName: "sun.min").foregroundStyle(Theme.secondaryText)
+                Slider(value: $model.level,
+                       in: Double(model.info?.min ?? 10)...Double(model.info?.max ?? 100), step: 1)
+                    .onChange(of: model.level) { _, _ in model.levelChanged() }
+                Image(systemName: "sun.max.fill").foregroundStyle(.white)
+            }
+            if let info = model.info {
+                Text(info.mode == "backlight" ? "Dims the panel's backlight." : "Dims the picture on this display.")
+                    .font(Theme.ui(12)).foregroundStyle(Theme.secondaryText)
             }
             if let e = model.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
         }

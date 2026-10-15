@@ -236,8 +236,15 @@ def apply_ui_bright_bgr(frame_bgr: np.ndarray) -> np.ndarray:
 
 
 def apply_ui_look_bgr(frame_bgr: np.ndarray) -> np.ndarray:
-    """Apply the picker look: red-mono dark. Light mode is assigned at paint time."""
-    return apply_ui_mono_bgr(frame_bgr)
+    """Apply the picker look (red-mono dark; light mode is assigned at paint time),
+    then the user's display brightness. Every displayed frame passes through here."""
+    frame_bgr = apply_ui_mono_bgr(frame_bgr)
+    try:
+        from pigeon.display_brightness import apply as _apply_brightness
+
+        return _apply_brightness(frame_bgr)
+    except Exception:
+        return frame_bgr
 
 
 __all__ = [

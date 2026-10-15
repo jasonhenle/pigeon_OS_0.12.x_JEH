@@ -161,6 +161,14 @@ struct PigeonClient {
         try await send("PATCH", "/pigeon-settings", body: patch)
     }
 
+    // MARK: Display
+
+    func display() async throws -> DisplayInfo { try await send("GET", "/display") }
+
+    func setBrightness(_ percent: Int) async throws -> DisplayInfo {
+        try await send("PATCH", "/display", body: DisplayPatch(brightness: percent))
+    }
+
     // MARK: Events (SSE)
 
     func events() -> AsyncThrowingStream<DeviceEvent, Error> {

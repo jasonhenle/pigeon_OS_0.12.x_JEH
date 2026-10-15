@@ -219,3 +219,12 @@ struct PigeonSettingsPatch: Codable {
 
 struct RoomIDRequest: Codable { var id: String }
 struct RoomNameRequest: Codable { var name: String }
+
+struct DisplayInfo: Codable, Equatable {
+    var brightness: Int
+    var min: Int
+    var max: Int
+    var mode: String   // "backlight" (hardware) or "software"
+}
+
+struct DisplayPatch: Codable { var brightness: Int }

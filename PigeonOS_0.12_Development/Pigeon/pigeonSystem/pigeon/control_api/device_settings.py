@@ -153,3 +153,30 @@ def patch_pigeon_settings(body: Mapping[str, Any]) -> None:
         )
     if "timezone" in body:
         pigeon_locale.set_timezone_manual(str(tz))
+
+
+# ----------------------------------------------------------------- display
+
+def read_display() -> dict[str, Any]:
+    from pigeon import display_brightness as db
+
+    return {
+        "brightness": db.get_percent(),
+        "min": db.MIN_PERCENT,
+        "max": db.MAX_PERCENT,
+        "mode": db.mode(),
+    }
+
+
+def patch_display(body: Mapping[str, Any]) -> None:
+    from pigeon import display_brightness as db
+
+    unknown = set(body) - {"brightness"}
+    if unknown or "brightness" not in body:
+        raise ValueError(",".join(sorted(unknown)) or "brightness")
+    value = body["brightness"]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("brightness")
+    if not db.MIN_PERCENT <= value <= db.MAX_PERCENT:
+        raise ValueError("brightness")
+    db.set_percent(value)
