@@ -155,6 +155,7 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 | `now_playing_override` | ✓ | ✓ | `/now-playing/*` |
 | `rooms` | ✓ | ✓ | `/rooms*` |
 | `pigeon_settings` | ✓ | – | `/pigeon-settings` |
+| `display_brightness` | ✓ | ✓ | `/display` |
 | `clock` | ✓ | – | `/clock` |
 | `locations` | ✓ | ✓ | `/locations`, `/location/room` |
 | `wifi` | ✓ | ✓ | `/wifi*` |
@@ -371,6 +372,12 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
 
 `PATCH /pigeon-settings` accepts any subset of `zip` (5 digits), `timezone` (one of `timezone_choices`), `options` (a map of option → allowed value) and `ui_color`. Validation is all-or-nothing: on `400` nothing is changed and `error.details.fields` names the offenders (`options.temp_format`, `zip`, ...). Setting `zip` also looks the timezone up in the background, so re-read after a few seconds. The response is the new `GET` body. On the device the on-screen settings reload immediately.
 
+### 6.3b Display brightness *(capability `display_brightness`)* — implemented
+
+`GET /display` returns `{ "brightness": 80, "min": 10, "max": 100, "mode": "software" }`. `PATCH /display` with `{ "brightness": 60 }` sets it (an integer from `min` to `max`; `400` otherwise, nothing changed) and returns the same body. The on-screen picture follows immediately and the level is saved across restarts.
+
+`mode` says how the dimming is done. `backlight` means the panel exposes `/sys/class/backlight/*` and the device writes the hardware level, which also saves power. `software` means a gain is applied to every frame before it reaches the screen (HDMI monitors). If a hardware write is refused the device falls back to `software` rather than failing. The floor is 10 % so a stray slider cannot leave the screen unreadable.
+
 ### 6.4 Wi-Fi *(capability `wifi`)*
 
 | Method & path | Purpose |
@@ -501,6 +508,7 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | PUT | `/rooms/current` | token | `rooms` |
 | PATCH | `/rooms/{id}` | token | `rooms` |
 | GET, PATCH | `/pigeon-settings` | token | `pigeon_settings` |
+| GET, PATCH | `/display` | token | `display_brightness` |
 | GET, PATCH | `/clock` | token | `clock` |
 | GET, POST | `/locations` | token | `locations` |
 | PATCH, DELETE | `/locations/{id}` | token | `locations` |

@@ -192,6 +192,31 @@ final class ClientTests: XCTestCase {
         _ = try await c.patchPigeonSettings(.init(zip: nil, timezone: nil, options: ["time_format": "24"], uiColor: "green"))
     }
 
+    func testDisplayBrightnessGetAndSet() async throws {
+        var seen: [String] = []
+        StubURLProtocol.handler = { req in
+            seen.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            if req.httpMethod == "PATCH" {
+                let body = req.httpBodyStream.map { s -> Data in
+                    s.open(); defer { s.close() }
+                    var d = Data(); var buf = [UInt8](repeating: 0, count: 256)
+                    while s.hasBytesAvailable { let n = s.read(&buf, maxLength: 256); if n <= 0 { break }; d.append(buf, count: n) }
+                    return d
+                } ?? req.httpBody ?? Data()
+                let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+                XCTAssertEqual(obj?["brightness"] as? Int, 40)
+            }
+            return (200, #"{"brightness":40,"min":10,"max":100,"mode":"software"}"#.data(using: .utf8)!)
+        }
+        let c = client()
+        let d = try await c.display()
+        XCTAssertEqual(d.min, 10)
+        XCTAssertEqual(d.mode, "software")
+        let after = try await c.setBrightness(40)
+        XCTAssertEqual(after.brightness, 40)
+        XCTAssertEqual(seen, ["GET /api/v1/display", "PATCH /api/v1/display"])
+    }
+
     func testSuggestionSubtitle() {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")

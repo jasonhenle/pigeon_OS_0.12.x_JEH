@@ -154,6 +154,8 @@ class ControlService:
             return self._rooms(method, route, body)
         elif route == "/pigeon-settings":
             return self._pigeon_settings(method, body)
+        elif route == "/display":
+            return self._display(method, body)
         elif route == "/controllers":
             if method == "GET":
                 return 200, {"controllers": self.auth.controllers()}
@@ -377,6 +379,25 @@ class ControlService:
             self._on_ui(self._apply_location)
             self.hub.publish("settings", {"changed": ["rooms"]})
             return 200, ds.read_rooms()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    def _display(self, method: str, body: Any) -> Response:
+        from pigeon.control_api import device_settings as ds
+
+        if not profile.has_capability("display_brightness"):
+            return _err(422, "unsupported", "display_brightness not supported on this device.")
+        if method == "GET":
+            return 200, ds.read_display()
+        if method == "PATCH":
+            if not isinstance(body, dict):
+                return _err(400, "bad_request", "JSON object required.")
+            try:
+                ds.patch_display(body)
+            except ValueError as exc:
+                return _err(400, "bad_request", "Invalid value.", fields=str(exc).split(","))
+            self._on_ui(self._apply_settings)
+            self.hub.publish("settings", {"changed": ["display"]})
+            return 200, ds.read_display()
         return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _pigeon_settings(self, method: str, body: Any) -> Response:
