@@ -6,6 +6,7 @@ followed by a UI-thread callback (supplied by boot) that reloads that copy.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping
 
 ROOM_NAME_MAX = 24
@@ -99,6 +100,12 @@ def read_pigeon_settings() -> dict[str, Any]:
     }
 
 
+def _is_five_digit_zip(raw: Any) -> bool:
+    return isinstance(raw, (str, int)) and not isinstance(raw, bool) and re.fullmatch(
+        r"\d{5}", str(raw).strip()
+    ) is not None
+
+
 def patch_pigeon_settings(body: Mapping[str, Any]) -> None:
     """Validate everything first, then apply. Raises ValueError with the field name."""
     from pigeon import pigeon_locale
@@ -106,7 +113,9 @@ def patch_pigeon_settings(body: Mapping[str, Any]) -> None:
     errors: list[str] = []
     zip_raw = body.get("zip")
     if "zip" in body:
-        if pigeon_locale.normalize_zip(str(zip_raw or "")) == "":
+        # the API contract is exactly five digits; normalize_zip alone would
+        # accept "123456" or "abc12345" by trimming/stripping
+        if not _is_five_digit_zip(zip_raw):
             errors.append("zip")
     tz = body.get("timezone")
     if "timezone" in body and str(tz or "") not in pigeon_locale.timezone_choices():
@@ -138,7 +147,9 @@ def patch_pigeon_settings(body: Mapping[str, Any]) -> None:
         keys = dict(read_ui_color_keys())
         keys["ui"] = str(body["ui_color"])
         write_ui_color_keys(keys)
+    if "zip" in body:
+        pigeon_locale.set_zipcode_manual(
+            str(zip_raw), manual_timezone_override="timezone" in body
+        )
     if "timezone" in body:
         pigeon_locale.set_timezone_manual(str(tz))
-    if "zip" in body:
-        pigeon_locale.set_zipcode_manual(str(zip_raw))

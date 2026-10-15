@@ -726,23 +726,30 @@ class MainSettingsState:
         return bool(row_name) and row_name.lower() == saved_name.lower() and row_ip == saved_ip
 
     def load_saved_box_devices(self) -> None:
+        """Sync both box columns to the saved devices of the *current* room.
+
+        A box with no saved device is cleared, so switching to a room that has no
+        player or receiver does not keep showing the previous room's device.
+        """
         try:
             from pigeon.app_state import read_saved_av_receiver, read_saved_streaming_device
 
             stream = read_saved_streaming_device()
-            if stream:
-                name = str(stream.get("name") or stream.get("label") or "Device").strip()
-                ip = str(stream.get("address") or "").strip()
-                self.box2_devices.picked = (name, ip)
-                self.box2_ip_invalid = False
             avr = read_saved_av_receiver()
-            if avr:
-                name = str(avr.get("name") or avr.get("label") or "Device").strip()
-                ip = str(avr.get("address") or "").strip()
-                self.box3_devices.picked = (name, ip)
-                self.box3_ip_invalid = False
         except Exception:
-            pass
+            return  # unreadable state: leave what is shown untouched
+        for box_num, row in ((2, stream), (3, avr)):
+            panel = self._box_panel(box_num)
+            if row:
+                name = str(row.get("name") or row.get("label") or "Device").strip()
+                ip = str(row.get("address") or "").strip()
+                panel.picked = (name, ip)
+            else:
+                panel.picked = None
+            if box_num == 2:
+                self.box2_ip_invalid = False
+            else:
+                self.box3_ip_invalid = False
 
     def reset_box_device_panel(self, box_num: int) -> None:
         panel = self._box_panel(box_num)

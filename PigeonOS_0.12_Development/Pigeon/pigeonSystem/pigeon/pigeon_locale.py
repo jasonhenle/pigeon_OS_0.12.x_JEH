@@ -276,7 +276,12 @@ def ensure_location_detected(on_done: Any = None) -> bool:
     return True
 
 
-def set_zipcode_manual(raw: str, on_done: Any = None) -> bool:
+def set_zipcode_manual(
+    raw: str,
+    on_done: Any = None,
+    *,
+    manual_timezone_override: bool = False,
+) -> bool:
     """Save a typed zip; resolve its timezone in the background."""
     zip_code = normalize_zip(raw)
     if not zip_code:
@@ -285,7 +290,11 @@ def set_zipcode_manual(raw: str, on_done: Any = None) -> bool:
 
     def worker() -> None:
         tz_name = _lookup_zip_timezone(zip_code)
-        if _zone(tz_name) is not None and read_zipcode() == zip_code:
+        if (
+            _zone(tz_name) is not None
+            and read_zipcode() == zip_code
+            and not manual_timezone_override
+        ):
             _write(timezone=tz_name, tz_source="zip")
         try:
             from pigeon.weather import refresh_weather
