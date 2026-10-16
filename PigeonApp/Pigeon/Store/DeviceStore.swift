@@ -72,6 +72,13 @@ final class DeviceStore: ObservableObject {
         persist()
     }
 
+    /// Unpairs on the device too (best effort), otherwise it still counts this phone as its controller
+    /// and refuses a new pairing with `already_claimed`.
+    func unpair(_ device: KnownDevice) async {
+        try? await client(for: device).revokeController(id: controllerID)
+        remove(id: device.id)
+    }
+
     func remove(id: String) {
         Keychain.delete(id)
         devices.removeAll { $0.id == id }

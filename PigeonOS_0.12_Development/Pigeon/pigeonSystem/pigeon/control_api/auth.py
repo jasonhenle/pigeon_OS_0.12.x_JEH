@@ -116,16 +116,20 @@ class AuthStore:
             return self._code
 
     def claim_open(self) -> bool:
-        """Claims are accepted while unclaimed, or during an invite window."""
+        """Claims are accepted while unclaimed, during an invite window, or while the code is on screen."""
         with self._lock:
-            return not self._load() or time.monotonic() < self._invite_until
+            now = time.monotonic()
+            return not self._load() or now < self._invite_until or now < self._display_until
 
     # ---- on-screen code (the phone asks the device to show it)
     def request_display(self, ttl_s: float = DISPLAY_TTL_S) -> bool:
-        """Ask the device to show the code big on its own screen. False if it can't be claimed."""
+        """Ask the device to show the code big on its own screen.
+
+        Allowed even when already claimed: seeing the screen is the proof of presence, so a phone that
+        lost its pairing (or a second phone) can re-pair without a still-paired controller. Claiming
+        with an existing controller id replaces that entry.
+        """
         with self._lock:
-            if not (not self._load() or time.monotonic() < self._invite_until):
-                return False
             self._display_until = time.monotonic() + ttl_s
             return True
 

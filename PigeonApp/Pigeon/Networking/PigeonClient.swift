@@ -95,6 +95,11 @@ struct PigeonClient {
         try? await sendNoContent("POST", "/pair/cancel")
     }
 
+    /// Tell the device to forget a controller (this phone, when removing it), so it can be paired again.
+    func revokeController(id: String) async throws {
+        try await sendNoContent("DELETE", "/controllers/\(id)")
+    }
+
     func device() async throws -> DeviceInfo { try await send("GET", "/device") }
     func capabilities() async throws -> Capabilities { try await send("GET", "/capabilities") }
     func status() async throws -> DeviceStatus { try await send("GET", "/status") }

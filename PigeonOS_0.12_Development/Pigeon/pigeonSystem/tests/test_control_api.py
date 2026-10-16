@@ -83,7 +83,7 @@ class RouteTests(_Base):
         self.assertEqual(self.call("GET", "/status", token="")[0], 401)
         self.assertEqual(self.call("GET", "/status", token="bad")[0], 401)
 
-    def test_claim_refused_when_claimed(self) -> None:
+    def test_claim_refused_when_claimed_and_code_not_on_screen(self) -> None:
         st, body = self.call("POST", "/claim", {"code": self.svc.auth.pairing_code}, token="")
         self.assertEqual(st, 403)
         self.assertEqual(body["error"]["code"], "already_claimed")
@@ -222,12 +222,11 @@ class PairingDisplayTests(_Base):
         a.request_display(ttl_s=-1)
         self.assertEqual(a.display_code(), "")
 
-    def test_cannot_request_when_claimed(self) -> None:
+    def test_can_request_display_when_claimed(self) -> None:
         a = AuthStore()
         a.claim(a.pairing_code, "p", "c1")
-        self.assertFalse(a.request_display())
-        a.invite()
         self.assertTrue(a.request_display())
+        self.assertTrue(a.claim_open())
 
     def test_routes(self) -> None:
         svc = ControlService(run_on_ui=lambda fn: fn())
@@ -237,8 +236,11 @@ class PairingDisplayTests(_Base):
         self.assertEqual(svc.handle("POST", "/api/v1/pair/cancel", {}, "", None)[0], 204)
         self.assertEqual(svc.auth.display_code(), "")
         svc.auth.claim(svc.auth.pairing_code, "p", "c1")
-        st, body = svc.handle("POST", "/api/v1/pair/start", {}, "", None)
-        self.assertEqual((st, body["error"]["code"]), (403, "already_claimed"))
+        st, _ = svc.handle("POST", "/api/v1/pair/start", {}, "", None)
+        self.assertEqual(st, 200)
+        # Same controller id re-pairing replaces its entry instead of adding a duplicate.
+        self.assertIsNotNone(svc.auth.claim(svc.auth.pairing_code, "p", "c1"))
+        self.assertEqual(len(svc.auth.controllers()), 1)
 
     def test_render_image(self) -> None:
         from pigeon.control_api.pairing_overlay import render_pairing_image
