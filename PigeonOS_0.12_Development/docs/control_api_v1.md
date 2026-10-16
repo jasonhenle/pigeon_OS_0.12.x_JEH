@@ -91,7 +91,7 @@ A device is **unclaimed** until a controller claims it. The claim proves physica
 { "token": "pgt_Zk3...", "device": { "id": "pgn-7f3a91", "name": "Theater Clock" } }
 ```
 
-**Showing the code on the screen (like the Apple TV PIN).** When the user picks a device in the app, the app first calls `POST /pair/start` *(open while claimable; `403 already_claimed` otherwise)*. The device then draws the code **full screen** until the claim succeeds, `POST /pair/cancel` *(open, `204`)* is called, or 120 seconds pass. The response is `{ "expires_in_s": 120 }` and never contains the code: seeing the screen is the proof of presence. Anyone on the LAN can trigger or dismiss the prompt, which is a nuisance, not a way in, since the code is still required to claim.
+**Showing the code on the screen (like the Apple TV PIN).** When the user picks a device in the app, the app first calls `POST /pair/start` *(open; works even when already claimed, since the on-screen code is the proof of presence)*. The device then draws the code **full screen** until the claim succeeds, `POST /pair/cancel` *(open, `204`)* is called, or 120 seconds pass. The response is `{ "expires_in_s": 120 }` and never contains the code: seeing the screen is the proof of presence. Anyone on the LAN can trigger or dismiss the prompt, which is a nuisance, not a way in, since the code is still required to claim.
 
 - The token is a 256-bit random value, stored in the iOS Keychain. The device stores only a hash.
 - The code is regenerated on every boot and after 5 failed attempts; failures are rate-limited (`429`).

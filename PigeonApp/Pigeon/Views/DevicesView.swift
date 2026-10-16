@@ -134,7 +134,9 @@ struct DeviceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .confirmationDialog("Remove \(device.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { store.remove(id: device.id); dismiss() }
+            Button("Remove", role: .destructive) {
+                Task { await store.unpair(device); dismiss() }
+            }
         } message: { Text("The device keeps working. Add it again with its on-screen code.") }
     }
 
