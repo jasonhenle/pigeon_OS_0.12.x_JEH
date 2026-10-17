@@ -1096,11 +1096,7 @@ def _clock_saver_for_compose(now: float, *, DevPhase, DisplayView, _apply_auto_w
             LAYOUT_ZONE6_PAUSESAVER,
             LAYOUT_ZONE10_PAUSESAVER,
         ):
-            from pigeon.clock_saver_policy import pausesaver_due_for_clocksaver
-
-            if pausesaver_due_for_clocksaver(_refresh_paused_row_stamp(now)):
-                return True
-            return False
+            return True
         if plan.layout == LAYOUT_ZONE6_CLOCKSAVER:
             return False
     except Exception:
@@ -1239,6 +1235,14 @@ def _rasterize_clock_saver_window_bgr(*, DESIGN_H, DESIGN_W, UI_TARGET_H, UI_TAR
         return None
 
 
+_PAUSED_POSTER_HOOK: list = [None]
+
+
+def set_paused_poster_hook(fn) -> None:
+    """``fn() -> BGR poster | None``: the poster to split with the clock while paused."""
+    _PAUSED_POSTER_HOOK[0] = fn
+
+
 def _clock_saver_layers(*, _clock_saver_volume_raw, _volume_lines, clock_saver_composite_bgra, render_audio_meter_composite_bgra, **kwargs):
     try:
         from pigeon.auto_widgets import live_plan
@@ -1279,6 +1283,17 @@ def _clock_saver_layers(*, _clock_saver_volume_raw, _volume_lines, clock_saver_c
                 (frame, rect), date = composite
                 frame = compose_clock_with_poster(frame, poster, opacity=float(op))
                 return (frame, rect), date
+        hook = _PAUSED_POSTER_HOOK[0]
+        poster = hook() if hook is not None else None
+        if poster is not None:
+            from pigeon.widgets.clock_saver import compose_clock_with_poster
+
+            op = kwargs.get("time_layer_opacity")
+            if op is None:
+                op = kwargs.get("layer_opacity", 1.0)
+            (frame, rect), date = composite
+            frame = compose_clock_with_poster(frame, poster, opacity=float(op))
+            return (frame, rect), date
     except Exception:
         pass
     return composite

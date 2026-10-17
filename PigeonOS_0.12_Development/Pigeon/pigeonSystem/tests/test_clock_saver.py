@@ -674,7 +674,7 @@ class ClockSaverSecondsBarTests(unittest.TestCase):
 
 
 class ClockSaverTriggerTests(unittest.TestCase):
-    def test_pause_does_not_arm_before_thirty_seconds(self) -> None:
+    def test_pause_arms_immediately(self) -> None:
         from pigeon.clock_saver_policy import (
             CLOCK_SAVER_PAUSED_AFTER_S,
             clock_saver_due_for_pause,
@@ -683,8 +683,8 @@ class ClockSaverTriggerTests(unittest.TestCase):
             should_hold_paused_screen,
         )
 
-        self.assertEqual(CLOCK_SAVER_PAUSED_AFTER_S, 30.0)
-        self.assertFalse(clock_saver_due_for_pause(True, 29.9))
+        self.assertEqual(CLOCK_SAVER_PAUSED_AFTER_S, 0.0)
+        self.assertTrue(clock_saver_due_for_pause(True, 0.0))
         self.assertTrue(clock_saver_due_for_pause(True, 30.0))
         self.assertFalse(clock_saver_due_for_pause(False, 90.0))
         from pigeon.clock_saver_policy import (
@@ -692,8 +692,7 @@ class ClockSaverTriggerTests(unittest.TestCase):
             pausesaver_hold_from_metadata_class,
         )
 
-        self.assertFalse(pausesaver_due_for_clocksaver(29.9))
-        self.assertTrue(pausesaver_due_for_clocksaver(30.0))
+        self.assertTrue(pausesaver_due_for_clocksaver(0.0))
         self.assertTrue(pausesaver_hold_from_metadata_class("stopped"))
         self.assertFalse(pausesaver_hold_from_metadata_class("ok"))
         started = next_paused_since_mono(True, 100.0, 0.0)

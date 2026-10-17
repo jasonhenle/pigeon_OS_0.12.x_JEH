@@ -121,69 +121,22 @@ class AutoWidgetResolveTests(unittest.TestCase):
         self.assertEqual(plan.assignments[3], INFO)
         self.assertEqual(plan.assignments[4], STATUS)
 
-    def test_paused_with_audio_uses_zone6_pausesaver(self) -> None:
-        plan = resolve_auto_widgets(
-            _sig(
-                player_metadata=METADATA_STOPPED,
-                audio_levels=True,
-                pausesaver_art=True,
-            )
-        )
-        self.assertEqual(plan.layout, LAYOUT_ZONE6_PAUSESAVER)
-        self.assertEqual(plan.assignments[0], PAUSESAVER)
-        self.assertEqual(plan.assignments[2], VOLUME)
-
-    def test_paused_without_art_is_clocksaver(self) -> None:
-        plan = resolve_auto_widgets(
-            _sig(
-                player_metadata=METADATA_STOPPED,
-                audio_levels=False,
-                pausesaver_art=False,
-            )
-        )
-        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
-        # No still to show, but audio: the visualizer shows what is playing.
-        zone6 = resolve_auto_widgets(
-            _sig(
-                player_metadata=METADATA_STOPPED,
-                audio_levels=True,
-                pausesaver_art=False,
-            )
-        )
-        self.assertEqual(zone6.layout, LAYOUT_ZONE6_VISUALIZER)
-
-    def test_paused_for_thirty_seconds_becomes_clocksaver(self) -> None:
-        still_paused = resolve_auto_widgets(
-            _sig(
-                player_metadata=METADATA_STOPPED,
-                audio_levels=False,
-                paused_for_s=29.0,
-                pausesaver_art=True,
-            )
-        )
-        self.assertEqual(still_paused.layout, LAYOUT_ZONE10_PAUSESAVER)
-        zone10 = resolve_auto_widgets(
-            _sig(player_metadata=METADATA_STOPPED, audio_levels=False, paused_for_s=30.0)
-        )
-        self.assertEqual(zone10.layout, LAYOUT_ZONE8_CLOCKSAVER)
-        self.assertEqual(zone10.zone8, CLOCK_SAVER)
-        zone6 = resolve_auto_widgets(
-            _sig(player_metadata=METADATA_STOPPED, audio_levels=True, paused_for_s=30.0)
-        )
-        self.assertEqual(zone6.layout, LAYOUT_ZONE6_VISUALIZER)
-        self.assertEqual(zone6.assignments[0], VISUALIZER_Z6)
-
-    def test_paused_without_audio_uses_zone10(self) -> None:
-        plan = resolve_auto_widgets(
-            _sig(
-                player_metadata=METADATA_STOPPED,
-                audio_levels=False,
-                pausesaver_art=True,
-            )
-        )
-        self.assertEqual(plan.layout, LAYOUT_ZONE10_PAUSESAVER)
-        self.assertEqual(plan.zone10, PAUSESAVER)
-        self.assertEqual(plan.assignments, ("", "", "", PAUSESAVER, STATUS))
+    def test_paused_is_clocksaver_immediately(self) -> None:
+        # Paused goes straight to Clocksaver (the poster split is drawn there),
+        # with or without audio, art, or time spent paused.
+        for audio in (False, True):
+            for art in (False, True):
+                for paused_for in (0.0, 29.0, 30.0):
+                    plan = resolve_auto_widgets(
+                        _sig(
+                            player_metadata=METADATA_STOPPED,
+                            audio_levels=audio,
+                            pausesaver_art=art,
+                            paused_for_s=paused_for,
+                        )
+                    )
+                    self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
+                    self.assertEqual(plan.zone8, CLOCK_SAVER)
 
     def test_absent_metadata_with_audio_is_the_zone6_visualizer(self) -> None:
         # Audio but no player metadata: visualizer, analog clock, the receiver's
