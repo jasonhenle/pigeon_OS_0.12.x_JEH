@@ -151,7 +151,8 @@ struct SearchView: View {
             .scrollBounceBehavior(.always)  // short lists still drag-dismiss the keyboard
         }
         .contentShape(Rectangle())
-        .onTapGesture { focused = false }
+        // Simultaneous, so it dismisses the keyboard without swallowing taps on the result rows.
+        .simultaneousGesture(TapGesture().onEnded { focused = false })
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 8)
     }
