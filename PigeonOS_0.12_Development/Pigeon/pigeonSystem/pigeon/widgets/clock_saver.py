@@ -1795,6 +1795,8 @@ def _contain_patch(
     canvas: np.ndarray,
     patch: np.ndarray | None,
     box: tuple[int, int, int, int],
+    *,
+    ink_crop: bool = True,
 ) -> None:
     if patch is None or patch.size == 0 or patch.ndim < 3:
         return
@@ -1803,7 +1805,7 @@ def _contain_patch(
     from pigeon.compositing import cv_resize_interp
     from pigeon.widgets.view_circles import _ink_crop_bgra, _paste_patch_bgra
 
-    cropped = _ink_crop_bgra(patch, pad=2)
+    cropped = _ink_crop_bgra(patch, pad=2) if ink_crop else patch
     if cropped is None or cropped.size == 0:
         return
     x, y, w, h = (int(v) for v in box)
@@ -1929,7 +1931,12 @@ def compose_clock_with_poster(
     # visible box with an edge. Keep only the lit ink.
     clock = frame.copy()
     clock[clock[:, :, :3].max(axis=2) < _CLOCK_INK_MIN_CHANNEL, 3] = 0
-    _contain_patch(out, clock, clock_box)
+    # Fixed crop, not an ink crop: the ink box moves with the digits (a skinny
+    # ``1``) and the growing seconds bar, which made the scale jump each tick.
+    from pigeon.np_layout import clock_saver_scaled_source_xywh
+
+    clock = _crop_bgra(clock, clock_saver_scaled_source_xywh())
+    _contain_patch(out, clock, clock_box, ink_crop=False)
 
     sh, sw = int(poster_bgr.shape[0]), int(poster_bgr.shape[1])
     if sh < 1 or sw < 1:
