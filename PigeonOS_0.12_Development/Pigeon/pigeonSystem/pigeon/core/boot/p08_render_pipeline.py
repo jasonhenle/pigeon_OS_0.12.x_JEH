@@ -280,6 +280,16 @@ def run(ctx) -> None:
         active_tmdb_title_key=active_tmdb_title_key,
     )
 
+    def _paused_poster_bgr():
+        if not ctx._pausesaver_is_holding():
+            return None
+        px = _active_tmdb_poster_bgra()
+        if px is None or getattr(px, "ndim", 0) < 3:
+            return None
+        return px[:, :, :3]
+
+    _core_saver_state.set_paused_poster_hook(_paused_poster_bgr)
+
     _active_tmdb_tt_src_bgra = _bind_deps(
         _core_tmdb_flow._active_tmdb_tt_src_bgra,
         _tmdb_tt_src_cache=_tmdb_tt_src_cache,

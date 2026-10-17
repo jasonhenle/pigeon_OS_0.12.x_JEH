@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-# Pausesaver holds for this span, then Clocksaver takes over.
-CLOCK_SAVER_PAUSED_AFTER_S = 30.0
+# A paused title hands off to Clocksaver (split with its poster) immediately.
+CLOCK_SAVER_PAUSED_AFTER_S = 0.0
 
 
 def player_reports_playing(

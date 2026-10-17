@@ -261,11 +261,9 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
     meta = str(sig.player_metadata or METADATA_ABSENT).strip().lower()
     if meta not in (METADATA_OK, METADATA_STOPPED, METADATA_ABSENT):
         meta = METADATA_ABSENT
-    if meta == METADATA_STOPPED and (
-        float(sig.paused_for_s) >= float(CLOCK_SAVER_PAUSED_AFTER_S)
-        or not bool(sig.pausesaver_art)
-    ):
-        # Pausesaver timed out, or no still to show, belongs to Clocksaver.
+    paused = meta == METADATA_STOPPED and not sig.visualizer_mode
+    if paused:
+        # A paused title goes straight to Clocksaver (split with its poster).
         meta = METADATA_ABSENT
 
     if not sig.wan_ok and not sig.reliable_clock:
@@ -313,7 +311,7 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
                 zone10=PAUSESAVER,
             )
 
-        if sig.audio_identification:
+        if sig.audio_identification and not paused:
             z4, z4_text = _zone4_fallback(sig)
             return _plan(
                 layout=LAYOUT_SHAZAM,
@@ -323,7 +321,7 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
             )
 
         z4, z4_text = _zone4_fallback(sig)
-        if sig.audio_levels:
+        if sig.audio_levels and not paused:
             # Audio but no player metadata: the visualizer shows what is playing.
             return _visualizer_plan(sig, metadata=False)
         return _plan(
