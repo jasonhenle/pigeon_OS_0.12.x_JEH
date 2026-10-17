@@ -117,7 +117,7 @@ PigeonOS_0.12_Development/
     control_api/        new: server, auth, routes, SSE, mDNS advertise
     profile.py          new: device profile + capabilities
     settings_registry.py  new
-  PigeonApp/            new: Xcode project "Pigeon" (SwiftUI)
+  (iOS app moved to github.com/jasonhenle/pigeon-ios)
   docs/
     PIGEON_COMPANION_ROADMAP.md   this file
     control_api_v1.md             OpenAPI-style spec (Phase 0 output)
