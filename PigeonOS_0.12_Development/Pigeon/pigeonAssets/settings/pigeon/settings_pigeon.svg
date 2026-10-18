@@ -64,7 +64,7 @@
           <rect id="settings_update_rectangle_full_grey" x="1663.58" y="1198.12" width="108.14" height="21.39" rx="6.67" ry="6.67" fill="#4a4a4a"/>
         </g>
       </g>
-      <text id="settings_update_update_text" transform="translate(1670.5112 1332.0786)" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">update</tspan></text>
+      <text id="settings_update_update_text" transform="translate(1717.69 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">check</tspan></text>
     </g>
   </g>
   <g id="settings_reset_group">
@@ -78,6 +78,13 @@
       <polygon id="settings_reset_icon_triangle" points="1529 1216.23 1524.57 1236.98 1519.68 1257.63 1503.92 1243.42 1488.49 1228.86 1508.68 1222.32 1529 1216.23" fill="#fff"/>
     </g>
     <text id="settings_reset_text_white" transform="translate(1513.8022 1332.7421)" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.56" isolation="isolate"><tspan x="0" y="0">reset</tspan></text>
+  </g>
+  <g id="settings_tile_labels_group">
+    <text id="settings_label_time_text" transform="translate(724.81 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">time</tspan></text>
+    <text id="settings_label_temp_text" transform="translate(889.6 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">temp</tspan></text>
+    <text id="settings_label_color_text" transform="translate(1055.77 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">color</tspan></text>
+    <text id="settings_label_option_text" transform="translate(1222.1 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">option</tspan></text>
+    <text id="settings_label_update_text" transform="translate(1388.43 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">update</tspan></text>
   </g>
   <g id="settings_option_group">
     <g id="option1_time_format">
