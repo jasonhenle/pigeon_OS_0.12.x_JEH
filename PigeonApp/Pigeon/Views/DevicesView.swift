@@ -309,7 +309,7 @@ struct PigeonSettingsCard: View {
         ("temp_format", "Temperature", ["f": "°F", "c": "°C"]),
         ("color_format", "Look", ["color": "Theme", "dark": "Dark"]),
         ("zone4_mode", "Playback bar", ["info": "Info", "visualizer": "Visualizer"]),
-        ("zone6_mode", "Now playing layout", ["now_playing": "Zone 6", "zone11": "Zone 11"]),
+        ("auto_update", "Software update", ["auto": "Auto", "manual": "Manual"]),
     ]
 
     private static let swatches: [String: Color] = [

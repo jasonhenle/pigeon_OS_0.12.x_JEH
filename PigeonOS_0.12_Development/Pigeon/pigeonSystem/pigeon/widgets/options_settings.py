@@ -2,9 +2,10 @@
 
 ``option1`` 12 / 24 hour, ``option2`` °F / °C, ``option3`` theme / dark
 (dark = red-tinted monochrome UI), ``option4`` info / visualizer (what the
-now-playing zone 4 shows), ``option5`` zone6 / zone11 (which now-playing layout
-a playing title uses: zone 6 is the TT beside the volume disc; zone 11 is the
-TT across zones 1–3 with the input / volume / TRT strip in zone 4). A long
+now-playing zone 4 shows), ``option5`` auto / manual update (auto installs the
+latest OS only while nothing is playing; manual only via the Update button).
+The zone 11 now-playing layout (TT across zones 1–3, input / volume / TRT strip
+in zone 4) is the permanent default. A long
 encoder press still flips into the visualizer, see :mod:`pigeon.visualizer_mode`.
 Values persist under ``settings_options``.
 
@@ -30,7 +31,7 @@ _DEFAULTS: dict[str, Any] = {
     "idle_standby": 60,
     "clock_saver": "on",
     "zone4_mode": "info",
-    "zone6_mode": "now_playing",
+    "auto_update": "auto",
 }
 
 # (option number on settings_pigeon, persist key, option A value, option B value)
@@ -39,7 +40,7 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (2, "temp_format", "f", "c"),
     (3, "color_format", "color", "dark"),
     (4, "zone4_mode", "info", "visualizer"),
-    (5, "zone6_mode", "now_playing", "zone11"),
+    (5, "auto_update", "auto", "manual"),
 )
 
 _STATE_KEY = "settings_options"
@@ -65,9 +66,8 @@ def _normalize(raw: object) -> dict[str, Any]:
     )
     z4 = str(raw.get("zone4_mode") or out["zone4_mode"]).strip().lower()
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
-    z6 = str(raw.get("zone6_mode") or out["zone6_mode"]).strip().lower()
-    # "visualizer" was option5's B value before 0.12; it now reads as zone 6.
-    out["zone6_mode"] = "zone11" if z6 in ("zone11", "zone_11", "11") else "now_playing"
+    au = str(raw.get("auto_update") or out["auto_update"]).strip().lower()
+    out["auto_update"] = "manual" if au in ("manual", "off", "false") else "auto"
     return out
 
 
@@ -166,8 +166,14 @@ def zone6_visualizer_default(state: MainSettingsState | None = None) -> bool:
 
 
 def zone11_selected(state: MainSettingsState | None = None) -> bool:
-    """option5 = zone11: TT across zones 1–3, input / volume / TRT strip in zone 4."""
-    return _vals(state)["zone6_mode"] == "zone11"
+    """Zone 11 is the permanent layout: TT across zones 1–3, input / volume / TRT in zone 4."""
+    _ = state
+    return True
+
+
+def auto_update_enabled(state: MainSettingsState | None = None) -> bool:
+    """option5 = auto: install the latest OS while nothing is playing."""
+    return _vals(state)["auto_update"] == "auto"
 
 
 def ui_is_bright(state: MainSettingsState | None = None) -> bool:
@@ -248,6 +254,7 @@ def apply_ui_look_bgr(frame_bgr: np.ndarray) -> np.ndarray:
 
 
 __all__ = [
+    "auto_update_enabled",
     "apply_ui_bright_bgr",
     "apply_ui_look_bgr",
     "apply_ui_mono_bgr",
