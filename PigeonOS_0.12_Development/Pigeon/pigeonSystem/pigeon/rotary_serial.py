@@ -634,11 +634,13 @@ def _gpio_poll_encoder_script(
             held = True"""
     else:
         button = f"""
-        if bv != prev_btn:
-            if prev_btn == 1 and bv == 0 and (now - last_btn) >= 0.05:
-                print({push!r}, flush=True)
-                last_btn = now
-            prev_btn = bv"""
+        if bv != raw_btn:
+            raw_btn = bv
+            raw_at = now
+        if raw_btn != prev_btn and (now - raw_at) >= 0.02:
+            prev_btn = raw_btn
+            if prev_btn == 1:
+                print({push!r}, flush=True)"""
     return f"""
 import time
 from gpiozero import DigitalInputDevice
