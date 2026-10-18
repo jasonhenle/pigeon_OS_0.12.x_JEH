@@ -75,10 +75,12 @@ class BadgeTests(unittest.TestCase):
 class GpioHoldScriptTests(unittest.TestCase):
     """Run the generated GPIO helper against a fake gpiozero button."""
 
-    def _run(self, presses: list[tuple[float, float]]) -> list[str]:
+    def _run(self, presses: list[tuple[float, float]], hold: bool = True) -> list[str]:
         from pigeon.rotary_serial import _gpio_poll_encoder_script
 
-        script = _gpio_poll_encoder_script(17, 27, 22, cw="RIGHT", ccw="LEFT", push="PUSH", hold="HOLD", hold_s=0.3)
+        script = _gpio_poll_encoder_script(
+            17, 27, 22, cw="RIGHT", ccw="LEFT", push="PUSH", hold="HOLD" if hold else None, hold_s=0.3
+        )
         with tempfile.TemporaryDirectory() as d:
             fake = Path(d) / "gpiozero.py"
             fake.write_text(textwrap.dedent(f"""
@@ -111,6 +113,11 @@ class GpioHoldScriptTests(unittest.TestCase):
     def test_contact_bounce_is_one_short_press(self) -> None:
         bounce = [(0.100, 0.103), (0.105, 0.107), (0.109, 0.25), (0.252, 0.254)]
         self.assertEqual(self._run(bounce), ["PUSH"])
+
+    def test_volume_button_pushes_once_on_press_despite_bounce(self) -> None:
+        bounce = [(0.100, 0.103), (0.105, 0.107), (0.109, 0.25), (0.252, 0.254)]
+        self.assertEqual(self._run(bounce, hold=False), ["PUSH"])
+        self.assertEqual(self._run([(0.1, 0.2)], hold=False), ["PUSH"])
 
 
 class NowPlayingZone6Tests(unittest.TestCase):
