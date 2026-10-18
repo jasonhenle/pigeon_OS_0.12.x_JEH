@@ -210,7 +210,10 @@ class ControlService:
             except ValueError:
                 return _err(400, "bad_request", "limit must be an integer.", fields=["limit"])
             limit = max(1, min(SUGGEST_MAX, limit))
-            rows = ms.suggest_now(q, limit=limit)
+            try:
+                rows = ms.suggest_now(q, limit=limit, strict=True)
+            except ms.SuggestionSearchError as exc:
+                return _err(503, exc.code, str(exc))
             return 200, {"query": q, "results": [
                 {"tmdb_id": r.get("tmdb_id") or None, "kind": r.get("kind"),
                  "title": r.get("title"), "year": int(r["year"]) if str(r.get("year") or "").isdigit() else None}

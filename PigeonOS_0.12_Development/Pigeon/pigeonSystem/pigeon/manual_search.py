@@ -262,6 +262,13 @@ def on_content_idle() -> None:
 
 # ------------------------------------------------------------------ suggestions
 
+class SuggestionSearchError(RuntimeError):
+    """A search service failure that callers may safely show to users."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
 def _search_multi(query: str) -> list[dict]:
     from pigeon.tmdb_poster import (
         TMDB_API_BASE,
@@ -309,14 +316,29 @@ def _search_multi(query: str) -> list[dict]:
     return out
 
 
-def suggest_now(query: str, limit: int = SUGGEST_ROWS) -> tuple[dict, ...]:
+def suggest_now(
+    query: str, limit: int = SUGGEST_ROWS, *, strict: bool = False
+) -> tuple[dict, ...]:
     """Blocking search (worker threads / tests). Title-prefix matches first."""
     q = " ".join(str(query or "").split())
     if len(q) < 2:
         return ()
+    if strict:
+        from pigeon.tmdb_poster import tmdb_is_configured
+
+        if not tmdb_is_configured():
+            raise SuggestionSearchError(
+                "tmdb_not_configured",
+                "TMDb isn't configured on this Pigeon device. Add a TMDb API key or read token under ~/.pigeon_0_6/.",
+            )
     try:
         rows = _search_multi(q)
-    except Exception:
+    except Exception as exc:
+        if strict:
+            raise SuggestionSearchError(
+                "search_unavailable",
+                "Pigeon couldn't get results from TMDb. Check the device's internet connection and TMDb credentials, then try again.",
+            ) from exc
         return ()
     nq = _norm(q)
     rows.sort(
