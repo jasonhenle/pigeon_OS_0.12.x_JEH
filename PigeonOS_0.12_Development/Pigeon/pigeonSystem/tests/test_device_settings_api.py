@@ -92,7 +92,7 @@ class PigeonSettingsTests(_Base):
         self.assertEqual(st, 200)
         self.assertEqual(d["options"]["time_format"], "24")
         self.assertEqual(d["options"]["temp_format"], "c")
-        self.assertEqual(d["options"]["zone6_mode"], "now_playing")  # untouched
+        self.assertEqual(d["options"]["auto_update"], "auto")  # untouched
         self.assertEqual(d["ui_color"], "green")
         self.assertEqual(self.applied, ["settings"])
         # survives a fresh read from disk

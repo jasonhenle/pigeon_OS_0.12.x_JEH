@@ -1810,6 +1810,42 @@ def _apply_location_rename(*, _apply_persisted_location_to_runtime, _refresh_loc
     _start_location_toast()
 
 
+def _auto_update_tick(*, _AUTO_UPDATE_TICK_S, _AUTO_UPDATE_RETRY_S, _auto_update_busy, _auto_update_state_holder, _auto_update_playing, _run_github_apply_worker, root, update_check_state) -> None:
+    """Auto-update (settings_pigeon option 5): install a known newer OS only
+    while nothing is playing. One attempt per version per retry window."""
+    try:
+        from pigeon.widgets.options_settings import auto_update_enabled
+
+        if (
+            auto_update_enabled()
+            and update_check_state.get("update_available")
+            and not update_check_state.get("applying")
+            and not update_check_state.get("checking")
+            and not _auto_update_busy()
+            and not _auto_update_playing()
+        ):
+            remote = str(update_check_state.get("remote_version") or "?")
+            tried = _auto_update_state_holder
+            now = time.monotonic()
+            if tried.get("remote") != remote or (now - float(tried.get("at") or 0.0)) >= _AUTO_UPDATE_RETRY_S:
+                tried["remote"] = remote
+                tried["at"] = now
+                branch = update_check_state.get("github_branch")
+                _run_github_apply_worker(remote=remote, branch=str(branch) if branch else None)
+    except Exception:
+        pass
+    root.after(int(_AUTO_UPDATE_TICK_S * 1000), lambda: _auto_update_tick(
+        _AUTO_UPDATE_TICK_S=_AUTO_UPDATE_TICK_S,
+        _AUTO_UPDATE_RETRY_S=_AUTO_UPDATE_RETRY_S,
+        _auto_update_busy=_auto_update_busy,
+        _auto_update_state_holder=_auto_update_state_holder,
+        _auto_update_playing=_auto_update_playing,
+        _run_github_apply_worker=_run_github_apply_worker,
+        root=root,
+        update_check_state=update_check_state,
+    ))
+
+
 def _schedule_periodic_update_check(*, _UPDATE_CHECK_INTERVAL_S, _check_for_updates, _schedule_periodic_update_check, root) -> None:
     _check_for_updates(force=False)
     root.after(int(_UPDATE_CHECK_INTERVAL_S * 1000), _schedule_periodic_update_check)

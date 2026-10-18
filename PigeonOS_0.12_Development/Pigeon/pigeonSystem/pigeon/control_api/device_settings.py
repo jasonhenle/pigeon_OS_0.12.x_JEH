@@ -19,7 +19,7 @@ OPTION_VALUES: dict[str, tuple[str, ...]] = {
     "temp_format": ("f", "c"),
     "color_format": ("color", "dark"),
     "zone4_mode": ("info", "visualizer"),
-    "zone6_mode": ("now_playing", "zone11"),
+    "auto_update": ("auto", "manual"),
 }
 
 

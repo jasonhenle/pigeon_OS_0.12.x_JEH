@@ -131,9 +131,10 @@ Canonical list is also in Developer settings via `pigeon/hotkeys.py`.
 
 In visualizer mode, turning the encoder (or Left / Right from an HID board)
 picks the zone-6 visualizer preset. **V** on a keyboard is the same as a long
-press. settings_pigeon option 5 is **zone6 / zone11**: zone6 is the TT beside the
-volume disc; zone11 is the TT across zones 1–3 with input name, volume and TRT
-(title UI color) in zone 4. Presets are
+press. settings_pigeon option 5 is **auto / manual** update: auto (default) installs
+the latest OS only while nothing is playing; manual updates only via the Update
+button. The now-playing layout is always zone 11 (TT across zones 1–3 with input
+name, volume and TRT in zone 4). Presets are
 tuned in `testingEnvironments/fullscreen_viz_lab.py` (see `pigeon/fullscreen_viz.py`).
 
 Env: `PIGEON_ROTARY_SERIAL=0` disables; `PIGEON_ROTARY_HOLD_S` sets the GPIO long-press time; `PIGEON_ADB_SERIAL` selects ADB device; see `hardware/rotary_hid/README.md`.

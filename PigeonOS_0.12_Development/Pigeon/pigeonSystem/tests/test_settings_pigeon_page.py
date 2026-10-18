@@ -254,25 +254,25 @@ class NavigationTests(_IsolatedStateTest):
         w.activate()
         self.assertFalse(zone4_visualizer_on())
 
-    def test_option5_toggles_zone6_and_zone11(self) -> None:
-        from pigeon.widgets.options_settings import zone11_selected
+    def test_option5_toggles_auto_and_manual_update(self) -> None:
+        from pigeon.widgets.options_settings import auto_update_enabled
 
         w = self._widget()
-        self.assertFalse(zone11_selected())
+        self.assertTrue(auto_update_enabled())
         self._focus(w, "option:5")
         self.assertEqual(w.activate(), "options_toggle:5")
-        self.assertTrue(zone11_selected())
+        self.assertFalse(auto_update_enabled())
         w.activate()
-        self.assertFalse(zone11_selected())
+        self.assertTrue(auto_update_enabled())
 
-    def test_option5_labels_read_zone6_and_zone11(self) -> None:
+    def test_option5_labels_read_auto_and_manual(self) -> None:
         import re
         from pathlib import Path
 
         svg = (Path(__file__).resolve().parents[2] / "pigeonAssets" / "settings" / "pigeon" / "settings_pigeon.svg").read_text()
-        a = re.search(r'id="option5_zone6_a_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
-        b = re.search(r'id="option5_zone6_b_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
-        self.assertEqual((a.group(1), b.group(1)), ("zone6", "zone11"))
+        a = re.search(r'id="option5_update_a_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
+        b = re.search(r'id="option5_update_b_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
+        self.assertEqual((a.group(1), b.group(1)), ("auto", "manual"))
 
     def test_timezone_dropdown_sets_manual_zone(self) -> None:
         pigeon_locale._write(timezone="America/New_York", tz_source="auto")

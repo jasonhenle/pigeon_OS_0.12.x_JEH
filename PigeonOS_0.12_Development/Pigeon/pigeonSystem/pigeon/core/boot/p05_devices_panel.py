@@ -239,6 +239,38 @@ def run(ctx) -> None:
     _sync_update_button_style()
     root.after(4000, lambda: _check_for_updates(force=True))
     root.after(int(_UPDATE_CHECK_INTERVAL_S * 1000), _schedule_periodic_update_check)
+
+    def _auto_update_playing() -> bool:
+        # p06 binds these after this panel is built, so resolve them per tick.
+        for name in ("_something_playing_now", "_program_audio_session"):
+            fn = getattr(ctx, name, None)
+            if fn is None:
+                return True  # not ready yet: never update blind
+            try:
+                if fn():
+                    return True
+            except Exception:
+                return True
+        return False
+
+    def _auto_update_busy() -> bool:
+        holder = getattr(ctx, "main_settings_widget_holder", None)
+        st = getattr(holder[0] if holder else None, "state", None)
+        return bool(getattr(st, "update_applying", False))
+
+    root.after(
+        60_000,
+        lambda: _core_settings_ui._auto_update_tick(
+            _AUTO_UPDATE_TICK_S=60.0,
+            _AUTO_UPDATE_RETRY_S=3600.0,
+            _auto_update_busy=_auto_update_busy,
+            _auto_update_state_holder={},
+            _auto_update_playing=_auto_update_playing,
+            _run_github_apply_worker=_run_github_apply_worker,
+            root=root,
+            update_check_state=update_check_state,
+        ),
+    )
     tk.Label(
         devices_strip,
         text="Choose a device role, pick a device or enter Host/IP, then Confirm to save it to the current location.",
