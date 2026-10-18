@@ -24,12 +24,12 @@ targets:
     info:
       path: Pigeon/Info.plist
       properties:
-        CFBundleDisplayName: Pigeon
+        CFBundleDisplayName: Pigeon Remote
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIAppFonts: [Digital-7.ttf, SharpSansMedium.otf, SharpSansSemibold.otf]
-        NSLocalNetworkUsageDescription: Pigeon finds and controls the Pigeon devices on your home network.
+        NSLocalNetworkUsageDescription: Pigeon Remote finds and controls the Pigeon devices on your home network.
         NSBonjourServices: [_pigeon._tcp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

@@ -1,7 +1,7 @@
 # Pigeon Control API v1
 
 Status: draft v0.1 (2026-10-14). **Phase 1 implemented** in `pigeon/control_api/`: `/hello`, `/claim`, `/device`, `/capabilities`, `/status`, `/events`, `/search/*`, `/controllers*`. Everything else is still design. `poster_url` fields and `/media/poster` arrive later. Companion to [PIGEON_COMPANION_ROADMAP.md](PIGEON_COMPANION_ROADMAP.md).
-The Control API is how the **Pigeon** iOS app discovers and configures PigeonOS devices (Pigeon Clock, Pigeon Marquee). The device is the source of truth; there is no cloud.
+The Control API is how the **Pigeon Remote** iOS app discovers and configures PigeonOS devices (Pigeon Clock, Pigeon Marquee). The device is the source of truth; there is no cloud.
 
 ## Decisions this spec assumes
 
