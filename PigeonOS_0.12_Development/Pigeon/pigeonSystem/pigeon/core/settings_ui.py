@@ -1831,7 +1831,7 @@ def _auto_update_tick(*, _AUTO_UPDATE_TICK_S, _AUTO_UPDATE_RETRY_S, _auto_update
                 tried["remote"] = remote
                 tried["at"] = now
                 branch = update_check_state.get("github_branch")
-                _run_github_apply_worker(remote=remote, branch=str(branch) if branch else None)
+                _run_github_apply_worker(remote=remote, branch=str(branch) if branch else None, silent=True)
     except Exception:
         pass
     root.after(int(_AUTO_UPDATE_TICK_S * 1000), lambda: _auto_update_tick(
@@ -2135,14 +2135,16 @@ def _sync_update_button_style(*, _match_neighbor_button_style, find_device_btn, 
         )
 
 
-def _run_github_apply_worker(*, remote: str = "?", branch: str | None = None, _resolve_install_root_for_update, _sync_update_button_style, root, update_btn_holder, update_check_state) -> None:
+def _run_github_apply_worker(*, remote: str = "?", branch: str | None = None, silent: bool = False, _resolve_install_root_for_update, _sync_update_button_style, root, update_btn_holder, update_check_state) -> None:
     install_root = _resolve_install_root_for_update()
-    progress = tk.Toplevel(root)
-    progress.title("Updating Pigeon")
-    progress.transient(root)
-    progress.grab_set()
+    # Auto-update runs unattended: no modal progress window, no error dialog.
+    progress = None if silent else tk.Toplevel(root)
     status_var = tk.StringVar(value="Downloading from GitHub…")
-    tk.Label(progress, textvariable=status_var, padx=16, pady=16).pack()
+    if progress is not None:
+        progress.title("Updating Pigeon")
+        progress.transient(root)
+        progress.grab_set()
+        tk.Label(progress, textvariable=status_var, padx=16, pady=16).pack()
     update_check_state["applying"] = True
     update_btn_holder[0].configure(state=tk.DISABLED)
 
@@ -2175,8 +2177,9 @@ def _run_github_apply_worker(*, remote: str = "?", branch: str | None = None, _r
 
                 def _restart_and_exit() -> None:
                     try:
-                        progress.grab_release()
-                        progress.destroy()
+                        if progress is not None:
+                            progress.grab_release()
+                            progress.destroy()
                     except tk.TclError:
                         pass
                     try:
@@ -2199,15 +2202,17 @@ def _run_github_apply_worker(*, remote: str = "?", branch: str | None = None, _r
                 return
 
             try:
-                progress.grab_release()
-                progress.destroy()
+                if progress is not None:
+                    progress.grab_release()
+                    progress.destroy()
             except tk.TclError:
                 pass
-            messagebox.showerror(
-                "Update failed",
-                result.message,
-                parent=root,
-            )
+            if not silent:
+                messagebox.showerror(
+                    "Update failed",
+                    result.message,
+                    parent=root,
+                )
 
         root.after(0, finish_apply)
 

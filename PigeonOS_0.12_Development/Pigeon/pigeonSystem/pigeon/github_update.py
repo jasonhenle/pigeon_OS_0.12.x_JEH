@@ -91,6 +91,12 @@ def _download_zip_to_file(
     cmd = [
         curl,
         "-fL",
+        # Connection resets mid-transfer (exit 56) are usually transient.
+        "--retry",
+        "3",
+        "--retry-all-errors",
+        "--retry-delay",
+        "2",
         "--max-time",
         str(max(1, int(timeout_s))),
         "-o",
