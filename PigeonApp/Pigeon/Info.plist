@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Pigeon</string>
+	<string>Pigeon Remote</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -30,7 +30,7 @@
 		<string>_pigeon._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Pigeon finds and controls the Pigeon devices on your home network.</string>
+	<string>Pigeon Remote finds and controls the Pigeon devices on your home network.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Digital-7.ttf</string>

@@ -246,7 +246,7 @@ struct EmptyDevicesView: View {
     var goToDevices: () -> Void
     var body: some View {
         VStack(spacing: 16) {
-            LCDLabel(text: "Pigeon", size: 48)
+            LCDLabel(text: "Pigeon Remote", size: 38)
             Text("Add a Pigeon to start searching.").font(Theme.ui(17)).foregroundStyle(Theme.secondaryText)
             Button(action: goToDevices) {
                 Text("Add a device").font(Theme.uiBold(18))

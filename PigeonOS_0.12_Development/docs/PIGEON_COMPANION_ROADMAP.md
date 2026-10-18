@@ -44,7 +44,7 @@ Findings from reading `pigeonSystem/` (v0.12.11):
 ## 3. Architecture
 
 ```
- iOS app "Pigeon"  ──(LAN: mDNS + HTTPS/JSON + SSE)──▶  PigeonOS device(s)
+ iOS app "Pigeon Remote" ──(LAN: mDNS + HTTPS/JSON + SSE)──▶  PigeonOS device(s)
         │                                                   │
         └── first-boot only: BLE or setup hotspot ──────────┘  (Wi-Fi provisioning)
 ```
@@ -96,7 +96,7 @@ All paths under `/api/v1`, bearer token unless noted.
 
 Rules: versioned, additive-only within v1; errors as `{code, message}`; long operations (scan, pairing) return a session id and report through SSE.
 
-## 5. The iOS app, "Pigeon"
+## 5. The iOS app, "Pigeon Remote"
 
 - **Native SwiftUI**, iOS 17+. Bonjour and `NEHotspotConfiguration` favour native over cross-platform.
 - **Design language:** derive tokens (colors, type, spacing, corner radii) from PigeonOS (`pigeon/design.py`, `pigeonAssets/`, fonts in `pigeonAssets/fonts`) into a single `tokens.json` that both Python and Swift read. Do not re-draw by eye.
@@ -117,7 +117,7 @@ PigeonOS_0.12_Development/
     control_api/        new: server, auth, routes, SSE, mDNS advertise
     profile.py          new: device profile + capabilities
     settings_registry.py  new
-  PigeonApp/            new: Xcode project "Pigeon" (SwiftUI)
+  PigeonApp/            new: Xcode project "Pigeon" (SwiftUI, shown on the phone as "Pigeon Remote")
   docs/
     PIGEON_COMPANION_ROADMAP.md   this file
     control_api_v1.md             OpenAPI-style spec (Phase 0 output)
