@@ -1959,6 +1959,16 @@ def compose_clock_with_poster(
     op = max(0.0, min(1.0, float(opacity)))
     roi[:, :, :3] = scaled[:, :, :3]
     roi[:, :, 3] = int(round(255 * op))
+    try:
+        from pigeon.widgets.view_circles import _poster_geometry, _rounded_rect_mask
+
+        # Same corner radius as the now-playing poster.
+        radius = int(_poster_geometry("video", zone=2)[4])
+        roi[:, :, 3] = (
+            roi[:, :, 3].astype(np.uint16) * _rounded_rect_mask(nw, nh, radius) // 255
+        ).astype(np.uint8)
+    except Exception:
+        pass
     if op < 1.0:
         roi[:, :, :3] = (roi[:, :, :3].astype(np.float32) * op).astype(np.uint8)
     return out
