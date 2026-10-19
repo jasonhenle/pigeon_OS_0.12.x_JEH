@@ -372,6 +372,16 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
 
 `PATCH /pigeon-settings` accepts any subset of `zip` (5 digits), `timezone` (one of `timezone_choices`), `options` (a map of option → allowed value) and `ui_color`. Validation is all-or-nothing: on `400` nothing is changed and `error.details.fields` names the offenders (`options.temp_format`, `zip`, ...). Setting `zip` also looks the timezone up in the background, so re-read after a few seconds. The response is the new `GET` body. On the device the on-screen settings reload immediately.
 
+### 6.3c Restart, update, TMDb refresh, pairing scan — implemented
+
+| Method & path | Capability | Behavior |
+|---|---|---|
+| `POST /device/restart` | `restart` | `202 {"state":"restarting"}`; relaunches Pigeon (systemd on the Pi). `503` while an update installs. |
+| `GET /update` | `update` | Checks GitHub now: `{local_version, remote_version, update_available, error, applying}`. |
+| `POST /update` | `update` | `202 {"state":"updating"}`; installs the newest version, then restarts. `409` if already installing. |
+| `POST /now-playing/refresh` | `tmdb_refresh` | Re-runs the TMDb lookup for what is playing (forced). Returns the `/now-playing/detail` body; `409` if nothing is playing. |
+| `POST /rooms/{id}/pairing` | `pairing_player` / `pairing_receiver` | `{"kind":"player"\|"audio"}`: switches to that room and starts the device's on-screen search; the user finishes pairing on the Pigeon. `202`. |
+
 ### 6.3b Display brightness *(capability `display_brightness`)* — implemented
 
 `GET /display` returns `{ "brightness": 80, "min": 10, "max": 100, "mode": "software" }`. `PATCH /display` with `{ "brightness": 60 }` sets it (an integer from `min` to `max`; `400` otherwise, nothing changed) and returns the same body. The on-screen picture follows immediately and the level is saved across restarts.

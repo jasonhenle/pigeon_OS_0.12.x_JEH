@@ -228,3 +228,18 @@ struct DisplayInfo: Codable, Equatable {
 }
 
 struct DisplayPatch: Codable { var brightness: Int }
+
+// MARK: Maintenance
+
+struct UpdateInfo: Codable, Equatable {
+    var localVersion: String
+    var remoteVersion: String?
+    var updateAvailable: Bool
+    var error: String?
+    var applying: Bool
+}
+
+struct StateReply: Codable, Equatable { var state: String }
+
+struct PairingRequest: Codable { var kind: String }
+

@@ -63,6 +63,10 @@ def start(
     respawn: Callable[[str, str], object] | None = None,
     apply_location: Callable[[], object] | None = None,
     apply_settings: Callable[[], object] | None = None,
+    restart: Callable[[], object] | None = None,
+    apply_update: Callable[[], object] | None = None,
+    update_state: Callable[[], dict[str, Any]] | None = None,
+    pair_scan: Callable[[str], object] | None = None,
     port: int | None = None,
 ) -> ControlServer | None:
     """Start the API (and mDNS advertise) once. Returns the server, or ``None`` if disabled."""
@@ -77,6 +81,8 @@ def start(
                 status_provider=status_provider, run_on_ui=run_on_ui,
                 metadata_provider=metadata_provider, fetch_provider=fetch_provider, respawn=respawn,
                 apply_location=apply_location, apply_settings=apply_settings,
+                restart=restart, apply_update=apply_update, update_state=update_state,
+                pair_scan=pair_scan,
             )
             srv = ControlServer(svc, port=port or int(os.environ.get("PIGEON_CONTROL_PORT") or profile.DEFAULT_PORT))
             srv.start()

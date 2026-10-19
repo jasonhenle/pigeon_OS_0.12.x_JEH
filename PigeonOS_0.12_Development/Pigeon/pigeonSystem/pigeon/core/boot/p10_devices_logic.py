@@ -890,7 +890,61 @@ def run(ctx) -> None:
         def _control_api_respawn(query: str, prefer: str) -> None:
             spawn_tmdb_poster_fetch(query, prefer=prefer or "auto", force=True)
 
+        _api_update = {"applying": False}
+
+        def _control_api_restart() -> None:
+            """Relaunch Pigeon, same path the updater uses after installing."""
+            import os as _os
+
+            from pigeon.core.settings_ui import _resolve_install_root_for_update
+            from pigeon.github_update import exit_code_after_update, restart_pigeon_after_update
+
+            def _go() -> None:
+                try:
+                    restart_pigeon_after_update(_resolve_install_root_for_update(), parent_pid=_os.getpid())
+                except Exception:
+                    pass
+                _os._exit(exit_code_after_update())
+
+            root.after(600, _go)  # let the 202 reach the phone first
+
+        def _control_api_apply_update() -> None:
+            """Download + install the newest GitHub release, then restart (no dialogs)."""
+            if _api_update["applying"]:
+                return
+            _api_update["applying"] = True
+
+            import threading as _threading
+
+            def worker() -> None:
+                from pigeon.core.settings_ui import _resolve_install_root_for_update
+                from pigeon.github_update import apply_github_update
+
+                try:
+                    result = apply_github_update(_resolve_install_root_for_update())
+                    ok = bool(result.ok)
+                except Exception:
+                    ok = False
+                if ok:
+                    root.after(0, _control_api_restart)
+                else:
+                    _api_update["applying"] = False
+
+            _threading.Thread(target=worker, daemon=True).start()
+
+        def _control_api_pair_scan(kind: str) -> None:
+            """Start the same on-screen device search the Pigeon's settings page runs."""
+            w = _control_api_widget()
+            if w is None:
+                return
+            w._start_box_device_scan(2 if kind == "player" else 3)
+            _control_api_repaint()
+
         if _control_api.start(
+            restart=_control_api_restart,
+            apply_update=_control_api_apply_update,
+            update_state=lambda: dict(_api_update),
+            pair_scan=_control_api_pair_scan,
             status_provider=_control_api_status,
             run_on_ui=lambda fn: root.after(0, fn),
             metadata_provider=_control_api_metadata,

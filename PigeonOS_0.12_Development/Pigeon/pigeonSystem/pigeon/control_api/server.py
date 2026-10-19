@@ -49,6 +49,10 @@ class ControlService:
         respawn: Callable[[str, str], object] | None = None,
         apply_location: Callable[[], object] | None = None,
         apply_settings: Callable[[], object] | None = None,
+        restart: Callable[[], object] | None = None,
+        apply_update: Callable[[], object] | None = None,
+        update_state: Callable[[], Mapping[str, Any]] | None = None,
+        pair_scan: Callable[[str], object] | None = None,
     ) -> None:
         self.auth = auth or AuthStore()
         self.hub = hub or EventHub()
@@ -60,6 +64,10 @@ class ControlService:
         self._respawn = respawn
         self._apply_location = apply_location
         self._apply_settings = apply_settings
+        self._restart = restart
+        self._apply_update = apply_update
+        self._update_state = update_state or (lambda: {})
+        self._pair_scan = pair_scan
         # Called with the new TXT record whenever it changes (claimed, renamed).
         self.txt_listeners: list[Callable[[dict[str, str]], object]] = []
 
@@ -137,6 +145,10 @@ class ControlService:
                 return 200, self.device_body()
             if method == "PATCH":
                 return self._patch_device(body)
+        elif route == "/device/restart" and method == "POST":
+            return self._restart_device()
+        elif route == "/update":
+            return self._update(method)
         elif route == "/capabilities" and method == "GET":
             return 200, {
                 "product": profile.product(),
@@ -197,6 +209,50 @@ class ControlService:
             return _err(400, "bad_request", str(exc), fields=["name"])
         self.hub.publish("device", {"name": name})
         return 200, self.device_body()
+
+    def _restart_device(self) -> Response:
+        if not profile.has_capability("restart"):
+            return _err(422, "unsupported", "restart not supported on this device.")
+        if self._restart is None:
+            return _err(503, "busy", "Restart is not available right now.")
+        if self._update_state().get("applying"):
+            return _err(503, "busy", "The device is installing an update.")
+        self.hub.publish("device", {"restarting": True})
+        self._on_ui(self._restart)
+        return 202, {"state": "restarting"}
+
+    def _update(self, method: str) -> Response:
+        """GET checks GitHub for a newer version; POST installs it and restarts."""
+        if not profile.has_capability("update"):
+            return _err(422, "unsupported", "update not supported on this device.")
+        state = dict(self._update_state() or {})
+        if method == "GET":
+            if state.get("applying"):
+                return 200, {"local_version": profile.version(), "remote_version": None,
+                             "update_available": False, "error": None, "applying": True}
+            from pigeon.update_check import check_for_update
+
+            try:
+                res = check_for_update(force=True)
+            except Exception as exc:  # network trouble must not 500 the app
+                return 200, {"local_version": profile.version(), "remote_version": None,
+                             "update_available": False, "error": str(exc), "applying": False}
+            return 200, {
+                "local_version": res.local_version,
+                "remote_version": res.remote_version,
+                "update_available": bool(res.update_available),
+                "error": res.error or None,
+                "applying": False,
+            }
+        if method == "POST":
+            if self._apply_update is None:
+                return _err(503, "busy", "Updating is not available right now.")
+            if state.get("applying"):
+                return _err(409, "conflict", "An update is already installing.")
+            self.hub.publish("device", {"updating": True})
+            self._on_ui(self._apply_update)
+            return 202, {"state": "updating"}
+        return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _search(self, method: str, route: str, query: dict[str, list[str]], body: Any) -> Response:
         if not profile.has_capability("manual_search"):
@@ -301,6 +357,8 @@ class ControlService:
             return _err(422, "unsupported", "now_playing_override not supported on this device.")
         if route == "/now-playing/detail" and method == "GET":
             return 200, self._override_detail()
+        if route == "/now-playing/refresh" and method == "POST":
+            return self._refresh_tmdb()
         if route == "/now-playing/preview" and method == "POST":
             if not isinstance(body, dict):
                 return _err(400, "bad_request", "JSON object required.")
@@ -347,6 +405,55 @@ class ControlService:
         return _err(404, "not_found", "Unknown endpoint or method.")
 
     # ------------------------------------------------------- rooms / settings
+    def _refresh_tmdb(self) -> Response:
+        """Force Pigeon to run its TMDb lookup again for what is playing."""
+        if not profile.has_capability("tmdb_refresh"):
+            return _err(422, "unsupported", "tmdb_refresh not supported on this device.")
+        md = self._metadata() or {}
+        query, prefer = "", str(md.get("prefer") or "auto")
+        try:
+            from pigeon.raw_title import resolve_metadata_tmdb_query
+
+            query = resolve_metadata_tmdb_query(md) or ""
+        except Exception:
+            pass
+        fetch: dict[str, Any] = {}
+        try:
+            fetch = dict(self._fetch() or {})
+        except Exception:
+            pass
+        query = query or str(fetch.get("input") or "")
+        prefer = str(fetch.get("prefer") or prefer or "auto")
+        if not query.strip():
+            return _err(409, "conflict", "Nothing is playing to look up.")
+        self._do_respawn(query, prefer)
+        self.hub.publish("override", {"active": False, "refreshed": True})
+        return 200, self._override_detail()
+
+    def _rooms_pairing(self, room_id: str, body: Any) -> Response:
+        """Start the on-screen player / audio pairing flow for a room."""
+        kind = body.get("kind") if isinstance(body, dict) else None
+        cap = {"player": "pairing_player", "audio": "pairing_receiver"}.get(str(kind))
+        if cap is None:
+            return _err(400, "bad_request", "kind must be player or audio.", fields=["kind"])
+        if not profile.has_capability(cap):
+            return _err(422, "unsupported", f"{cap} not supported on this device.")
+        if self._pair_scan is None:
+            return _err(503, "busy", "Pairing is not available right now.")
+        from pigeon.control_api import device_settings as ds
+
+        if not any(r["id"] == room_id for r in ds.read_rooms()["rooms"]):
+            return _err(404, "not_found", "Unknown room.")
+        try:
+            ds.switch_room(room_id)
+        except KeyError:
+            return _err(404, "not_found", "Unknown room.")
+        self._on_ui(self._apply_location)
+        scan = self._pair_scan
+        self._on_ui(lambda: scan(str(kind)))
+        self.hub.publish("settings", {"changed": ["rooms"]})
+        return 202, {"state": "scanning", "kind": kind}
+
     def _on_ui(self, fn: Callable[[], object] | None) -> None:
         if fn is not None:
             self._run_on_ui(fn)
@@ -369,6 +476,9 @@ class ControlService:
             self._on_ui(self._apply_location)
             self.hub.publish("settings", {"changed": ["rooms"]})
             return 200, ds.read_rooms()
+        mp = re.fullmatch(r"/rooms/([^/]+)/pairing", route)
+        if mp and method == "POST":
+            return self._rooms_pairing(mp.group(1), body)
         m = re.fullmatch(r"/rooms/([^/]+)", route)
         if m and method == "PATCH":
             if not isinstance(body, dict) or "name" not in body:
