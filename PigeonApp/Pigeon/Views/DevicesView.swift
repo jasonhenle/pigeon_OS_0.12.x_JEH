@@ -18,6 +18,7 @@ struct DevicesView: View {
                         ForEach(store.devices) { d in
                             NavigationLink(value: d) { DeviceRow(device: d, selected: d.id == store.selectedID) }
                                 .buttonStyle(.plain)
+                                .simultaneousGesture(TapGesture().onEnded { store.selectedID = d.id })
                         }
                     }
                     .padding(Theme.gutter)
@@ -98,13 +99,9 @@ struct DeviceDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).tile()
 
-                    if let caps {
-                        VStack(alignment: .leading, spacing: 8) {
-                            LCDLabel(text: "Can do", size: 18, color: Theme.accent)
-                            Text(caps.capabilities.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: " · "))
-                                .font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading).tile()
+                    if caps?.capabilities.contains("restart") == true || caps?.capabilities.contains("update") == true {
+                        MaintenanceCard(client: store.client(for: device), caps: caps?.capabilities ?? [],
+                                        version: info?.version)
                     }
 
                     if status?.nowPlaying != nil {
@@ -122,7 +119,7 @@ struct DeviceDetailView: View {
                     if let errorText { Text(errorText).font(Theme.ui(14)).foregroundStyle(Theme.bad) }
 
                     Button(role: .destructive) { confirmRemove = true } label: {
-                        Text("Remove from this phone").font(Theme.uiBold(16))
+                        Text("Remove from this device").font(Theme.uiBold(16))
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
                             .background(Theme.tile, in: RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
                     }
@@ -133,11 +130,12 @@ struct DeviceDetailView: View {
         .navigationTitle(device.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .confirmationDialog("Remove \(device.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+        .alert("Remove \(device.name)?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) {
                 Task { await store.unpair(device); dismiss() }
             }
-        } message: { Text("The device keeps working. Add it again with its on-screen code.") }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The Pigeon keeps working. Add it again with its on-screen code.") }
     }
 
     private func row(_ k: String, _ v: String) -> some View {
@@ -179,6 +177,7 @@ final class RoomsModel: ObservableObject {
     @Published private(set) var data: RoomsResponse?
     @Published private(set) var busy = false
     @Published var errorText: String?
+    @Published private(set) var notice: String?
     private let client: PigeonClient
     init(client: PigeonClient) { self.client = client }
 
@@ -192,13 +191,23 @@ final class RoomsModel: ObservableObject {
     }
 
     func rename(_ room: Room, to name: String) async {
-        let n = name.trimmingCharacters(in: .whitespaces)
+        let n = name.trimmingCharacters(in: .whitespaces).uppercased()  // Pigeon only shows capitals
         guard !n.isEmpty, n != room.name else { return }
         await run { self.data = try await self.client.renameRoom(room.id, to: n) }
     }
 
+    /// Starts the device-side search for a player (`player`) or audio receiver (`audio`) in this room.
+    func startPairing(_ room: Room, kind: String) async {
+        await run {
+            try await self.client.startPairing(room: room.id, kind: kind)
+            self.data = try await self.client.rooms()
+            self.notice = "Pigeon is searching for \(kind == "player" ? "players" : "audio devices"). Pick one on its screen."
+        }
+    }
+
     private func run(_ work: @escaping () async throws -> Void) async {
         busy = true
+        notice = nil
         defer { busy = false }
         do { try await work(); errorText = nil } catch { errorText = error.localizedDescription }
     }
@@ -226,29 +235,148 @@ struct RoomsCard: View {
                         HStack(spacing: 10) {
                             Image(systemName: r.current ? "largecircle.fill.circle" : "circle")
                                 .foregroundStyle(r.current ? Theme.accent : Theme.inactive)
-                            Text(r.name).font(Theme.uiBold(17)).foregroundStyle(.white)
+                            Text(r.name.uppercased()).font(Theme.uiBold(17)).foregroundStyle(.white)
                             Spacer()
                         }
                     }
                     .buttonStyle(.plain)
-                    Button { newName = r.name; renaming = r } label: {
+                    Menu {
+                        Button { newName = r.name.uppercased(); renaming = r } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button { Task { await model.startPairing(r, kind: "player") } } label: {
+                            Label("Add player", systemImage: "appletv")
+                        }
+                        Button { Task { await model.startPairing(r, kind: "audio") } } label: {
+                            Label("Add audio", systemImage: "hifispeaker")
+                        }
+                    } label: {
                         Image(systemName: "pencil").foregroundStyle(Theme.secondaryText)
+                            .frame(width: 36, height: 36).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.vertical, 6)
             }
+            if let n = model.notice { Text(n).font(Theme.ui(13)).foregroundStyle(Theme.ok) }
             if let e = model.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .tile()
         .task { await model.load() }
         .alert("Rename room", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Room name", text: $newName)
+            TextField("ROOM NAME", text: $newName)
+                .textInputAutocapitalization(.characters)
+                .onChange(of: newName) { _, v in if v != v.uppercased() { newName = v.uppercased() } }
             Button("Save") { if let r = renaming { Task { await model.rename(r, to: newName) } } }
             Button("Cancel", role: .cancel) {}
         } message: {
             if let p = model.data?.presets, !p.isEmpty { Text("e.g. " + p.prefix(4).joined(separator: ", ")) }
+        }
+    }
+}
+
+// MARK: Restart and update
+
+@MainActor
+final class MaintenanceModel: ObservableObject {
+    enum Phase: Equatable { case idle, working(String), upToDate, available(String), done(String) }
+    @Published private(set) var phase: Phase = .idle
+    @Published var errorText: String?
+    private let client: PigeonClient
+    init(client: PigeonClient) { self.client = client }
+
+    var busy: Bool { if case .working = phase { return true }; return false }
+
+    func restart() async {
+        phase = .working("Restarting…")
+        do {
+            try await client.restart()
+            errorText = nil
+            phase = .done("Restarting. It'll be back in about a minute.")
+        } catch { errorText = error.localizedDescription; phase = .idle }
+    }
+
+    func check() async {
+        phase = .working("Checking for updates…")
+        do {
+            let u = try await client.checkUpdate()
+            if let e = u.error { errorText = "Couldn't check: \(e)"; phase = .idle; return }
+            errorText = nil
+            if u.applying { phase = .done("An update is already installing."); return }
+            phase = u.updateAvailable ? .available(u.remoteVersion ?? "") : .upToDate
+        } catch { errorText = error.localizedDescription; phase = .idle }
+    }
+
+    func install() async {
+        phase = .working("Starting update…")
+        do {
+            try await client.applyUpdate()
+            errorText = nil
+            phase = .done("Installing. Pigeon restarts itself when it's finished.")
+        } catch { errorText = error.localizedDescription; phase = .idle }
+    }
+}
+
+struct MaintenanceCard: View {
+    @StateObject private var model: MaintenanceModel
+    let caps: [String]
+    let version: String?
+    @State private var confirmRestart = false
+    @State private var confirmInstall = false
+
+    init(client: PigeonClient, caps: [String], version: String?) {
+        _model = StateObject(wrappedValue: MaintenanceModel(client: client))
+        self.caps = caps
+        self.version = version
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                LCDLabel(text: "Software", size: 18, color: Theme.accent)
+                Spacer()
+                if model.busy { ProgressView() }
+            }
+            if let version { Text("Version \(version)").font(Theme.ui(14)).foregroundStyle(Theme.secondaryText) }
+
+            switch model.phase {
+            case .working(let t): Text(t).font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
+            case .upToDate: Text("Pigeon is up to date.").font(Theme.ui(14)).foregroundStyle(Theme.ok)
+            case .available(let v): Text("Version \(v) is available.").font(Theme.uiBold(14)).foregroundStyle(Theme.ok)
+            case .done(let t): Text(t).font(Theme.ui(14)).foregroundStyle(Theme.ok)
+            case .idle: EmptyView()
+            }
+            if let e = model.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
+
+            if caps.contains("update") {
+                if case .available(let v) = model.phase {
+                    button("Update to \(v)", filled: true) { confirmInstall = true }
+                } else {
+                    button("Check for updates", filled: false) { Task { await model.check() } }
+                }
+            }
+            if caps.contains("restart") {
+                button("Restart Pigeon", filled: false) { confirmRestart = true }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tile()
+        .disabled(model.busy)
+        .alert("Restart Pigeon?", isPresented: $confirmRestart) {
+            Button("Restart", role: .destructive) { Task { await model.restart() } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The screen goes dark for about a minute while it starts back up.") }
+        .alert("Install the update?", isPresented: $confirmInstall) {
+            Button("Update") { Task { await model.install() } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Pigeon downloads the update, installs it and restarts. Your settings are kept.") }
+    }
+
+    private func button(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(Theme.uiBold(16)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                .foregroundStyle(filled ? Color.black : Color.white)
+                .background(filled ? Theme.accent : Theme.tileRaised, in: Capsule())
         }
     }
 }

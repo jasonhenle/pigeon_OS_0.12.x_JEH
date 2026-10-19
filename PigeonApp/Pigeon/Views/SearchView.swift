@@ -355,6 +355,14 @@ final class NowPlayingFixModel: ObservableObject {
         }
     }
 
+    func refreshTmdb() async {
+        await run {
+            let d = try await self.client.refreshTmdb()
+            self.absorb(d, resetEdits: false)
+            self.notice = "Asked Pigeon to search TMDb again."
+        }
+    }
+
     func reset() async {
         await run {
             let d = try await self.client.clearOverride()
@@ -399,6 +407,8 @@ struct NowPlayingFixView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if let d = model.detail {
                         matchCard(d)
+                        actionButton("Refresh TMDb search", filled: false) { Task { await model.refreshTmdb() } }
+                            .disabled(model.busy)
                         pickCard      // first: its results must sit above the keyboard
                         heardCard(d)
                         adjustCard

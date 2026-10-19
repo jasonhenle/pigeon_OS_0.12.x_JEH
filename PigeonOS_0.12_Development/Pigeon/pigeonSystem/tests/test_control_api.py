@@ -136,6 +136,57 @@ class RouteTests(_Base):
         self.assertEqual(svc.status()["now_playing"]["title"], "X")
 
 
+class MaintenanceRouteTests(_Base):
+    def setUp(self) -> None:
+        super().setUp()
+        self.calls: list = []
+        self.svc = ControlService(
+            run_on_ui=lambda fn: fn(), on_manual_set=lambda: None,
+            restart=lambda: self.calls.append("restart"),
+            apply_update=lambda: self.calls.append("update"),
+            pair_scan=lambda kind: self.calls.append(("scan", kind)),
+            metadata_provider=lambda: {"title": "Heat", "query": "Heat"},
+            respawn=lambda q, p: self.calls.append(("respawn", q)),
+        )
+        self.token = self.svc.auth.claim(self.svc.auth.pairing_code, "t", "c1")
+
+    def call(self, method, path, body=None):
+        return self.svc.handle(method, "/api/v1" + path, {}, self.token, body)
+
+    def test_restart(self) -> None:
+        self.assertEqual(self.call("POST", "/device/restart")[0], 202)
+        self.assertEqual(self.calls, ["restart"])
+
+    def test_update_check_and_apply(self) -> None:
+        from types import SimpleNamespace
+
+        res = SimpleNamespace(local_version="0.12.1", remote_version="0.12.2",
+                              update_available=True, error=None)
+        with mock.patch("pigeon.update_check.check_for_update", return_value=res):
+            st, body = self.call("GET", "/update")
+        self.assertEqual((st, body["update_available"], body["remote_version"]), (200, True, "0.12.2"))
+        self.assertEqual(self.call("POST", "/update")[0], 202)
+        self.assertEqual(self.calls, ["update"])
+
+    def test_update_refused_while_applying(self) -> None:
+        self.svc._update_state = lambda: {"applying": True}
+        self.assertEqual(self.call("POST", "/update")[0], 409)
+        self.assertEqual(self.call("POST", "/device/restart")[0], 503)
+
+    def test_tmdb_refresh_respawns_current_query(self) -> None:
+        st, _ = self.call("POST", "/now-playing/refresh")
+        self.assertEqual(st, 200)
+        self.assertEqual(self.calls[0][0], "respawn")
+
+    def test_tmdb_refresh_needs_something_playing(self) -> None:
+        self.svc._metadata = lambda: None
+        self.assertEqual(self.call("POST", "/now-playing/refresh")[0], 409)
+
+    def test_pairing_scan_validates(self) -> None:
+        self.assertEqual(self.call("POST", "/rooms/nope/pairing", {"kind": "tv"})[0], 400)
+        self.assertEqual(self.call("POST", "/rooms/nope/pairing", {"kind": "player"})[0], 404)
+
+
 class HttpTests(_Base):
     def test_end_to_end_and_sse(self) -> None:
         svc = ControlService(run_on_ui=lambda fn: fn(), on_manual_set=lambda: None)

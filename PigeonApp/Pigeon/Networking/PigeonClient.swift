@@ -8,7 +8,7 @@ enum PigeonError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: return "This device no longer recognizes this phone. Add it again."
+        case .unauthorized: return "This Pigeon no longer recognizes this device. Add it again."
         case .api(_, _, let message): return message
         case .transport(let m): return "Can't reach the device. \(m)"
         case .decoding(let m): return "Unexpected reply from the device. \(m)"
@@ -33,15 +33,16 @@ struct PigeonClient {
     func url(_ path: String, query: [URLQueryItem] = []) -> URL {
         var c = URLComponents()
         c.scheme = "http"
-        c.host = host
+        c.host = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host  // IPv6 literal
         c.port = port
         c.path = "/api/v1" + path
         if !query.isEmpty { c.queryItems = query }
         return c.url!
     }
 
-    func makeRequest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Encodable? = nil) throws -> URLRequest {
-        var req = URLRequest(url: url(path, query: query), timeoutInterval: 8)
+    func makeRequest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Encodable? = nil,
+                     timeout: TimeInterval = 8) throws -> URLRequest {
+        var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {
@@ -66,8 +67,8 @@ struct PigeonClient {
     }
 
     func send<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = [],
-                            body: Encodable? = nil, as: T.Type = T.self) async throws -> T {
-        let data = try await perform(try makeRequest(method, path, query: query, body: body))
+                            body: Encodable? = nil, timeout: TimeInterval = 8, as: T.Type = T.self) async throws -> T {
+        let data = try await perform(try makeRequest(method, path, query: query, body: body, timeout: timeout))
         do { return try Self.decoder.decode(T.self, from: data) }
         catch { throw PigeonError.decoding(String(describing: error)) }
     }
@@ -148,6 +149,25 @@ struct PigeonClient {
         try await send("DELETE", "/now-playing/override")
     }
 
+    func refreshTmdb() async throws -> NowPlayingDetail {
+        try await send("POST", "/now-playing/refresh")
+    }
+
+    // MARK: Maintenance
+
+    /// The device relaunches Pigeon; the reply arrives before it goes down.
+    func restart() async throws {
+        let _: StateReply = try await send("POST", "/device/restart")
+    }
+
+    /// Asks the device to look on GitHub, which can take a while on a slow link.
+    func checkUpdate() async throws -> UpdateInfo { try await send("GET", "/update", timeout: 25) }
+
+    /// Installs the newest version and restarts the device.
+    func applyUpdate() async throws {
+        let _: StateReply = try await send("POST", "/update")
+    }
+
     // MARK: Rooms and Pigeon-page settings
 
     func rooms() async throws -> RoomsResponse { try await send("GET", "/rooms") }
@@ -158,6 +178,11 @@ struct PigeonClient {
 
     func renameRoom(_ id: String, to name: String) async throws -> RoomsResponse {
         try await send("PATCH", "/rooms/\(id)", body: RoomNameRequest(name: name))
+    }
+
+    /// Starts the on-screen player / audio search for a room; the device finishes pairing.
+    func startPairing(room id: String, kind: String) async throws {
+        let _: StateReply = try await send("POST", "/rooms/\(id)/pairing", body: PairingRequest(kind: kind))
     }
 
     func pigeonSettings() async throws -> PigeonSettings { try await send("GET", "/pigeon-settings") }
