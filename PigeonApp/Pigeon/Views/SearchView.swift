@@ -84,78 +84,44 @@ final class SearchModel: ObservableObject {
     }
 }
 
-struct SearchView: View {
+/// Search and "playing now" for one device, shown at the top of its detail page.
+struct DeviceSearchSection: View {
     @EnvironmentObject private var store: DeviceStore
     @StateObject private var model = SearchModel()
     @FocusState private var focused: Bool
-    @State private var showFix = false
-    var goToDevices: () -> Void
+    let device: KnownDevice
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.canvas.ignoresSafeArea()
-                if let device = store.selected {
-                    content(for: device)
-                } else {
-                    EmptyDevicesView(goToDevices: goToDevices)
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-        }
-        .onAppear { reattach() }
-        .onChange(of: store.selectedID) { _, _ in reattach() }
-        .onChange(of: store.selected?.host) { _, _ in reattach() }
-        .onDisappear { model.detach() }
-        .sheet(isPresented: $showFix) {
-            if let d = store.selected {
-                NavigationStack { NowPlayingFixView(client: store.client(for: d), deviceName: d.name) }
-            }
-        }
-    }
-
-    private func reattach() {
-        model.attach(store.selected.map { store.client(for: $0) })
-    }
-
-    @ViewBuilder
-    private func content(for device: KnownDevice) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            DeviceChip(device: device)
+        VStack(alignment: .leading, spacing: 12) {
             searchField
             if let text = model.errorText {
                 Text(text).font(Theme.ui(14)).foregroundStyle(Theme.bad)
             }
-            ScrollView {
-                VStack(spacing: 10) {
-                    if let np = model.nowPlaying, np.source == "detected", model.query.isEmpty {
-                        Button { showFix = true } label: { DetectedCard(nowPlaying: np) }
-                            .buttonStyle(.plain)
-                    }
-                    if model.current.active, let e = model.current.entry, model.query.isEmpty {
-                        CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
-                    }
-                    ForEach(model.results) { s in
-                        Button { Task { await model.choose(s); focused = false } } label: {
-                            SuggestionRow(suggestion: s)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if model.results.isEmpty, model.query.count >= 2, !model.isSearching {
-                        Text("No matches").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
-                            .padding(.top, 24)
-                    }
-                }
+            if let np = model.nowPlaying, np.source == "detected", model.query.isEmpty {
+                NavigationLink {
+                    NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
+                } label: { DetectedCard(nowPlaying: np) }
+                    .buttonStyle(.plain)
             }
-            .scrollDismissesKeyboard(.interactively)
-            .scrollBounceBehavior(.always)  // short lists still drag-dismiss the keyboard
+            if model.current.active, let e = model.current.entry, model.query.isEmpty {
+                CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
+            }
+            ForEach(model.results) { s in
+                Button { Task { await model.choose(s); focused = false } } label: {
+                    SuggestionRow(suggestion: s)
+                }
+                .buttonStyle(.plain)
+            }
+            if model.results.isEmpty, model.query.count >= 2, !model.isSearching {
+                Text("No matches").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
+            }
         }
-        .contentShape(Rectangle())
-        // Simultaneous, so it dismisses the keyboard without swallowing taps on the result rows.
-        .simultaneousGesture(TapGesture().onEnded { focused = false })
-        .padding(.horizontal, Theme.gutter)
-        .padding(.top, 8)
+        .onAppear { reattach() }
+        .onChange(of: device.host) { _, _ in reattach() }
+        .onDisappear { model.detach() }
     }
+
+    private func reattach() { model.attach(store.client(for: device)) }
 
     private var searchField: some View {
         HStack(spacing: 10) {
@@ -175,33 +141,6 @@ struct SearchView: View {
         }
         .padding(16)
         .background(Theme.tile, in: RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
-        .task { focused = true }  // search is the app's primary action: keyboard ready on launch
-    }
-}
-
-struct DeviceChip: View {
-    @EnvironmentObject private var store: DeviceStore
-    let device: KnownDevice
-
-    var body: some View {
-        Menu {
-            ForEach(store.devices) { d in
-                Button { store.selectedID = d.id } label: {
-                    if d.id == device.id { Label(d.name, systemImage: "checkmark") } else { Text(d.name) }
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Circle().fill(Theme.ok).frame(width: 8, height: 8)
-                LCDLabel(text: device.name, size: 22)
-                if store.devices.count > 1 {
-                    Image(systemName: "chevron.down").font(.caption).foregroundStyle(Theme.secondaryText)
-                }
-            }
-            .padding(.vertical, 8).padding(.horizontal, 14)
-            .background(Theme.tile, in: Capsule())
-        }
-        .disabled(store.devices.count < 2)
     }
 }
 
@@ -239,21 +178,6 @@ struct CurrentCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .tile(selected: true)
-    }
-}
-
-struct EmptyDevicesView: View {
-    var goToDevices: () -> Void
-    var body: some View {
-        VStack(spacing: 16) {
-            LCDLabel(text: "Pigeon Remote", size: 38)
-            Text("Add a Pigeon to start searching.").font(Theme.ui(17)).foregroundStyle(Theme.secondaryText)
-            Button(action: goToDevices) {
-                Text("Add a device").font(Theme.uiBold(18))
-                    .padding(.horizontal, 28).padding(.vertical, 14)
-                    .background(Theme.accent, in: Capsule()).foregroundStyle(.black)
-            }
-        }
     }
 }
 
