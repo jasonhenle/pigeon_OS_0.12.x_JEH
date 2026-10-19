@@ -25,6 +25,8 @@ targets:
       path: Pigeon/Info.plist
       properties:
         CFBundleDisplayName: Pigeon Remote
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

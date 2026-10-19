@@ -5,6 +5,13 @@ struct DevicesView: View {
     @EnvironmentObject private var browser: DeviceBrowser
     @State private var showAdd = false
 
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let v = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (build \(b))"
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -12,14 +19,20 @@ struct DevicesView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         if store.devices.isEmpty {
-                            Text("No devices yet.").font(Theme.ui(16)).foregroundStyle(Theme.secondaryText)
-                                .padding(.top, 40)
+                            VStack(spacing: 10) {
+                                LCDLabel(text: "Pigeon Remote", size: 34)
+                                Text("Tap + to add a Pigeon and start searching.")
+                                    .font(Theme.ui(16)).foregroundStyle(Theme.secondaryText)
+                            }.padding(.top, 40)
                         }
                         ForEach(store.devices) { d in
                             NavigationLink(value: d) { DeviceRow(device: d, selected: d.id == store.selectedID) }
                                 .buttonStyle(.plain)
                                 .simultaneousGesture(TapGesture().onEnded { store.selectedID = d.id })
                         }
+                        Text("App version \(Self.appVersion)")
+                            .font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+                            .frame(maxWidth: .infinity).padding(.top, 8)
                     }
                     .padding(Theme.gutter)
                 }
@@ -71,6 +84,8 @@ struct DeviceDetailView: View {
             Theme.canvas.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    DeviceSearchSection(device: device)
+
                     VStack(alignment: .leading, spacing: 8) {
                         LCDLabel(text: "Name", size: 18, color: Theme.accent)
                         TextField("Name", text: $name)
@@ -102,18 +117,6 @@ struct DeviceDetailView: View {
                     if caps?.capabilities.contains("restart") == true || caps?.capabilities.contains("update") == true {
                         MaintenanceCard(client: store.client(for: device), caps: caps?.capabilities ?? [],
                                         version: info?.version)
-                    }
-
-                    if status?.nowPlaying != nil {
-                        NavigationLink {
-                            NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
-                        } label: {
-                            HStack {
-                                Text("Fix what's showing").font(Theme.uiBold(16)).foregroundStyle(.white)
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
-                            }.tile()
-                        }.buttonStyle(.plain)
                     }
 
                     if let errorText { Text(errorText).font(Theme.ui(14)).foregroundStyle(Theme.bad) }
@@ -333,7 +336,7 @@ struct MaintenanceCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                LCDLabel(text: "Software", size: 18, color: Theme.accent)
+                LCDLabel(text: "Pigeon Clock Software", size: 18, color: Theme.accent)
                 Spacer()
                 if model.busy { ProgressView() }
             }
