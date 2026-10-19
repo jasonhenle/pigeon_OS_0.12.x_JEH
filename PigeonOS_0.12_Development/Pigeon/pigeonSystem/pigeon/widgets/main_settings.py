@@ -4296,6 +4296,19 @@ def _draw_wifi_icon_overlay(
         _composite_stroke_mask(bgra, ring_mask, color)
 
 
+def _dual_network_text_is_network(state: MainSettingsState) -> bool:
+    """False while the dual container holds text that has nothing to do with Wi‑Fi.
+
+    The same container shows room rename, new-device name/IP, pairing PIN, zip
+    and search entry; the Wi‑Fi logo belongs only with network text (SSID,
+    password, or the sign-out prompt).
+    """
+    kb = state.keyboard
+    if kb is not None:
+        return str(getattr(kb, "target", "") or "") in ("network", "wifi_logout")
+    return state.manual_device_entry is None and state.box_pairing is None
+
+
 def _draw_wifi_overlays(
     bgra: np.ndarray,
     state: MainSettingsState,
@@ -4324,7 +4337,7 @@ def _draw_wifi_overlays(
         if layout.picker_row and not state.show_network_picker:
             continue
         if layout.focus_logical == "main_dual_network_button":
-            if kb_logout or rename_mode:
+            if kb_logout or rename_mode or not _dual_network_text_is_network(state):
                 continue
             if not state.wifi_configured and not state.wifi_connecting:
                 continue

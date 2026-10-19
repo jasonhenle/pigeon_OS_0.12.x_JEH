@@ -7,6 +7,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -1228,6 +1229,32 @@ class SettingsKeyboard1280Tests(unittest.TestCase):
         self.assertEqual(kb.buffer, ch.upper() if not kb.supports_lowercase else ch)
         self.assertNotIn("NEST", kb.buffer.upper())
         self.assertNotIn("ROOM", kb.buffer.upper())
+
+    def test_wifi_logo_hidden_while_container_shows_non_network_text(self) -> None:
+        from pigeon.widgets import main_settings as ms
+
+        assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
+        state = ms.MainSettingsState()
+        layout = ms._WifiIconLayout(
+            clip_polygon_svg=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)),
+            cx_svg=0.0, cy_svg=0.0, fail_text_xy_svg=(0.0, 0.0),
+            focus_logical="main_dual_network_button", picker_row=False,
+        )
+        bgra = np.zeros((4, 4, 4), dtype=np.uint8)
+
+        def drawn() -> int:
+            with mock.patch.object(ms, "_draw_wifi_icon_overlay") as d:
+                ms._draw_wifi_overlays(bgra, state, [layout], focused_logical="")
+            return d.call_count
+
+        with mock.patch.object(type(state), "wifi_configured", new=True):
+            self.assertEqual(drawn(), 1)  # idle, connected: logo shown
+            state.renaming_location_slot = 2
+            state.open_keyboard("location", assets_dir=assets)
+            self.assertEqual(drawn(), 0)  # renaming a room: no logo
+            state.keyboard = None
+            state.open_keyboard("zipcode", assets_dir=assets)
+            self.assertEqual(drawn(), 0)
 
     def test_text_entry_cursor_sits_in_location_field(self) -> None:
         from pigeon.settings_layout import DUAL_SLOT_A, dual_slot_design
