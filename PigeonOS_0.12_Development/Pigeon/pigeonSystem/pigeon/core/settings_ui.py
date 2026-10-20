@@ -1136,6 +1136,24 @@ def _handle_main_settings_action(action: str, *, _apply_persisted_location_to_ru
         _prefetch_pigeon_update_badge()
         return
 
+    if action == "pigeon_restart":
+        # settings_pigeon general → RESTART: relaunch the way the updater does.
+        def _restart_pigeon() -> None:
+            try:
+                from pigeon.github_update import restart_pigeon_after_update
+
+                restart_pigeon_after_update(
+                    _resolve_install_root_for_update(), parent_pid=os.getpid()
+                )
+            except Exception:
+                pass
+            from pigeon.github_update import exit_code_after_update
+
+            os._exit(exit_code_after_update())
+
+        root.after(200, _restart_pigeon)
+        return
+
     if action == "pigeon_factory_reset":
         from pigeon.widgets.pigeon_settings import factory_reset_pigeon_persisted_state
         from pigeon.widgets.ui_color_settings import (

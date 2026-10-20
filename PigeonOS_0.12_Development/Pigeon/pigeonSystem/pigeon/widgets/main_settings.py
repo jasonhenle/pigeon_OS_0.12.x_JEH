@@ -530,6 +530,8 @@ class MainSettingsState:
     box3_ip_invalid: bool = False
     show_pigeon_settings: bool = False
     pigeon_focus_index: int = 0
+    # Menu section1 of settings_pigeon shows: general | theme | clock.
+    pigeon_view: str = "general"
     # Silent GitHub poll when opening settings_pigeon (badge without popup).
     pigeon_needs_update_prefetch: bool = False
     # settings_pigeon status lights: metadata / audio seen in the last 60 s,
@@ -539,7 +541,7 @@ class MainSettingsState:
     pigeon_network_ok: bool = False
     # UI color the page falls back to when focus leaves the color row.
     ui_color_committed_key: str = ""
-    # Timezone dropdown under the settings_pigeon timezone pill.
+    # Timezone list over section1 (clock menu's TIME ZONE tile).
     tz_dropdown_open: bool = False
     tz_dropdown_index: int = 0
     show_preferences: bool = False
@@ -581,7 +583,7 @@ class MainSettingsState:
     ui_color_accent_key: str = "white"
     ui_color_ui_key: str = "blue"
     ui_color_button_key: str = "black"
-    # settings_pigeon option toggles (12/24 h, °F/°C, theme/dark).
+    # settings_pigeon option toggles (12/24 h, °F/°C, auto/manual update, digital/analog).
     options_values: dict[str, object] = field(default_factory=dict)
     show_update_popup: bool = False
     update_popup_focus_index: int = 0
@@ -1061,8 +1063,17 @@ class MainSettingsState:
     def pigeon_focused_id(self) -> str:
         from pigeon.widgets.pigeon_settings import pigeon_focus_ring
 
-        ring = pigeon_focus_ring()
+        ring = pigeon_focus_ring(self.pigeon_view)
         return ring[int(self.pigeon_focus_index) % len(ring)]
+
+    def set_pigeon_view(self, view: str, *, focus: str = "") -> None:
+        """Load a menu into section1; ``focus`` is the id to keep focus on."""
+        from pigeon.widgets.pigeon_settings import normalize_view, pigeon_focus_ring
+
+        self.pigeon_view = normalize_view(view)
+        ring = pigeon_focus_ring(self.pigeon_view)
+        self.pigeon_focus_index = ring.index(focus) if focus in ring else 0
+        self.sync_pigeon_color_preview()
 
     def enter_pigeon_settings(self) -> None:
         from pigeon.widgets.options_settings import load_options_into_state
@@ -1070,6 +1081,7 @@ class MainSettingsState:
         from pigeon.widgets.ui_color_settings import load_persisted_theme_into_state
 
         self.show_pigeon_settings = True
+        self.pigeon_view = "general"
         self.show_box1_panel = False
         self.close_update_popup()
         self.close_preferences()
@@ -1089,9 +1101,8 @@ class MainSettingsState:
             ensure_location_detected()
         except Exception:
             pass
-        ring = pigeon_focus_ring()
-        # Land on the first editable control; EXIT stays one step back.
-        self.pigeon_focus_index = ring.index("zipcode") if "zipcode" in ring else 0
+        # Land on the first tile; EXIT stays one step back.
+        self.pigeon_focus_index = 1 if len(pigeon_focus_ring(self.pigeon_view)) > 1 else 0
         # Prefetch update availability so the badge is ready without opening the popup.
         self.pigeon_needs_update_prefetch = True
 
@@ -1136,6 +1147,7 @@ class MainSettingsState:
         self.close_metadata_debug()
         self._restore_committed_ui_color()
         self.show_pigeon_settings = False
+        self.pigeon_view = "general"
         self.pigeon_needs_update_prefetch = False
         self.ensure_focus_ring()
         if "main_box1_button" in self.focus_ring:
@@ -1445,7 +1457,7 @@ class MainSettingsState:
         if self.show_update_popup:
             self.navigate_update_popup(forward=forward)
             return
-        ring = pigeon_focus_ring()
+        ring = pigeon_focus_ring(self.pigeon_view)
         step = 1 if forward else -1
         self.pigeon_focus_index = (int(self.pigeon_focus_index) + step) % len(ring)
         self.sync_pigeon_color_preview()
@@ -6651,6 +6663,7 @@ class MainSettingsWidget:
             st.box3_devices.picked,
             bool(st.show_pigeon_settings),
             int(st.pigeon_focus_index),
+            str(st.pigeon_view),
             bool(st.pigeon_needs_update_prefetch),
             st.pigeon_metadata_ok,
             bool(st.pigeon_audio_ok),
@@ -6864,6 +6877,7 @@ class MainSettingsWidget:
             int(st.box3_devices.row),
             str(st.box3_devices.arrow),
             int(st.pigeon_focus_index),
+            str(st.pigeon_view),
             int(st.preferences_focus_index) if st.show_preferences else -1,
             str(st.preferences_nav or "") if st.show_preferences else "",
             int(st.preferences_active_zone) if st.show_preferences else 0,
@@ -7036,7 +7050,7 @@ class MainSettingsWidget:
 
             if st.tz_dropdown_open or st.show_update_popup or st.show_metadata_debug:
                 return
-            ring = pigeon_focus_ring()
+            ring = pigeon_focus_ring(st.pigeon_view)
             n = len(ring)
             if n <= 1:
                 return
@@ -7251,7 +7265,7 @@ class MainSettingsWidget:
 
             if st.tz_dropdown_open or st.show_update_popup or st.show_metadata_debug:
                 return
-            ring = pigeon_focus_ring()
+            ring = pigeon_focus_ring(st.pigeon_view)
             n = len(ring)
             nxt = (int(st.pigeon_focus_index) + (1 if forward else -1)) % n
             if color_key_for_focus(ring[nxt]) is not None:
@@ -8280,7 +8294,12 @@ class MainSettingsWidget:
                 st.begin_update_check()
                 self.invalidate()
                 return "update_popup:check"
-            from pigeon.widgets.pigeon_settings import color_key_for_focus, option_for_focus
+            from pigeon.widgets.pigeon_settings import (
+                color_key_for_focus,
+                option_for_focus,
+                theme_key_for_focus,
+                view_for_section,
+            )
 
             focused = st.pigeon_focused_id
             if focused == "exit":
@@ -8289,6 +8308,11 @@ class MainSettingsWidget:
                 # EXIT leaves settings for now playing; while WiFi setup still
                 # locks settings open it only goes back to settings_main.
                 return "exit" if st.exit_enabled else "pigeon_settings_back"
+            target_view = view_for_section(st.pigeon_view, focused)
+            if target_view is not None:
+                st.set_pigeon_view(target_view, focus=focused)
+                self.invalidate()
+                return f"pigeon_view:{target_view}"
             if focused == "zipcode":
                 st.open_keyboard("zipcode", assets_dir=self._assets_dir)
                 self.invalidate()
@@ -8297,9 +8321,16 @@ class MainSettingsWidget:
                 st.open_tz_dropdown()
                 self.invalidate()
                 return "timezone_dropdown_open"
+            from pigeon.widgets.options_settings import set_option_value
+
+            if theme_key_for_focus(focused) == "dark":
+                st.options_values = set_option_value("color_format", "dark", st.options_values or None)
+                self.invalidate()
+                return "ui_color_dark"
             color = color_key_for_focus(focused)
             if color is not None:
                 st.commit_pigeon_color(color)
+                st.options_values = set_option_value("color_format", "color", st.options_values or None)
                 self.invalidate()
                 return f"ui_color_swatch:ui:{color}"
             option = option_for_focus(focused)
@@ -8316,6 +8347,9 @@ class MainSettingsWidget:
             if focused == "reset":
                 self.invalidate()
                 return "pigeon_factory_reset"
+            if focused == "restart":
+                self.invalidate()
+                return "pigeon_restart"
             return f"pigeon_activate:{focused}"
 
         focused = st.focused_id

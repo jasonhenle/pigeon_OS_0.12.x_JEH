@@ -1,12 +1,11 @@
 """
-System UI color keys — the color row on ``settings_pigeon`` (0.11).
+System UI color keys — the theme menu on ``settings_pigeon`` (0.12).
 
-Seven UI themes, left → right as drawn on the page. Each theme hex is the
-fill of its ``ui_color_[color]_icon`` layer, so the UI matches the swatch the
-user is looking at. Accent / button classes keep their saved keys (no longer
-user-editable) so older installs render the same.
-
-Dark mode is ``option3`` on settings_pigeon (``color_format``), not a swatch.
+The page offers blue, green, yellow, pink and red here (plus a "dark" tile that
+is the ``color_format`` option, not a swatch). ``orange``, ``grey`` and
+``white`` are no longer offered but stay valid keys, so an install that saved
+one keeps its theme until the user picks another. Accent / button classes keep
+their saved keys (no longer user-editable) so older installs render the same.
 """
 
 from __future__ import annotations
@@ -34,6 +33,7 @@ _UI_SWATCHES: tuple[_Swatch, ...] = (
     _Swatch("blue", "#4B9EEC"),
     _Swatch("green", "#00A22D"),
     _Swatch("yellow", "#E5FF0C"),
+    _Swatch("pink", "#FF5CA8"),
     _Swatch("orange", "#E39F00"),
     _Swatch("red", "#FB0000"),
     _Swatch("grey", "#777777"),

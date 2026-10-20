@@ -17,39 +17,60 @@ Preferences zone nav: zone1 → zone5 → **color** → BACK. The color control 
 | Name | Module / surface | Asset |
 |------|------------------|-------|
 | **settings_main** | `pigeon/widgets/main_settings.py` + OpenCV composite | `pigeonAssets/settings_0.8/settings_main.svg` |
-| **pigeon settings** | `pigeon/widgets/pigeon_settings.py` (0.11 flat page, see below) | `pigeonAssets/settings/pigeon/settings_pigeon.svg` |
+| **pigeon settings** | `pigeon/widgets/pigeon_settings.py` (0.12 three-section page, see below) | `pigeonAssets/settings/pigeon/settings_pigeon.svg` |
 | **preferences** | `pigeon/widgets/preferences_settings.py` | `pigeon_settings_preferences.svg` |
 | **update popup** | `pigeon/widgets/update_popup.py` | update SVG layers |
 | **keyboards** | `pigeon/widgets/settings_keyboard.py` | `keyboard_*.svg` |
 
 `DevPhase.MAIN_SETTINGS = 2` (SVG stack only). The legacy Tk settings form is no longer reachable.
 
-## settings_pigeon (0.11)
+## settings_pigeon (0.12)
 
-One flat page, opened from settings_main box1. Nothing opens a sub-page except
-the zip keypad, the timezone dropdown and the update popup.
+One page, three sections (`pigeon/widgets/pigeon_settings.py`, art
+`pigeonAssets/settings/pigeon/settings_pigeon.svg`). **section1** is the working
+area: six tiles that are plain buttons or two-way toggles, depending on which
+menu it shows. **section2** and **section3** are the big buttons that pick the
+menu. Activating a big button loads its menu into section1, and that button
+becomes the way back to *general*.
 
-Focus order: **EXIT → ZIP → TIMEZONE → blue, green, yellow, orange, red, grey,
-white → 12/24 hr → °F/°C → theme/dark → RESET → UPDATE**. The clock, version
-and the wifi / metadata / audio lights are not selectable.
+| section1 shows | section2 | section3 |
+|----------------|----------|----------|
+| **general** (on entry) | theme | clock |
+| **theme** | general | clock |
+| **clock** | theme | general |
+
+Focus order: **EXIT → the open menu's tiles → section2 → section3**. The clock,
+version and the wifi / metadata / audio lights are not selectable; "TBD" tiles
+are drawn dim and skipped by focus.
+
+| Menu | 1 | 2 | 3 | 4 | 5 | 6 |
+|------|---|---|---|---|---|---|
+| general | °F / °C | RESET | RESTART | UPDATE | AUTO / MANUAL | TBD |
+| theme | blue | green | yellow | pink | red | dark |
+| clock | 12 HR / 24 HR | ZIP | TIME ZONE | DIGITAL / ANALOG | TBD | TBD |
 
 - **EXIT** returns to now playing (settings_main while WiFi setup still locks settings open).
+- **RESET** is the factory reset. **RESTART** relaunches Pigeon the way the
+  updater does (`pigeon_restart` action in `settings_ui.py`). **UPDATE** opens the
+  update popup (green dot when one is available).
+- **Theme tiles** preview live while focused; activating commits. Leaving the
+  menu falls back to the committed color. **dark** switches `color_format` to the
+  red-on-black UI (no preview); any color tile switches it back. `orange`,
+  `grey` and `white` are no longer offered but stay valid saved keys.
 - **ZIP** opens the numeric keypad. The zip is guessed once from the public IP
   when settings opens (`pigeon/pigeon_locale.py`); a typed zip wins, sets the
   timezone for that zip, and drives the weather widget. Shows `ENTER` when unknown.
-- **TIMEZONE** opens a dropdown (`CST -1:00` = offset from the current zone).
-  It applies to Pigeon's clocks only (`pigeon_now()`); the OS clock is untouched.
-- **Colors** preview live while focused; activating commits. Leaving the row
-  falls back to the committed color. Theme hexes are the `ui_color_*_icon` fills.
-- **Options** toggle `time_format`, `temp_format`, `color_format` (dark = red
-  monochrome). The knob shown is the circle nearest the active label (the export's
-  `toggle_a` / `toggle_b` names are swapped relative to their labels).
+- **TIME ZONE** opens a dropdown over section2 (`CST -1:00` = offset from the
+  current zone). It applies to Pigeon's clocks only (`pigeon_now()`).
+- **Toggles** write `settings_options`: option 1 `time_format`, 2 `temp_format`,
+  5 `auto_update`, 6 `clock_format` (digital / analog). Option 3 (`color_format`)
+  is the dark theme tile; option 4 (`zone4_mode`) has no tile (long encoder press
+  still flips the visualizer).
 - **Lights**: wifi green while associated; metadata / audio green when seen in
   the last 60 s (`pigeon/source_status.py`).
 
-The now-play widget picker and the old options / color bars are retired: now
-playing always uses the default zone layout, and the old clock-face, idle-delay
-and clocksaver-off switches read as their defaults.
+The big-button names follow the open menu, and section3 reuses section2's
+"general" art shifted right, so the SVG only needs one copy of it.
 
 ## Assets
 

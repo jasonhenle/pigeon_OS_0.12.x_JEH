@@ -1,17 +1,20 @@
-"""System-wide options — the five toggles on settings_pigeon (0.11).
+"""System-wide options — the toggles behind settings_pigeon (0.12).
 
 ``option1`` 12 / 24 hour, ``option2`` °F / °C, ``option3`` theme / dark
-(dark = red-tinted monochrome UI), ``option4`` info / visualizer (what the
-now-playing zone 4 shows), ``option5`` auto / manual update (auto installs the
-latest OS only while nothing is playing; manual only via the Update button).
+(dark = red-tinted monochrome UI; the "dark" tile in the theme menu), ``option4``
+info / visualizer (what the now-playing zone 4 shows; no tile any more),
+``option5`` auto / manual update (auto installs the latest OS only while
+nothing is playing; manual only via the Update button), ``option6`` digital /
+analog clock.
 The zone 11 now-playing layout (TT across zones 1–3, input / volume / TRT strip
 in zone 4) is the permanent default. A long
 encoder press still flips into the visualizer, see :mod:`pigeon.visualizer_mode`.
 Values persist under ``settings_options``.
 
-The 0.8–0.11.38 options bar also had clock face, idle delay and clocksaver
-on/off switches. Those have no control any more, so they always read as
-their defaults (digital, 60 s, on) even if an older install saved otherwise.
+The 0.8–0.11.38 options bar also had idle delay and clocksaver on/off
+switches. Those have no control any more, so they always read as their
+defaults (60 s, on) even if an older install saved otherwise. The clock face
+switch came back in 0.12 as ``option6``.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (3, "color_format", "color", "dark"),
     (4, "zone4_mode", "info", "visualizer"),
     (5, "auto_update", "auto", "manual"),
+    (6, "clock_format", "digital", "analog"),
 )
 
 _STATE_KEY = "settings_options"
@@ -68,6 +72,8 @@ def _normalize(raw: object) -> dict[str, Any]:
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
     au = str(raw.get("auto_update") or out["auto_update"]).strip().lower()
     out["auto_update"] = "manual" if au in ("manual", "off", "false") else "auto"
+    cf = str(raw.get("clock_format") or out["clock_format"]).strip().lower()
+    out["clock_format"] = "analog" if cf in ("analog", "analogue") else "digital"
     return out
 
 
@@ -113,6 +119,19 @@ def toggle_option(
     return write_options(vals, persist=persist)
 
 
+def set_option_value(
+    key: str,
+    value: Any,
+    values: dict[str, Any] | None = None,
+    *,
+    persist: bool = True,
+) -> dict[str, Any]:
+    """Write one option by persist key (``"color_format"`` …) and return all of them."""
+    vals = _normalize(values if values is not None else read_options())
+    vals[key] = value
+    return write_options(vals, persist=persist)
+
+
 def load_options_into_state(state: MainSettingsState) -> None:
     state.options_values = read_options()
 
@@ -130,7 +149,7 @@ def clock_uses_24h(state: MainSettingsState | None = None) -> bool:
 
 
 def clock_widget_analog(state: MainSettingsState | None = None) -> bool:
-    """Analog clock faces are no longer selectable (always digital)."""
+    """option6 = analog: the analog face replaces the digital clock widgets."""
     return _vals(state)["clock_format"] == "analog"
 
 
