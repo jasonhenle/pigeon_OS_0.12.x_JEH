@@ -128,7 +128,7 @@ class Zone11LayoutTests(unittest.TestCase):
         art = frame[:, 300:900].astype(int)
         colored = (art[:, :, 0] - art[:, :, 2]) > 60  # blue-ish art, BGR
         art_top = int(np.where(colored[:500].any(axis=1))[0].min())
-        self.assertGreaterEqual(art_top, vol_bottom - 20)  # small overlap allowed
+        self.assertGreaterEqual(art_top, vol_bottom)  # no overlap
 
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
         w = self._widget()
@@ -180,7 +180,7 @@ class Zone11LayoutTests(unittest.TestCase):
 
     def test_input_id_stacks_under_app_id_and_takes_its_place_when_missing(self) -> None:
         def rows(frame: np.ndarray) -> list[int]:
-            reg = frame[66:150, 0:400].astype(int)
+            reg = frame[66:150, 0:95].astype(int)
             band = (reg.max(axis=2) > 90) & (reg.max(axis=2) < 200)
             ys = np.where(band.any(axis=1))[0]
             groups: list[int] = []
