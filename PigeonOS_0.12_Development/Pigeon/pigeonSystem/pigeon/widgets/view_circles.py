@@ -7287,7 +7287,7 @@ class ViewCirclesWidget:
         )
 
     _REVEAL_S = 0.7
-    _REVEAL_FEATHER_PX = 160
+    _REVEAL_FEATHER_PX = 0  # hard edge; >0 feathers the leading edge over that many px
 
     def reveal_active(self) -> bool:
         """True while the finished page is wiping on over the loading page."""
@@ -7351,7 +7351,7 @@ class ViewCirclesWidget:
         feather = int(self._REVEAL_FEATHER_PX)
         edge = p * float(w + feather)
         x_new = max(0, min(w, int(edge - feather)))  # final left of this
-        x_old = max(0, min(w, int(math.ceil(edge))))  # loading page intact right of this
+        x_old = max(0, min(w, int(math.ceil(edge)))) if feather > 0 else x_new  # loading page intact right of this
 
         # The loading page keeps animating until the wipe covers it.
         regions = self._loading_live_regions()
@@ -7367,7 +7367,7 @@ class ViewCirclesWidget:
             out[:, self._reveal_done_x : x_new] = new[:, self._reveal_done_x : x_new]
             self._reveal_done_x = x_new
         rows = self._reveal_rows
-        if x_old > x_new and rows is not None and rows.size:
+        if feather > 0 and x_old > x_new and rows is not None and rows.size:
             xs = np.arange(x_new, x_old, dtype=np.float32)
             m = np.clip((edge - xs) / float(feather), 0.0, 1.0)[None, :, None]
             n = new[rows, x_new:x_old].astype(np.float32)
