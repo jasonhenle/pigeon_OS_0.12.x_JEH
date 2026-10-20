@@ -84,8 +84,6 @@ struct DeviceDetailView: View {
             Theme.canvas.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    DeviceSearchSection(device: device)
-
                     VStack(alignment: .leading, spacing: 8) {
                         LCDLabel(text: "Name", size: 18, color: Theme.accent)
                         TextField("Name", text: $name)
@@ -95,29 +93,24 @@ struct DeviceDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).tile()
 
+                    // Search for a movie or show, then what's playing now.
+                    DeviceSearchSection(device: device)
+
                     if caps?.capabilities.contains("display_brightness") == true {
                         BrightnessCard(client: store.client(for: device))
                     }
-                    if caps?.capabilities.contains("rooms") == true {
-                        RoomsCard(client: store.client(for: device))
-                    }
-                    if caps?.capabilities.contains("pigeon_settings") == true {
-                        PigeonSettingsCard(client: store.client(for: device))
-                    }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        LCDLabel(text: "Status", size: 18, color: Theme.accent)
-                        row("State", status?.state.capitalized ?? "—")
-                        row("Now playing", status?.nowPlaying?.title ?? "Nothing")
-                        row("Version", info?.version ?? "—")
-                        row("Address", "\(device.host):\(device.port)")
+                    NavigationLink {
+                        PigeonClockSettingsView(device: device, caps: caps, info: info, status: status)
+                    } label: {
+                        HStack {
+                            LCDLabel(text: "Pigeon Clock Settings", size: 18, color: Theme.accent)
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).tile()
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading).tile()
-
-                    if caps?.capabilities.contains("restart") == true || caps?.capabilities.contains("update") == true {
-                        MaintenanceCard(client: store.client(for: device), caps: caps?.capabilities ?? [],
-                                        version: info?.version)
-                    }
+                    .buttonStyle(.plain)
 
                     if let errorText { Text(errorText).font(Theme.ui(14)).foregroundStyle(Theme.bad) }
 
@@ -141,14 +134,6 @@ struct DeviceDetailView: View {
         } message: { Text("The Pigeon keeps working. Add it again with its on-screen code.") }
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
-        HStack {
-            Text(k).font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
-            Spacer()
-            Text(v).font(Theme.uiBold(15)).foregroundStyle(.white).multilineTextAlignment(.trailing)
-        }
-    }
-
     private func load() async {
         let c = store.client(for: device)
         do {
@@ -170,6 +155,56 @@ struct DeviceDetailView: View {
             store.rename(id: device.id, to: updated.name)
             errorText = nil
         } catch { errorText = error.localizedDescription }
+    }
+}
+
+/// Everything about the device itself: room, its settings, status and software.
+struct PigeonClockSettingsView: View {
+    @EnvironmentObject private var store: DeviceStore
+    let device: KnownDevice
+    let caps: Capabilities?
+    let info: DeviceInfo?
+    let status: DeviceStatus?
+
+    var body: some View {
+        ZStack {
+            Theme.canvas.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if caps?.capabilities.contains("rooms") == true {
+                        RoomsCard(client: store.client(for: device))
+                    }
+                    if caps?.capabilities.contains("pigeon_settings") == true {
+                        PigeonSettingsCard(client: store.client(for: device))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        LCDLabel(text: "Status", size: 18, color: Theme.accent)
+                        row("State", status?.state.capitalized ?? "—")
+                        row("Now playing", status?.nowPlaying?.title ?? "Nothing")
+                        row("Version", info?.version ?? "—")
+                        row("Address", "\(device.host):\(device.port)")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).tile()
+
+                    if caps?.capabilities.contains("restart") == true || caps?.capabilities.contains("update") == true {
+                        MaintenanceCard(client: store.client(for: device), caps: caps?.capabilities ?? [],
+                                        version: info?.version)
+                    }
+                }
+                .padding(Theme.gutter)
+            }
+        }
+        .navigationTitle("Pigeon Clock Settings")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ k: String, _ v: String) -> some View {
+        HStack {
+            Text(k).font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
+            Spacer()
+            Text(v).font(Theme.uiBold(15)).foregroundStyle(.white).multilineTextAlignment(.trailing)
+        }
     }
 }
 
