@@ -6511,16 +6511,24 @@ class ViewCirclesWidget:
         self._paste_trt_with_plate(out, patch, px, py)
 
     def _paste_trt_with_plate(self, out: np.ndarray, patch: np.ndarray, px: int, py: int) -> None:
-        """Paste TRT digits on a black rounded plate so they read on any artwork."""
+        """Paste TRT digits on a soft black plate (blurred, 50% opaque)."""
+        import cv2
+
         ph, pw = patch.shape[:2]
         pad_x = max(10, int(round(ph * 0.45)))
         pad_y = max(6, int(round(ph * 0.28)))
-        plate = _black_rounded_plate(int(pw) + 2 * pad_x, int(ph) + 2 * pad_y)
-        _paste_patch_bgra(out, plate, px - pad_x, py - pad_y)
-        _paste_patch_bgra(out, patch, px, py)
-        self._tt_time_paint_rects.append(
-            (px - pad_x, py - pad_y, int(plate.shape[1]), int(plate.shape[0]))
+        sigma = max(2.0, ph * 0.18)
+        margin = int(round(sigma * 3))  # room for the blur to fade out
+        plate = cv2.copyMakeBorder(
+            _black_rounded_plate(int(pw) + 2 * pad_x, int(ph) + 2 * pad_y),
+            margin, margin, margin, margin, cv2.BORDER_CONSTANT, value=(0, 0, 0, 0),
         )
+        alpha = cv2.GaussianBlur(plate[:, :, 3], (0, 0), sigma)
+        plate[:, :, 3] = (alpha.astype(np.float32) * 0.5).astype(np.uint8)
+        ox, oy = px - pad_x - margin, py - pad_y - margin
+        _paste_patch_bgra(out, plate, ox, oy)
+        _paste_patch_bgra(out, patch, px, py)
+        self._tt_time_paint_rects.append((ox, oy, int(plate.shape[1]), int(plate.shape[0])))
 
     def _draw_tt_countdown(
         self, out: np.ndarray, *, zone: int, wide: bool = False, part: str = "all"
