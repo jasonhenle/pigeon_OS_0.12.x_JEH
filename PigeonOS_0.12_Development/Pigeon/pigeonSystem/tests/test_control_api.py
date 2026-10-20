@@ -246,7 +246,7 @@ class ClaimCodeDrawTests(_Base):
         self.assertIs(draw_companion_code(frame, ""), frame)  # nothing to show
         out = draw_companion_code(frame, "482913")
         self.assertIsNot(out, frame)
-        self.assertGreater(int(out[600:660, 60:500, 3].max()), 0)
+        self.assertGreater(int(out[660:720, 60:500, 3].max()), 0)
         self.assertEqual(int(frame.max()), 0)  # input untouched
 
     def test_code_hidden_when_api_not_running(self) -> None:

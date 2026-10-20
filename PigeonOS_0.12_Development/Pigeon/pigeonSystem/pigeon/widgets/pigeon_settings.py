@@ -1,15 +1,24 @@
 """
-Pigeon device settings — ``settings/pigeon/settings_pigeon.svg`` (0.11).
+Pigeon device settings — ``settings/pigeon/settings_pigeon.svg`` (0.12).
 
-One flat page opened from main settings box1. Everything is edited in place;
-nothing opens a sub-page except the zip keyboard, the timezone dropdown and
-the update popup. Focus order (spec "settings_pigeon_0.11")::
+One page, three sections. ``section1`` is the working area: six tiles that are
+plain buttons or two-way toggles depending on the menu it shows. ``section2``
+and ``section3`` are the big buttons that pick that menu::
 
-    EXIT → ZIP → TIMEZONE → 7 UI colors → 5 options → RESET → UPDATE
+    section1 shows   section2   section3
+    general          theme      clock        (default on entry)
+    theme            general    clock
+    clock            theme      general
 
-The clock, version, and the wifi / metadata / audio lights are not selectable.
-Moving focus across the color row previews that theme live; activating a
-color commits it, and leaving the row falls back to the committed color.
+Activating a big button loads its menu into section1 and turns that button
+into the way back to ``general``. Focus order::
+
+    EXIT → the focusable tiles of the open menu → section2 → section3
+
+Tiles that are "TBD" are drawn dim and skipped by focus. The clock, version,
+and the wifi / metadata / audio lights are not selectable. Moving focus across
+the theme tiles previews that color live; activating one commits it, and
+leaving the menu falls back to the committed color.
 
 The HH:MM:SS clock ticks every second, so it is drawn by
 :func:`draw_pigeon_settings_clock` on top of the cached page instead of being
@@ -22,6 +31,7 @@ import copy
 import os
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -56,49 +66,86 @@ _COLOR_BLACK = "#000000"
 _COLOR_BUTTON = "#231F20"
 _COLOR_STATUS_OK = "#58FF00"
 _COLOR_STATUS_BAD = "#FF0000"
-# White knobs vanish in a white well, so the white theme borrows grey's fill.
-_COLOR_TOGGLE_WELL_ON_WHITE = "#777777"
+# White fills vanish on a white theme, so the white theme borrows grey's.
+_COLOR_WELL_ON_WHITE = "#777777"
+_COLOR_DARK_RING = "#D60000"
+# "TBD" tiles: same dark tile, greyed-out ink.
+_COLOR_TBD_INK = "#6E6E6E"
+_COLOR_TBD_WELL = "#3A3A3A"
 
-UI_COLOR_KEYS: tuple[str, ...] = (
-    "blue",
-    "green",
-    "yellow",
-    "orange",
-    "red",
-    "grey",
-    "white",
-)
-OPTION_NUMBERS: tuple[int, ...] = (1, 2, 3, 4, 5)
+THEME_KEYS: tuple[str, ...] = ("blue", "green", "yellow", "pink", "red", "dark")
+VIEWS: tuple[str, ...] = ("general", "theme", "clock")
+DEFAULT_VIEW = "general"
 
-_FOCUS_RING: tuple[str, ...] = (
-    ("exit", "zipcode", "timezone")
-    + tuple(f"color:{k}" for k in UI_COLOR_KEYS)
-    + tuple(f"option:{n}" for n in OPTION_NUMBERS)
-    + ("reset", "update")
+# Option numbers (see :mod:`pigeon.widgets.options_settings`).
+OPT_TIME = 1
+OPT_TEMP = 2
+OPT_AUTO_UPDATE = 5
+OPT_CLOCK_FORMAT = 6
+
+
+@dataclass(frozen=True)
+class Slot:
+    """One of section1's six tiles."""
+
+    kind: str  # toggle | button | color | tbd_toggle | tbd_button
+    focus_id: str = ""  # "" = not focusable
+    label: str = ""  # button text / color key
+    choices: tuple[str, str] = ("", "")  # toggle labels, option A on top
+
+
+_GENERAL_SLOTS: tuple[Slot, ...] = (
+    Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
+    Slot("button", "reset", "RESET"),
+    Slot("button", "restart", "RESTART"),
+    Slot("button", "update", "UPDATE"),
+    Slot("toggle", f"option:{OPT_AUTO_UPDATE}", choices=("AUTO", "MANUAL")),
+    Slot("tbd_toggle", choices=("TBD", "TBD")),
 )
+_THEME_SLOTS: tuple[Slot, ...] = tuple(
+    Slot("color", f"color:{k}", k) for k in THEME_KEYS
+)
+_CLOCK_SLOTS: tuple[Slot, ...] = (
+    Slot("toggle", f"option:{OPT_TIME}", choices=("12 HR", "24 HR")),
+    Slot("button", "zipcode", "ZIP"),
+    Slot("button", "timezone", "TIME ZONE"),
+    Slot("toggle", f"option:{OPT_CLOCK_FORMAT}", choices=("DIGITAL", "ANALOG")),
+    Slot("tbd_button", label="TBD"),
+    Slot("tbd_button", label="TBD"),
+)
+_SLOTS: dict[str, tuple[Slot, ...]] = {
+    "general": _GENERAL_SLOTS,
+    "theme": _THEME_SLOTS,
+    "clock": _CLOCK_SLOTS,
+}
 
 # Right edge of the status-light row; the version string right-aligns to it
 # so longer versions never run off the plate.
 _VERSION_RIGHT_X_SVG = 1795.59
 
-# Clock: glyph baseline and the span it may use, right-aligned beside the
-# timezone pill (SVG board units, drawn 1:1 on the 1280×800 canvas). Locked
-# digit cells run wider than the authored proportional "10:06:15" (starts at
-# 1163.81), so the span reaches back to the middle of the gap after the zip
-# pill (ends 1086.03).
+# Clock: glyph baseline and the span it may use, right-aligned (SVG board
+# units, drawn 1:1 on the 1280×800 canvas). Locked digit cells run wider than
+# the authored proportional "10:06:15".
 _CLOCK_LEFT_SVG = 1125.0
 _CLOCK_RIGHT_SVG = 1316.0
 _CLOCK_BASELINE_SVG = 830.09
 _CLOCK_FONT_PX = 60
 
-# Timezone dropdown, hung under the timezone pill.
+# Timezone dropdown: a list laid over section2 (the TIME ZONE tile stays visible).
+_DROPDOWN_ANCHOR_SVG = (1185.0, 985.0)
 _DROPDOWN_ROW_W = 240
 _DROPDOWN_ROW_H = 52
 _DROPDOWN_ROW_GAP = 6
-_DROPDOWN_TOP_GAP = 8
 _DROPDOWN_RADIUS = 18
 _DROPDOWN_FONT_PX = 44
-_DROPDOWN_MAX_ROWS = 8
+_DROPDOWN_MAX_ROWS = 7
+
+# Tile text (SVG board units).
+_TOGGLE_LABEL_PX = 22
+_BUTTON_LABEL_PX = 27
+_CAPTION_PX = 20
+_VALUE_PX = 46
+_COLOR_DOT_R = 40.0
 
 _SVG_TREE_TEMPLATES: dict[tuple[str, int], ET.Element] = {}
 _SVG_TREE_TEMPLATE_MAX = 4
@@ -117,17 +164,50 @@ def default_pigeon_settings_svg_path(assets_dir: Path | str | None = None) -> Pa
     return settings_widget_path("pigeon_page", assets_dir=assets_dir)
 
 
-def pigeon_focus_ring() -> tuple[str, ...]:
-    return _FOCUS_RING
+# --- views, focus -------------------------------------------------------------
+
+
+def normalize_view(view: object) -> str:
+    v = str(view or "").strip().lower()
+    return v if v in VIEWS else DEFAULT_VIEW
+
+
+def view_slots(view: object) -> tuple[Slot, ...]:
+    return _SLOTS[normalize_view(view)]
+
+
+def pigeon_focus_ring(view: object = DEFAULT_VIEW) -> tuple[str, ...]:
+    tiles = tuple(s.focus_id for s in view_slots(view) if s.focus_id)
+    return ("exit", *tiles, "section2", "section3")
+
+
+def section_targets(view: object) -> tuple[str, str]:
+    """Menu that (section2, section3) open from ``view``."""
+    v = normalize_view(view)
+    return ("general" if v == "theme" else "theme", "general" if v == "clock" else "clock")
+
+
+def view_for_section(view: object, focus_id: str) -> str | None:
+    """Menu opened by activating ``section2`` / ``section3``; None for other ids."""
+    sec2, sec3 = section_targets(view)
+    return {"section2": sec2, "section3": sec3}.get(normalize_pigeon_focus_id(focus_id))
 
 
 def normalize_pigeon_focus_id(focus_id: str) -> str:
     return str(focus_id or "").strip()
 
 
-def color_key_for_focus(focus_id: str) -> str | None:
+def theme_key_for_focus(focus_id: str) -> str | None:
+    """Theme tile key (``dark`` included) for a ``color:`` focus id."""
     fid = normalize_pigeon_focus_id(focus_id)
     return fid.split(":", 1)[1] if fid.startswith("color:") else None
+
+
+def color_key_for_focus(focus_id: str) -> str | None:
+    """UI color key to preview/commit; None for non-color ids and for ``dark``
+    (dark is the ``color_format`` option, not a UI color)."""
+    key = theme_key_for_focus(focus_id)
+    return None if key in (None, "dark") else key
 
 
 def option_for_focus(focus_id: str) -> int | None:
@@ -157,38 +237,13 @@ def _by_id(root: ET.Element | None, *ids: str) -> ET.Element | None:
     return None
 
 
-def _child_with(group: ET.Element | None, *fragments: str) -> ET.Element | None:
-    """First descendant of ``group`` whose id contains one of ``fragments``.
-
-    The Illustrator export mislabels some layers (the grey group's button is
-    ``ui_color_red_button``; green's is ``ui_color_green_butto``), so lookups
-    are scoped to the group and match on the role fragment.
-    """
-    if group is None:
-        return None
-    for el in group.iter():
-        if el is group:
-            continue
-        name = f"{el.get('id') or ''} {el.get('data-name') or ''}"
-        if any(frag in name for frag in fragments):
-            return el
-    return None
+def _local(el: ET.Element) -> str:
+    return el.tag.rsplit("}", 1)[-1]
 
 
-def _option_group(root: ET.Element, n: int) -> ET.Element | None:
-    """Option ``n``'s tile group, by group id or (``optionv_visualizer_grpup``
-    for option 4) by its ``option{n}_`` children."""
-    container = _by_id(root, "settings_option_group", "settings_options_group")
-    if container is None:
-        return None
-    prefix = f"option{n}_"
-    for el in container:
-        if str(el.get("id") or "").startswith(prefix):
-            return el
-    for el in container:
-        if any(str(c.get("id") or "").startswith(prefix) for c in el):
-            return el
-    return None
+def _sibling_tag(el: ET.Element, name: str) -> str:
+    """Tag ``name`` in the same namespace as ``el``."""
+    return f"{el.tag.rsplit('}', 1)[0]}}}{name}" if "}" in el.tag else name
 
 
 def _paint_text(el: ET.Element | None, color: str) -> None:
@@ -199,13 +254,19 @@ def _paint_text(el: ET.Element | None, color: str) -> None:
             _set_paint(node, fill=color)
 
 
+def _ui_hex(state: MainSettingsState) -> str:
+    """Theme color for filled shapes (white borrows grey so white knobs show)."""
+    hexv = str(getattr(state.theme, "ui", "") or "#4B9EEC")
+    return _COLOR_WELL_ON_WHITE if hexv.upper() in ("#FFFFFF", "#FFF") else hexv
+
+
 # --- state → SVG ------------------------------------------------------------
 
 
 def _sync_pill(
     root: ET.Element, *, button_id: str, text_id: str, selected: bool
 ) -> None:
-    """EXIT / ZIP / TIMEZONE: dark pill + white text, inverted when selected."""
+    """EXIT: dark pill + white text, inverted when selected."""
     button = _by_id(root, button_id)
     if button is not None:
         _set_paint(button, fill=_COLOR_WHITE if selected else _COLOR_BUTTON)
@@ -213,53 +274,11 @@ def _sync_pill(
 
 
 def _sync_stroke_button(el: ET.Element | None, *, selected: bool) -> None:
-    """Color / option / reset / update tiles: 3 pt stroke goes white when selected."""
+    """Tiles / section buttons: 3 pt stroke goes white when selected."""
     if el is None:
         return
     _set_paint(el, stroke=_COLOR_WHITE if selected else _COLOR_BUTTON)
     el.set("stroke-width", "3")
-
-
-def _fit_text_in_pill(root: ET.Element, *, text_id: str, button_id: str) -> None:
-    """Shrink a pill label only when it would overrun the pill (e.g. ``ENTER``, ``AKDT``).
-
-    Text keeps its authored left inset; the font size drops just enough for
-    the string to end the same inset short of the pill's right edge.
-    """
-    text = _by_id(root, text_id)
-    button = _by_id(root, button_id)
-    if text is None or button is None:
-        return
-    content = "".join(text.itertext()).strip()
-    m = re.search(r"translate\(\s*([-\d.]+)", text.get("transform") or "")
-    try:
-        x = float(m.group(1)) if m else None
-        bx = float(button.get("x"))
-        bw = float(button.get("width"))
-        size = float(text.get("font-size") or 0)
-    except (TypeError, ValueError):
-        return
-    if not content or x is None or size <= 0:
-        return
-    avail = (bx + bw) - x - max(0.0, x - bx)
-    width = _digital7_width(content, size)
-    if width > avail > 0:
-        text.set("font-size", f"{size * avail / width:.2f}")
-
-
-def _digital7_width(content: str, size: float) -> float:
-    from PIL import ImageFont
-
-    from pigeon.font_paths import resolve_digital7_font
-
-    path = resolve_digital7_font()
-    if not path:
-        return 0.0
-    try:
-        font = ImageFont.truetype(path, max(6, int(round(size))))
-    except OSError:
-        return 0.0
-    return float(font.getlength(content)) * size / max(6, int(round(size)))
 
 
 def _zipcode_text(state: MainSettingsState) -> str:
@@ -343,36 +362,335 @@ def _svg_y(el: ET.Element | None) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def _option_label(group: ET.Element, side: str) -> ET.Element | None:
-    for el in group.iter():
-        name = str(el.get("id") or "")
-        if el.tag.endswith("text") and f"_{side}_" in name:
-            return el
-    return None
+def _bbox(el: ET.Element) -> tuple[float, float, float, float]:
+    """(x0, y0, x1, y1) of a tile / container shape (rect or Illustrator pill path)."""
+    if _local(el) == "rect":
+        x, y = float(el.get("x") or 0), float(el.get("y") or 0)
+        return x, y, x + float(el.get("width") or 0), y + float(el.get("height") or 0)
+    from pigeon.widgets.settings_keyboard import _path_bbox
+
+    return _path_bbox(el.get("d") or "")
 
 
-def _sync_toggle_knob(group: ET.Element, *, is_b: bool) -> None:
-    """Show the knob circle that sits beside the active option's label.
+def _set_label(
+    el: ET.Element,
+    text: str,
+    *,
+    cx: float,
+    y: float | None = None,
+    size: float,
+    color: str = _COLOR_WHITE,
+) -> None:
+    """Center ``text`` on ``cx`` (keeping the authored baseline unless ``y``).
 
-    In the 0.11 export ``toggle_a`` sits beside the B label and vice versa,
-    so the knob is picked by position, not by layer name.
+    The export splits some labels into one ``tspan`` per letter; those are
+    flattened so the whole string is one run.
     """
-    knob_a = _child_with(group, "toggle_a_shape")
-    knob_b = _child_with(group, "toggle_b_shape")
-    label_y = _svg_y(_option_label(group, "b" if is_b else "a"))
-    ya, yb = _svg_y(knob_a), _svg_y(knob_b)
-    if label_y is None or ya is None or yb is None:
-        show_a = not is_b
+    if y is None:
+        y = _svg_y(el) or 0.0
+    for span in list(el):
+        if span.tag.endswith("tspan"):
+            el.remove(span)
+    el.text = text
+    el.attrib.pop("letter-spacing", None)
+    el.set("transform", f"translate({cx:.2f} {y:.2f})")
+    el.set("text-anchor", "middle")
+    el.set("font-size", f"{size:.2f}")
+    _set_paint(el, fill=color)
+
+
+def _add_text(
+    parent: ET.Element,
+    text: str,
+    *,
+    cx: float,
+    y: float,
+    size: float,
+    digital: bool = False,
+    color: str = _COLOR_WHITE,
+) -> None:
+    el = ET.SubElement(parent, _sibling_tag(parent, "text"))
+    el.text = text
+    el.set("transform", f"translate({cx:.2f} {y:.2f})")
+    el.set("font-family", "Digital-7, Digital-7" if digital else "SharpSans-Bold, 'Sharp Sans'")
+    if not digital:
+        el.set("font-weight", "700")
+    el.set("font-size", f"{size:.2f}")
+    el.set("text-anchor", "middle")
+    el.set("fill", color)
+
+
+def _toggle_parts(
+    graphics: ET.Element,
+) -> tuple[ET.Element | None, list[ET.Element], list[ET.Element]]:
+    """(container pill, knobs top→bottom, labels top→bottom) of a tile's toggle art.
+
+    The export names these inconsistently from tile to tile (``switch`` vs
+    ``text`` ids swap between rows), so parts are told apart by element type.
+    """
+    container = None
+    knobs: list[ET.Element] = []
+    labels: list[ET.Element] = []
+    for el in graphics:
+        tag = _local(el)
+        if tag == "text":
+            labels.append(el)
+        elif tag == "path":
+            if (el.get("fill") or "").lower() in ("#fff", "#ffffff"):
+                knobs.append(el)
+            else:
+                container = el
+    knobs.sort(key=lambda e: _svg_y(e) or 0.0)
+    labels.sort(key=lambda e: _svg_y(e) or 0.0)
+    return container, knobs, labels
+
+
+def _fill_toggle(
+    graphics: ET.Element,
+    *,
+    cx: float,
+    choices: tuple[str, str],
+    is_b: bool,
+    well: str,
+    ink: str = _COLOR_WHITE,
+) -> None:
+    container, knobs, labels = _toggle_parts(graphics)
+    if container is not None:
+        _set_paint(container, fill=well)
+    if len(knobs) == 2:
+        _set_visible(knobs[0], not is_b)
+        _set_visible(knobs[1], is_b)
+        for knob in knobs:
+            _set_paint(knob, fill=ink)
+    for label, text in zip(labels, choices):
+        _set_label(label, text, cx=cx, size=_TOGGLE_LABEL_PX, color=ink)
+
+
+def _sync_slot(
+    root: ET.Element,
+    n: int,
+    slot: Slot,
+    state: MainSettingsState,
+    *,
+    selected: bool,
+    ui_hex: str,
+) -> None:
+    group = _by_id(root, f"toggle_0{n}_group")
+    if group is None:
+        return
+    button = next((c for c in group if _local(c) in ("rect", "path")), None)
+    graphics = next((c for c in group if _local(c) == "g"), None)
+    if button is None or graphics is None:
+        return
+    x0, y0, x1, y1 = _bbox(button)
+    cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
+    _sync_stroke_button(button, selected=selected)
+    dim = slot.kind.startswith("tbd")
+
+    if slot.kind in ("toggle", "tbd_toggle"):
+        from pigeon.widgets.options_settings import option_is_b
+
+        n_opt = option_for_focus(slot.focus_id)
+        is_b = bool(n_opt and option_is_b(n_opt, getattr(state, "options_values", None) or None))
+        _fill_toggle(
+            graphics,
+            cx=cx,
+            choices=slot.choices,
+            is_b=is_b,
+            well=_COLOR_TBD_WELL if dim else ui_hex,
+            ink=_COLOR_TBD_INK if dim else _COLOR_WHITE,
+        )
+        return
+
+    _set_visible(graphics, False)
+    if slot.kind == "color":
+        _add_color_dot(group, cx, cy, slot.label)
+    elif slot.focus_id == "zipcode":
+        _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX)
+        _add_text(group, _zipcode_text(state), cx=cx, y=cy + 36, size=_VALUE_PX, digital=True)
+    elif slot.focus_id == "timezone":
+        from pigeon.pigeon_locale import timezone_abbrev
+
+        _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX)
+        _add_text(group, timezone_abbrev(), cx=cx, y=cy + 36, size=_VALUE_PX, digital=True)
     else:
-        show_a = abs(ya - label_y) <= abs(yb - label_y)
-    _set_visible(knob_a, show_a)
-    _set_visible(knob_b, not show_a)
+        _add_text(
+            group,
+            slot.label,
+            cx=cx,
+            y=cy + 9,
+            size=_BUTTON_LABEL_PX,
+            color=_COLOR_TBD_INK if dim else _COLOR_WHITE,
+        )
+        if slot.focus_id == "update" and bool(getattr(state, "update_available", False)):
+            dot = ET.SubElement(group, _sibling_tag(group, "circle"))
+            dot.set("cx", f"{x1 - 22:.2f}")
+            dot.set("cy", f"{y0 + 22:.2f}")
+            dot.set("r", "9")
+            dot.set("fill", _COLOR_STATUS_OK)
+
+
+def _add_color_dot(group: ET.Element, cx: float, cy: float, key: str) -> None:
+    from pigeon.widgets.ui_color_settings import hex_for_color_key
+
+    dot = ET.SubElement(group, _sibling_tag(group, "circle"))
+    dot.set("cx", f"{cx:.2f}")
+    dot.set("cy", f"{cy:.2f}")
+    if key == "dark":
+        # Monochrome red-on-black, like the dark UI it switches on.
+        dot.set("r", f"{_COLOR_DOT_R - 4:.2f}")
+        dot.set("fill", _COLOR_BLACK)
+        dot.set("stroke", _COLOR_DARK_RING)
+        dot.set("stroke-width", "8")
+    else:
+        dot.set("r", f"{_COLOR_DOT_R:.2f}")
+        dot.set("fill", hex_for_color_key("ui", key))
+        dot.set("stroke", _COLOR_BUTTON)
+
+
+def _first_rect(el: ET.Element) -> ET.Element | None:
+    return next((n for n in el.iter() if _local(n) == "rect"), None)
+
+
+def _first_text(el: ET.Element) -> ET.Element | None:
+    return next((n for n in el.iter() if _local(n) == "text"), None)
+
+
+def _shift_x(group: ET.Element, dx: float) -> None:
+    """Move a group's rects and texts right by ``dx`` in place.
+
+    Not a ``transform`` on the group: the text overlay reads each text's own
+    ``translate`` and ignores its parents'.
+    """
+    for el in group.iter():
+        tag = _local(el)
+        if tag == "rect":
+            el.set("x", f"{float(el.get('x') or 0) + dx:.2f}")
+        elif tag == "text":
+            m = re.search(r"translate\(\s*([-\d.]+)[,\s]+([-\d.]+)", el.get("transform") or "")
+            if m:
+                el.set("transform", f"translate({float(m.group(1)) + dx:.2f} {m.group(2)})")
+
+
+_ROT_RE = re.compile(
+    r"translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)\s*rotate\(\s*([-\d.]+)\s*\)"
+)
+
+
+def _clock_hands_to_polygons(root: ET.Element) -> None:
+    """Redraw the clock icon's rotated hand rects as polygons.
+
+    The background sweep deletes every rotated ``rect`` (they look like slanted
+    theme stripes), hands included.
+    """
+    import math
+
+    parents = {c: p for p in root.iter() for c in p}
+    for hid in ("clock_hand_minute", "clock_hand_hour", "clock_hand_second"):
+        rect = _by_id(root, hid)
+        parent = parents.get(rect) if rect is not None else None
+        m = _ROT_RE.search(rect.get("transform") or "") if rect is not None else None
+        if rect is None or parent is None or m is None:
+            continue
+        tx, ty, deg = float(m.group(1)), float(m.group(2)), float(m.group(3))
+        x, y = float(rect.get("x")), float(rect.get("y"))
+        w, h = float(rect.get("width")), float(rect.get("height"))
+        r = float(rect.get("rx") or 0)
+        # Inset by half the corner radius, then stroke with round joins.
+        x, y, w, h = x + r / 2, y + r / 2, w - r, h - r
+        c, sn = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+        pts = [
+            (tx + px * c - py * sn, ty + px * sn + py * c)
+            for px, py in ((x, y), (x + w, y), (x + w, y + h), (x, y + h))
+        ]
+        poly = ET.Element(_sibling_tag(rect, "polygon"))
+        poly.set("id", hid)
+        poly.set("points", " ".join(f"{a:.2f},{b:.2f}" for a, b in pts))
+        poly.set("fill", rect.get("fill") or _COLOR_WHITE)
+        poly.set("stroke", rect.get("fill") or _COLOR_WHITE)
+        poly.set("stroke-width", f"{r:.2f}")
+        poly.set("stroke-linejoin", "round")
+        parent.insert(list(parent).index(rect), poly)
+        parent.remove(rect)
+
+
+def _theme_ramp_hex(original: str, ui_hex: str) -> str:
+    """Re-tint one of the theme icon's red stripes with the live UI color,
+    keeping its brightness step (the same ramp the page background uses)."""
+    from pigeon.widgets.settings_theme_background import scale_ui_hex
+
+    try:
+        step = int(original.lstrip("#")[:2], 16) / 0xD6
+    except ValueError:
+        return ui_hex
+    return scale_ui_hex(ui_hex, min(1.0, step))
+
+
+def _sync_sections(root: ET.Element, state: MainSettingsState, *, focused: str, ui_hex: str) -> None:
+    view = normalize_view(getattr(state, "pigeon_view", DEFAULT_VIEW))
+    sec2_view, sec3_view = section_targets(view)
+
+    theme2 = _by_id(root, "section2_theme")
+    general2 = _by_id(root, "section2_general")
+    clock3 = _by_id(root, "section3_clock")
+    container3 = _by_id(root, "clock_container")
+    if theme2 is None or general2 is None or clock3 is None or container3 is None:
+        return
+    rect2 = _first_rect(general2)
+    if rect2 is None:
+        return
+
+    # section3 has no "general" art: borrow section2's, shifted onto section3.
+    parent = next((p for p in root.iter() if clock3 in list(p)), root)
+    for stale in [c for c in parent if c.get("id") == "section3_general"]:
+        parent.remove(stale)
+    general3 = copy.deepcopy(general2)
+    general3.set("id", "section3_general")
+    _shift_x(general3, float(container3.get("x") or 0) - float(rect2.get("x") or 0))
+    parent.insert(list(parent).index(clock3) + 1, general3)
+
+    # The theme icon is the page background's stripes: tint them live.
+    for stripe in theme2.iter():
+        fill = (stripe.get("fill") or "").lower()
+        if (
+            _local(stripe) == "rect"
+            and "rotate" in (stripe.get("transform") or "")
+            and fill.startswith("#")
+        ):
+            _set_paint(stripe, fill=_theme_ramp_hex(fill, ui_hex))
+    for node in (general2, general3):
+        disc = next(
+            (n for n in node.iter() if _local(n) == "rect" and (n.get("fill") or "").lower() == "#b00"),
+            None,
+        )
+        if disc is not None:
+            _set_paint(disc, fill=ui_hex)
+    for cid in ("clock_face", "clock_center"):
+        el = _by_id(root, cid)
+        if el is not None:
+            _set_paint(el, fill=ui_hex)
+    _clock_hands_to_polygons(root)
+
+    _set_visible(theme2, sec2_view == "theme")
+    _set_visible(general2, sec2_view == "general")
+    _set_visible(clock3, sec3_view == "clock")
+    _set_visible(general3, sec3_view == "general")
+
+    for node, name, section in (
+        (theme2, "theme", "section2"),
+        (general2, "general", "section2"),
+        (general3, "general", "section3"),
+        (clock3, "clock", "section3"),
+    ):
+        rect = _first_rect(node)
+        _sync_stroke_button(rect, selected=focused == section)
+        label = next((n for n in node.iter() if _local(n) == "text"), None)
+        if label is not None and rect is not None:
+            x0, _, x1, _ = _bbox(rect)
+            _set_label(label, name, cx=(x0 + x1) * 0.5, size=36)
 
 
 def apply_pigeon_settings_svg_state(root: ET.Element, state: MainSettingsState) -> None:
-    from pigeon.pigeon_locale import timezone_abbrev
-    from pigeon.widgets.options_settings import option_is_b
-
     kb_open = getattr(state, "keyboard", None) is not None
     focused = "" if kb_open else normalize_pigeon_focus_id(state.pigeon_focused_id)
     kb_zip = kb_open and str(getattr(state.keyboard, "target", "") or "") == "zipcode"
@@ -381,57 +699,33 @@ def apply_pigeon_settings_svg_state(root: ET.Element, state: MainSettingsState) 
     update_screen = bool(getattr(state, "show_update_popup", False))
     if update_screen:
         focused = "exit" if state.update_popup_focused_choice == "back" else ""
+    view = normalize_view(getattr(state, "pigeon_view", DEFAULT_VIEW))
+    ui_hex = _ui_hex(state)
 
     _sync_pill(root, button_id="exit_button", text_id="exit_text", selected=focused == "exit")
     _set_text_content(_by_id(root, "exit_text"), "BACK" if update_screen else "EXIT")
     center_label_on_pill(_by_id(root, "exit_text"), _by_id(root, "exit_button"))
-    _sync_pill(
-        root,
-        button_id="zipcode_button",
-        text_id="zipcode_00000_text",
-        selected=focused == "zipcode" or kb_zip,
-    )
-    _sync_pill(
-        root,
-        button_id="settings_timezone_button",
-        text_id="settings_timezone_text",
-        selected=focused == "timezone",
-    )
-    _paint_text(_by_id(root, "zipcode_zip_text"), _COLOR_WHITE)
-    _set_text_content(_by_id(root, "zipcode_00000_text"), _zipcode_text(state))
-    _set_text_content(_by_id(root, "settings_timezone_text"), timezone_abbrev())
-    _fit_text_in_pill(root, text_id="zipcode_00000_text", button_id="zipcode_button")
-    _fit_text_in_pill(
-        root, text_id="settings_timezone_text", button_id="settings_timezone_button"
-    )
-    # Live HH:MM:SS is painted per second by draw_pigeon_settings_clock().
-    _set_visible(_by_id(root, "settings_timezoe_clock", "settings_timezone_clock"), False)
 
     _sync_version_text(root, state)
     _sync_status_lights(root, state)
 
-    for key in UI_COLOR_KEYS:
-        group = _by_id(root, f"ui_color_{key}_group")
-        _sync_stroke_button(_child_with(group, "_butt"), selected=focused == f"color:{key}")
+    # section1: the open menu's six tiles on a UI-colored plate, named below.
+    panel = _by_id(root, "toggle_01_button")
+    if panel is not None:
+        _set_paint(panel, fill=ui_hex)
+    for n, slot in enumerate(view_slots(view), start=1):
+        selected = bool(slot.focus_id) and (
+            focused == slot.focus_id or (kb_zip and slot.focus_id == "zipcode")
+        )
+        _sync_slot(root, n, slot, state, selected=selected, ui_hex=ui_hex)
+    section1 = _by_id(root, "section1_togles")
+    if section1 is not None and panel is not None:
+        title = next((c for c in section1 if _local(c) == "text"), None)
+        if title is not None:
+            x0, _, x1, _ = _bbox(panel)
+            _set_label(title, view, cx=(x0 + x1) * 0.5, size=36)
 
-    ui_hex = str(getattr(state.theme, "ui", "") or _COLOR_WHITE)
-    well_hex = _COLOR_TOGGLE_WELL_ON_WHITE if ui_hex.upper() == _COLOR_WHITE else ui_hex
-    values = getattr(state, "options_values", None) or None
-    for n in OPTION_NUMBERS:
-        group = _option_group(root, n)
-        if group is None:
-            continue
-        _sync_stroke_button(_child_with(group, "_button"), selected=focused == f"option:{n}")
-        shape = _child_with(group, "shape_ui_color")
-        if shape is not None:
-            _set_paint(shape, fill=well_hex)
-        _sync_toggle_knob(group, is_b=option_is_b(n, values))
-
-    _sync_stroke_button(_by_id(root, "settings_reset_button"), selected=focused == "reset")
-    _sync_stroke_button(
-        _by_id(root, "settings_update_button", "setting_update_button"),
-        selected=focused == "update",
-    )
+    _sync_sections(root, state, focused=focused, ui_hex=ui_hex)
 
 
 # --- clip-path (PyMuPDF ignores it) -----------------------------------------
@@ -558,7 +852,7 @@ def timezone_dropdown_rows(state: MainSettingsState) -> tuple[list[str], int, in
     return labels, first, focus
 
 
-def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState, root: ET.Element) -> None:
+def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
     from PIL import Image, ImageDraw
 
     from pigeon.font_paths import resolve_digital7_font, resolve_ui_font_bold
@@ -567,15 +861,10 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState, root: E
     labels, first, focus = timezone_dropdown_rows(state)
     if not labels:
         return
-    button = _by_id(root, "settings_timezone_button")
-    try:
-        bx = float(button.get("x")) if button is not None else 1323.43
-        by = float(button.get("y")) + float(button.get("height")) if button is not None else 838.61
-    except (TypeError, ValueError):
-        bx, by = 1323.43, 838.61
+    bx, by = _DROPDOWN_ANCHOR_SVG
     x0, y0 = _svg_to_px(bx, by)
     x0 = int(round(x0))
-    y0 = int(round(y0)) + _DROPDOWN_TOP_GAP
+    y0 = int(round(y0))
     h = len(labels) * (_DROPDOWN_ROW_H + _DROPDOWN_ROW_GAP) - _DROPDOWN_ROW_GAP
     patch = Image.new("RGBA", (_DROPDOWN_ROW_W, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(patch)
@@ -584,12 +873,14 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState, root: E
     for i, label in enumerate(labels):
         top = i * (_DROPDOWN_ROW_H + _DROPDOWN_ROW_GAP)
         selected = first + i == focus
-        fill = (255, 255, 255, 255) if selected else (0x23, 0x1F, 0x20, 255)
+        fill = (255, 255, 255, 255) if selected else (0, 0, 0, 255)
         ink = (0, 0, 0, 255) if selected else (255, 255, 255, 255)
         draw.rounded_rectangle(
             (0, top, _DROPDOWN_ROW_W - 1, top + _DROPDOWN_ROW_H - 1),
             radius=_DROPDOWN_RADIUS,
             fill=fill,
+            outline=(255, 255, 255, 255),
+            width=2,
         )
         draw.text(
             (_DROPDOWN_ROW_W // 2, top + _DROPDOWN_ROW_H // 2),
@@ -626,7 +917,6 @@ def render_pigeon_settings_bgra(
     # the clip pass, which would otherwise lift them on top of the page.
     _set_visible(_by_id(root, "background"), False)
     _prune_display_none(root)
-    dropdown_root = copy.deepcopy(root) if getattr(st, "tz_dropdown_open", False) else None
     # Before the background sweep: it hides rotated rects, which would empty
     # the reset icon's rotated clip rectangle.
     clipped = _extract_clipped_layers(root)
@@ -646,8 +936,8 @@ def render_pigeon_settings_bgra(
     frame = _composite_bgra_over_bgra(bg, ui_bgra)
     if frame is bg:
         frame = bg.copy()
-    if dropdown_root is not None:
-        _draw_timezone_dropdown(frame, st, dropdown_root)
+    if getattr(st, "tz_dropdown_open", False):
+        _draw_timezone_dropdown(frame, st)
     if clock:
         frame = draw_pigeon_settings_clock(frame)
     return frame
@@ -712,8 +1002,8 @@ def draw_pigeon_settings_clock(frame: np.ndarray, now: datetime | None = None) -
     return out
 
 
-# Free strip under the toggle row, left of RESET (design px on the 1280x800 page).
-_COMPANION_CODE_XY = (70, 612)
+# Free strip under the section names (design px on the 1280x800 page).
+_COMPANION_CODE_XY = (70, 668)
 _COMPANION_CODE_FONT_PX = 34
 
 
@@ -844,8 +1134,13 @@ def factory_reset_pigeon_persisted_state() -> None:
 
 
 __all__ = [
-    "OPTION_NUMBERS",
-    "UI_COLOR_KEYS",
+    "OPT_AUTO_UPDATE",
+    "OPT_CLOCK_FORMAT",
+    "OPT_TEMP",
+    "OPT_TIME",
+    "Slot",
+    "THEME_KEYS",
+    "VIEWS",
     "apply_pigeon_settings_svg_state",
     "clear_pigeon_settings_render_caches",
     "color_key_for_focus",
@@ -854,10 +1149,15 @@ __all__ = [
     "draw_companion_code",
     "factory_reset_pigeon_persisted_state",
     "normalize_pigeon_focus_id",
+    "normalize_view",
     "option_for_focus",
     "pigeon_clock_label",
     "pigeon_focus_ring",
     "render_pigeon_settings_bgra",
+    "section_targets",
+    "theme_key_for_focus",
     "timezone_dropdown_rows",
     "version_label",
+    "view_for_section",
+    "view_slots",
 ]

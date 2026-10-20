@@ -131,7 +131,7 @@ Canonical list is also in Developer settings via `pigeon/hotkeys.py`.
 
 In visualizer mode, turning the encoder (or Left / Right from an HID board)
 picks the zone-6 visualizer preset. **V** on a keyboard is the same as a long
-press. settings_pigeon option 5 is **auto / manual** update: auto (default) installs
+press. settings_pigeon's general menu has an **auto / manual** update toggle: auto (default) installs
 the latest OS only while nothing is playing; manual updates only via the Update
 button. The now-playing layout is always zone 11 (TT across zones 1–3 with input
 name, volume and TRT in zone 4). Presets are

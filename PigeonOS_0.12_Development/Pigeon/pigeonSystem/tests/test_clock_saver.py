@@ -239,8 +239,8 @@ class ClockSaverSvgTests(unittest.TestCase):
         from pigeon.widgets.options_settings import _normalize
         from pigeon.widgets.view_circles import render_centered_clock_widget_bgra
 
-        # The analog option was retired with the 0.8 options bar: saved values read digital.
-        self.assertEqual(_normalize({"clock_format": "analog"})["clock_format"], "digital")
+        # option6 on settings_pigeon (clock menu) picks digital / analog.
+        self.assertEqual(_normalize({"clock_format": "analog"})["clock_format"], "analog")
         self.assertEqual(_normalize({"clock_format": "digital"})["clock_format"], "digital")
         with patch(
             "pigeon.widgets.options_settings.clock_widget_analog", return_value=True

@@ -56,7 +56,7 @@ class _IsolatedStateTest(unittest.TestCase):
         return w
 
     def _focus(self, w: MainSettingsWidget, fid: str) -> None:
-        for _ in range(len(ps.pigeon_focus_ring())):
+        for _ in range(len(ps.pigeon_focus_ring(w.state.pigeon_view))):
             if w.state.pigeon_focused_id == fid:
                 return
             w.navigate(forward=True)
@@ -64,43 +64,66 @@ class _IsolatedStateTest(unittest.TestCase):
 
 
 class FocusRingTests(unittest.TestCase):
-    def test_navigation_order_matches_spec(self) -> None:
+    def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
-            ps.pigeon_focus_ring(),
+            ps.pigeon_focus_ring("general"),
+            ("exit", "option:2", "reset", "restart", "update", "option:5", "section2", "section3"),
+        )
+        self.assertEqual(
+            ps.pigeon_focus_ring("theme"),
             (
                 "exit",
-                "zipcode",
-                "timezone",
                 "color:blue",
                 "color:green",
                 "color:yellow",
-                "color:orange",
+                "color:pink",
                 "color:red",
-                "color:grey",
-                "color:white",
-                "option:1",
-                "option:2",
-                "option:3",
-                "option:4",
-                "option:5",
-                "reset",
-                "update",
+                "color:dark",
+                "section2",
+                "section3",
             ),
         )
+        self.assertEqual(
+            ps.pigeon_focus_ring("clock"),
+            ("exit", "option:1", "zipcode", "timezone", "option:6", "section2", "section3"),
+        )
 
-    def test_swatch_hexes_are_the_svg_icon_fills(self) -> None:
-        def full_hex(value: str) -> str:
-            h = value.strip().lower().lstrip("#")
-            return "#" + ("".join(c * 2 for c in h) if len(h) == 3 else h)
+    def test_default_menu_is_general(self) -> None:
+        self.assertEqual(ps.pigeon_focus_ring(), ps.pigeon_focus_ring("general"))
+        self.assertEqual(ps.normalize_view("bogus"), "general")
 
+    def test_section_buttons_swap_with_open_menu(self) -> None:
+        self.assertEqual(ps.section_targets("general"), ("theme", "clock"))
+        self.assertEqual(ps.section_targets("theme"), ("general", "clock"))
+        self.assertEqual(ps.section_targets("clock"), ("theme", "general"))
+        self.assertEqual(ps.view_for_section("theme", "section2"), "general")
+        self.assertEqual(ps.view_for_section("clock", "section3"), "general")
+        self.assertIsNone(ps.view_for_section("clock", "zipcode"))
+
+    def test_six_tiles_per_menu_and_tbd_is_not_focusable(self) -> None:
+        for view in ps.VIEWS:
+            self.assertEqual(len(ps.view_slots(view)), 6, view)
+        for slot in ps.view_slots("general") + ps.view_slots("clock"):
+            if slot.kind.startswith("tbd"):
+                self.assertEqual(slot.focus_id, "")
+
+    def test_dark_is_not_a_ui_color_to_preview(self) -> None:
+        self.assertEqual(ps.theme_key_for_focus("color:dark"), "dark")
+        self.assertIsNone(ps.color_key_for_focus("color:dark"))
+        self.assertEqual(ps.color_key_for_focus("color:pink"), "pink")
+
+    def test_theme_tiles_have_a_swatch(self) -> None:
+        for key in ps.THEME_KEYS:
+            if key != "dark":
+                self.assertRegex(ucs.hex_for_color_key("ui", key), r"^#[0-9A-Fa-f]{6}$", key)
+        self.assertEqual(ucs.hex_for_color_key("ui", "pink").upper(), "#FF5CA8")
+
+    def test_svg_has_the_eight_buttons(self) -> None:
         root = ET.parse(ps.default_pigeon_settings_svg_path()).getroot()
-        for key in ps.UI_COLOR_KEYS:
-            group = ps._by_id(root, f"ui_color_{key}_group")
-            icon = ps._child_with(group, "_icon")
-            self.assertIsNotNone(icon, key)
-            self.assertEqual(
-                full_hex(ucs.hex_for_color_key("ui", key)), full_hex(icon.get("fill")), key
-            )
+        for n in range(1, 7):
+            self.assertIsNotNone(ps._by_id(root, f"toggle_0{n}_group"), n)
+        for ident in ("section2_theme", "section2_general", "section3_clock", "exit_button"):
+            self.assertIsNotNone(ps._by_id(root, ident), ident)
 
 
 class IsolatedStateFixtureTests(unittest.TestCase):
@@ -175,67 +198,211 @@ class PageStateTests(_IsolatedStateTest):
         self.assertEqual("".join(text.itertext()).strip(), "PIGEON 0.11.40")
         self.assertEqual(text.get("text-anchor"), "end")
 
-    def test_zip_placeholder_and_saved_zip(self) -> None:
-        root = self._root(MainSettingsState())
-        self.assertEqual("".join(ps._by_id(root, "zipcode_00000_text").itertext()), "ENTER")
-        pigeon_locale._write(zip="21710", zip_source="manual")
-        root = self._root(MainSettingsState())
-        self.assertEqual("".join(ps._by_id(root, "zipcode_00000_text").itertext()), "21710")
+    def _texts(self, root: ET.Element) -> list[str]:
+        return ["".join(t.itertext()).strip() for t in root.iter() if t.tag.endswith("text")]
 
-    def test_toggle_knob_sits_beside_active_label(self) -> None:
-        root = self._root(
-            MainSettingsState(options_values={"time_format": "24", "zone4_mode": "visualizer"})
-        )
-        for n, is_b in ((1, True), (2, False), (3, False), (4, True)):
-            group = ps._option_group(root, n)
-            knobs = [
-                ps._child_with(group, "toggle_a_shape"),
-                ps._child_with(group, "toggle_b_shape"),
+    def _state(self, view: str, focus: str = "", **kw) -> MainSettingsState:
+        st = MainSettingsState(**kw)
+        st.pigeon_view = view
+        ring = ps.pigeon_focus_ring(view)
+        st.pigeon_focus_index = ring.index(focus) if focus in ring else 0
+        return st
+
+    def _tile_stroke(self, root: ET.Element, n: int) -> str:
+        group = ps._by_id(root, f"toggle_0{n}_group")
+        return next(c for c in group if ps._local(c) in ("rect", "path")).get("stroke")
+
+    def test_zip_placeholder_and_saved_zip(self) -> None:
+        root = self._root(self._state("clock"))
+        self.assertIn("ENTER", self._texts(root))
+        pigeon_locale._write(zip="21710", zip_source="manual")
+        root = self._root(self._state("clock"))
+        self.assertIn("21710", self._texts(root))
+        self.assertNotIn("ENTER", self._texts(root))
+
+    def test_section_names_follow_the_open_menu(self) -> None:
+        for view, names in (
+            ("general", ["general", "theme", "clock"]),
+            ("theme", ["theme", "general", "clock"]),
+            ("clock", ["clock", "theme", "general"]),
+        ):
+            root = self._root(self._state(view))
+            # Hidden section art is pruned at render; the tree still holds it.
+            visible = [
+                "".join(t.itertext()).strip()
+                for t in root.iter()
+                if t.tag.endswith("text") and not self._hidden(root, t)
+                and "".join(t.itertext()).strip() in ("general", "theme", "clock")
             ]
+            self.assertEqual(sorted(visible), sorted(names), view)
+
+    def _hidden(self, root: ET.Element, el: ET.Element) -> bool:
+        parents = {c: p for p in root.iter() for c in p}
+        while el is not None:
+            if el.get("display") == "none":
+                return True
+            el = parents.get(el)
+        return False
+
+    def test_general_tiles(self) -> None:
+        root = self._root(self._state("general"))
+        texts = self._texts(root)
+        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "AUTO", "MANUAL", "TBD"):
+            self.assertIn(label, texts, label)
+
+    def test_clock_tiles(self) -> None:
+        root = self._root(self._state("clock"))
+        texts = self._texts(root)
+        for label in ("12 HR", "24 HR", "ZIP", "TIME ZONE", "DIGITAL", "ANALOG", "TBD"):
+            self.assertIn(label, texts, label)
+
+    def test_toggle_knob_follows_the_option(self) -> None:
+        for values, slot_n, top in (
+            ({}, 1, True),
+            ({"temp_format": "c"}, 1, False),
+            ({"auto_update": "manual"}, 5, False),
+            ({"auto_update": "auto"}, 5, True),
+        ):
+            root = self._root(self._state("general", options_values=values))
+            group = ps._by_id(root, f"toggle_0{slot_n}_group")
+            graphics = next(c for c in group if ps._local(c) == "g")
+            _c, knobs, _l = ps._toggle_parts(graphics)
             shown = [k for k in knobs if k.get("display") != "none"]
-            self.assertEqual(len(shown), 1, n)
-            label_y = ps._svg_y(ps._option_label(group, "b" if is_b else "a"))
-            nearest = min(knobs, key=lambda k: abs(ps._svg_y(k) - label_y))
-            self.assertIs(shown[0], nearest, n)
+            self.assertEqual(len(shown), 1, (values, slot_n))
+            self.assertIs(shown[0], knobs[0] if top else knobs[1], (values, slot_n))
+
+    def test_clock_toggles_follow_options(self) -> None:
+        root = self._root(self._state("clock", options_values={"time_format": "24", "clock_format": "analog"}))
+        for slot_n in (1, 4):
+            graphics = next(c for c in ps._by_id(root, f"toggle_0{slot_n}_group") if ps._local(c) == "g")
+            _c, knobs, _l = ps._toggle_parts(graphics)
+            self.assertEqual([k.get("display") for k in knobs], ["none", None], slot_n)
 
     def test_toggle_wells_stay_grey_on_white_theme(self) -> None:
         for key, well in (("white", "#777777"), ("grey", "#777777"), ("blue", "#4B9EEC")):
             theme = ucs.theme_from_color_keys({"accent": "white", "ui": key, "button": "black"})
-            root = self._root(MainSettingsState(theme=theme))
-            for n in ps.OPTION_NUMBERS:
-                shape = ps._child_with(ps._option_group(root, n), "shape_ui_color")
-                self.assertEqual(shape.get("fill", "").upper(), well, (key, n))
+            root = self._root(self._state("general", theme=theme))
+            group = ps._by_id(root, "toggle_01_group")
+            container, _k, _l = ps._toggle_parts(next(c for c in group if ps._local(c) == "g"))
+            self.assertEqual(container.get("fill", "").upper(), well, key)
 
     def test_selected_tile_gets_white_stroke(self) -> None:
-        st = MainSettingsState()
-        st.pigeon_focus_index = ps.pigeon_focus_ring().index("color:grey")
-        root = self._root(st)
-        # The export names the grey button ``ui_color_red_button``; lookup is group-scoped.
-        grey = ps._child_with(ps._by_id(root, "ui_color_grey_group"), "_butt")
-        red = ps._child_with(ps._by_id(root, "ui_color_red_group"), "_butt")
-        self.assertEqual(grey.get("stroke"), "#FFFFFF")
-        self.assertEqual(red.get("stroke"), "#231F20")
+        root = self._root(self._state("general", "reset"))
+        self.assertEqual(self._tile_stroke(root, 2), "#FFFFFF")
+        self.assertEqual(self._tile_stroke(root, 3), "#231F20")
+
+    def test_selected_section_button_gets_white_stroke(self) -> None:
+        root = self._root(self._state("general", "section3"))
+        self.assertEqual(ps._by_id(root, "clock_container").get("stroke"), "#FFFFFF")
+        theme_rect = ps._first_rect(ps._by_id(root, "section2_theme"))
+        self.assertEqual(theme_rect.get("stroke"), "#231F20")
+
+    def test_theme_tiles_show_color_dots(self) -> None:
+        root = self._root(self._state("theme"))
+        fills = []
+        for n in range(1, 7):
+            group = ps._by_id(root, f"toggle_0{n}_group")
+            dots = [c for c in group if ps._local(c) == "circle"]
+            self.assertEqual(len(dots), 1, n)
+            fills.append(dots[0].get("fill").upper())
+        self.assertEqual(fills[:5], ["#4B9EEC", "#00A22D", "#E5FF0C", "#FF5CA8", "#FB0000"])
+        self.assertEqual(fills[5], "#000000")
+
+    def test_update_badge_only_when_an_update_exists(self) -> None:
+        def dots(root: ET.Element) -> int:
+            group = ps._by_id(root, "toggle_04_group")
+            return len([c for c in group if ps._local(c) == "circle"])
+
+        self.assertEqual(dots(self._root(self._state("general"))), 0)
+        self.assertEqual(dots(self._root(self._state("general", update_available=True))), 1)
+
+    def test_clock_hands_survive_the_background_sweep(self) -> None:
+        root = self._root(self._state("general"))
+        for hand in ("clock_hand_minute", "clock_hand_hour", "clock_hand_second"):
+            el = ps._by_id(root, hand)
+            self.assertEqual(ps._local(el), "polygon", hand)
 
 
 class NavigationTests(_IsolatedStateTest):
-    def test_color_row_previews_then_restores_committed(self) -> None:
+    def _open_menu(self, w: MainSettingsWidget, view: str) -> None:
+        """Activate the section button that loads ``view`` into section1."""
+        for _ in range(3):
+            if w.state.pigeon_view == view:
+                return
+            sec = "section2" if ps.section_targets(w.state.pigeon_view)[0] == view else "section3"
+            self._focus(w, sec)
+            w.activate()
+        self.assertEqual(w.state.pigeon_view, view)
+
+    def test_opens_on_general_at_first_tile(self) -> None:
         w = self._widget()
+        self.assertEqual(w.state.pigeon_view, "general")
+        self.assertEqual(w.state.pigeon_focused_id, "option:2")
+
+    def test_section_buttons_open_menus_and_turn_into_general(self) -> None:
+        w = self._widget()
+        self._focus(w, "section2")
+        self.assertEqual(w.activate(), "pigeon_view:theme")
+        self.assertEqual(w.state.pigeon_view, "theme")
+        # Focus stays on the button that was pressed — now the way back.
+        self.assertEqual(w.state.pigeon_focused_id, "section2")
+        self.assertEqual(w.activate(), "pigeon_view:general")
+        self.assertEqual(w.state.pigeon_view, "general")
+        self._focus(w, "section3")
+        self.assertEqual(w.activate(), "pigeon_view:clock")
+        self.assertEqual(w.state.pigeon_focused_id, "section3")
+        self.assertEqual(w.activate(), "pigeon_view:general")
+
+    def test_clock_menu_hands_section2_back_to_theme(self) -> None:
+        w = self._widget()
+        self._open_menu(w, "clock")
+        self._focus(w, "section2")
+        self.assertEqual(w.activate(), "pigeon_view:theme")
+
+    def test_theme_row_previews_then_restores_committed(self) -> None:
+        w = self._widget()
+        self._open_menu(w, "theme")
         self.assertEqual(w.state.ui_color_committed_key, "blue")
         self._focus(w, "color:red")
         self.assertEqual(w.state.theme.ui.upper(), "#FB0000")
-        self._focus(w, "option:1")
+        self._focus(w, "color:pink")
+        self.assertEqual(w.state.theme.ui.upper(), "#FF5CA8")
+        self._focus(w, "section3")
         self.assertEqual(w.state.theme.ui.upper(), "#4B9EEC")
         self.assertEqual(ucs.read_ui_color_keys()["ui"], "blue")
 
+    def test_leaving_theme_menu_drops_the_preview(self) -> None:
+        w = self._widget()
+        self._open_menu(w, "theme")
+        self._focus(w, "color:green")
+        self._focus(w, "section2")
+        self.assertEqual(w.state.theme.ui.upper(), "#4B9EEC")
+
     def test_activating_color_commits(self) -> None:
         w = self._widget()
-        self._focus(w, "color:orange")
-        self.assertEqual(w.activate(), "ui_color_swatch:ui:orange")
-        self._focus(w, "reset")
-        self.assertEqual(w.state.theme.ui.upper(), "#E39F00")
-        self.assertEqual(ucs.read_ui_color_keys()["ui"], "orange")
+        self._open_menu(w, "theme")
+        self._focus(w, "color:pink")
+        self.assertEqual(w.activate(), "ui_color_swatch:ui:pink")
+        self._focus(w, "section2")
+        self.assertEqual(w.state.theme.ui.upper(), "#FF5CA8")
+        self.assertEqual(ucs.read_ui_color_keys()["ui"], "pink")
 
-    def test_option_activation_persists(self) -> None:
+    def test_dark_tile_switches_to_the_dark_look_and_a_color_undoes_it(self) -> None:
+        from pigeon.widgets.options_settings import read_options, ui_is_monochrome
+
+        w = self._widget()
+        self._open_menu(w, "theme")
+        self._focus(w, "color:dark")
+        self.assertEqual(w.activate(), "ui_color_dark")
+        self.assertTrue(ui_is_monochrome())
+        self.assertEqual(read_options()["color_format"], "dark")
+        # Focusing dark never re-themes the page.
+        self.assertEqual(w.state.theme.ui.upper(), "#4B9EEC")
+        self._focus(w, "color:green")
+        self.assertEqual(w.activate(), "ui_color_swatch:ui:green")
+        self.assertFalse(ui_is_monochrome())
+
+    def test_temp_toggle_persists(self) -> None:
         w = self._widget()
         self._focus(w, "option:2")
         self.assertEqual(w.activate(), "options_toggle:2")
@@ -243,18 +410,7 @@ class NavigationTests(_IsolatedStateTest):
 
         self.assertEqual(read_options()["temp_format"], "c")
 
-    def test_option4_toggles_zone4_visualizer(self) -> None:
-        from pigeon.widgets.options_settings import zone4_visualizer_on
-
-        w = self._widget()
-        self.assertFalse(zone4_visualizer_on())
-        self._focus(w, "option:4")
-        self.assertEqual(w.activate(), "options_toggle:4")
-        self.assertTrue(zone4_visualizer_on())
-        w.activate()
-        self.assertFalse(zone4_visualizer_on())
-
-    def test_option5_toggles_auto_and_manual_update(self) -> None:
+    def test_auto_update_toggle(self) -> None:
         from pigeon.widgets.options_settings import auto_update_enabled
 
         w = self._widget()
@@ -265,18 +421,52 @@ class NavigationTests(_IsolatedStateTest):
         w.activate()
         self.assertTrue(auto_update_enabled())
 
-    def test_option5_labels_read_auto_and_manual(self) -> None:
-        import re
-        from pathlib import Path
+    def test_clock_mode_and_format_toggles(self) -> None:
+        from pigeon.widgets.options_settings import (
+            clock_uses_24h,
+            clock_widget_analog,
+        )
 
-        svg = (Path(__file__).resolve().parents[2] / "pigeonAssets" / "settings" / "pigeon" / "settings_pigeon.svg").read_text()
-        a = re.search(r'id="option5_update_a_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
-        b = re.search(r'id="option5_update_b_[^"]*"[^>]*>.*?<tspan[^>]*>([^<]*)</tspan>', svg, re.S)
-        self.assertEqual((a.group(1), b.group(1)), ("auto", "manual"))
+        w = self._widget()
+        self._open_menu(w, "clock")
+        self._focus(w, "option:1")
+        self.assertEqual(w.activate(), "options_toggle:1")
+        self.assertTrue(clock_uses_24h())
+        self._focus(w, "option:6")
+        self.assertEqual(w.activate(), "options_toggle:6")
+        self.assertTrue(clock_widget_analog())
+        w.activate()
+        self.assertFalse(clock_widget_analog())
+
+    def test_general_buttons_report_their_actions(self) -> None:
+        w = self._widget()
+        self._focus(w, "reset")
+        self.assertEqual(w.activate(), "pigeon_factory_reset")
+        self._focus(w, "restart")
+        self.assertEqual(w.activate(), "pigeon_restart")
+        self._focus(w, "update")
+        self.assertEqual(w.activate(), "update_popup:open")
+
+    def test_tbd_tiles_are_skipped_by_focus(self) -> None:
+        w = self._widget()
+        seen = set()
+        for _ in range(len(ps.pigeon_focus_ring("general")) * 2):
+            seen.add(w.state.pigeon_focused_id)
+            w.navigate(forward=True)
+        self.assertEqual(seen, set(ps.pigeon_focus_ring("general")))
+
+    def test_exit_menu_resets_to_general(self) -> None:
+        w = self._widget()
+        self._open_menu(w, "clock")
+        self._focus(w, "exit")
+        self.assertEqual(w.activate(), "exit")
+        self.assertFalse(w.state.show_pigeon_settings)
+        self.assertEqual(w.state.pigeon_view, "general")
 
     def test_timezone_dropdown_sets_manual_zone(self) -> None:
         pigeon_locale._write(timezone="America/New_York", tz_source="auto")
         w = self._widget()
+        self._open_menu(w, "clock")
         self._focus(w, "timezone")
         self.assertEqual(w.activate(), "timezone_dropdown_open")
         choices = pigeon_locale.timezone_choices()
@@ -288,6 +478,7 @@ class NavigationTests(_IsolatedStateTest):
 
     def test_zip_keyboard_saves_manual_zip(self) -> None:
         w = self._widget()
+        self._open_menu(w, "clock")
         self._focus(w, "zipcode")
         self.assertEqual(w.activate(), "keyboard_open:zipcode")
         w.state.keyboard.buffer = "21710"
@@ -362,15 +553,38 @@ class RetiredCustomizationTests(_IsolatedStateTest):
 
 
 class RenderTests(_IsolatedStateTest):
-    def test_clip_paths_are_applied(self) -> None:
-        frame = ps.render_pigeon_settings_bgra(MainSettingsState())
-        self.assertEqual(frame.shape, (800, 1280, 4))
-        # Reset arc (circle clipped by a rotated rect): white ink on the tile.
-        reset = frame[465:545, 920:1025, :3]
-        self.assertGreater(int(np.count_nonzero(np.all(reset > 200, axis=2))), 300)
-        # Update bar: gray only on the clipped right end, white on the left.
-        self.assertTrue(np.all(frame[515, 1100, :3] > 200))
-        self.assertTrue(np.all(np.abs(frame[515, 1175, :3].astype(int) - 0x4A) < 12))
+    def _frame(self, view: str) -> np.ndarray:
+        st = MainSettingsState()
+        st.pigeon_view = view
+        return ps.render_pigeon_settings_bgra(st)
+
+    def test_every_menu_renders(self) -> None:
+        frames = {v: self._frame(v) for v in ps.VIEWS}
+        for view, frame in frames.items():
+            self.assertEqual(frame.shape, (800, 1280, 4), view)
+        self.assertFalse(np.array_equal(frames["general"], frames["theme"]))
+        self.assertFalse(np.array_equal(frames["general"], frames["clock"]))
+
+    def test_clock_icon_hands_render_white(self) -> None:
+        # Section3 shows the clock icon on general/theme: its hands are white ink.
+        x, y = ps._svg_to_px(1635.8, 1128.0)
+        region = self._frame("general")[int(y) - 10 : int(y) + 100, int(x) - 60 : int(x) + 10, :3]
+        self.assertGreater(int(np.count_nonzero(np.all(region > 240, axis=2))), 150)
+
+    def test_section3_general_art_is_shifted_onto_section3(self) -> None:
+        frame = self._frame("clock")
+        x, y = ps._svg_to_px(1636.0, 1128.0)
+        # The "general" disc is the UI color (blue) there, not the dark container.
+        self.assertGreater(int(frame[int(y) + 70, int(x), 0]), 0xC0)
+
+    def test_timezone_dropdown_overlays_section2(self) -> None:
+        st = MainSettingsState()
+        st.pigeon_view = "clock"
+        st.tz_dropdown_open = True
+        with_list = ps.render_pigeon_settings_bgra(st)
+        st.tz_dropdown_open = False
+        without = ps.render_pigeon_settings_bgra(st)
+        self.assertFalse(np.array_equal(with_list, without))
 
     def test_clock_overlay_draws_in_its_span(self) -> None:
         from datetime import datetime

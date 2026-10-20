@@ -23,10 +23,7 @@
       <path d="M648.66,882.51h1143.85c17.46,0,31.64,14.18,31.64,31.64v441.41c0,17.46-14.18,31.64-31.64,31.64H648.67c-17.46,0-31.64-14.18-31.64-31.64v-441.41c0-17.46,14.18-31.64,31.64-31.64Z" fill="none"/>
     </clipPath>
     <clipPath id="clippath-7">
-      <rect id="settings_update_clipping_mask" x="1739.59" y="1174.17" width="91.93" height="63.35" fill="none"/>
-    </clipPath>
-    <clipPath id="clippath-8">
-      <rect id="settings_reset_icon_leplipse_clipping_mask" x="1375.18" y="1080.78" width="234.88" height="159.85" transform="translate(-101.31 143.59) rotate(-5.33)" fill="none"/>
+      <rect x="1182.53" y="1003.55" width="244.34" height="242.72" rx="121.36" ry="121.36" fill="none"/>
     </clipPath>
     <clipPath id="clippath-9">
       <polygon id="settings_input_wifi_clipping_mask" points="1672.93 727.78 1690.2 727.65 1681.45 742.54 1672.93 757.56 1664.41 742.54 1655.66 727.65 1672.93 727.78" fill="none"/>
@@ -55,145 +52,130 @@
       </g>
     </g>
   </g>
-  <g id="settings_update_group">
-    <g id="settings_update_icon_group">
-      <rect id="settings_update_button" x="1640.9" y="1132.76" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <rect id="settings_update_white" x="1663.58" y="1198.12" width="108.14" height="21.39" rx="6.67" ry="6.67" fill="#fff"/>
-      <g id="settings_update_icon_clipping_mask">
-        <g clip-path="url(#clippath-7)">
-          <rect id="settings_update_rectangle_full_grey" x="1663.58" y="1198.12" width="108.14" height="21.39" rx="6.67" ry="6.67" fill="#4a4a4a"/>
-        </g>
-      </g>
-      <text id="settings_update_update_text" transform="translate(1717.69 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">check</tspan></text>
-    </g>
-  </g>
-  <g id="settings_reset_group">
-    <rect id="settings_reset_button" x="1475.42" y="1134.15" width="153.26" height="151.54" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-    <g id="settings_reset_icon_group">
-      <g id="settings_reset_icon_eplipse">
-        <g clip-path="url(#clippath-8)">
-          <circle id="settings_reset_icon_eplipse_white" cx="1554.03" cy="1209.93" r="47" fill="none" stroke="#fff" stroke-miterlimit="10" stroke-width="8"/>
-        </g>
-      </g>
-      <polygon id="settings_reset_icon_triangle" points="1529 1216.23 1524.57 1236.98 1519.68 1257.63 1503.92 1243.42 1488.49 1228.86 1508.68 1222.32 1529 1216.23" fill="#fff"/>
-    </g>
-    <text id="settings_reset_text_white" transform="translate(1513.8022 1332.7421)" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.56" isolation="isolate"><tspan x="0" y="0">reset</tspan></text>
-  </g>
-  <g id="settings_tile_labels_group">
-    <text id="settings_label_time_text" transform="translate(724.81 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">time</tspan></text>
-    <text id="settings_label_temp_text" transform="translate(889.6 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">temp</tspan></text>
-    <text id="settings_label_color_text" transform="translate(1055.77 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">color</tspan></text>
-    <text id="settings_label_option_text" transform="translate(1222.1 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">option</tspan></text>
-    <text id="settings_label_update_text" transform="translate(1388.43 1332.0786)" text-anchor="middle" fill="#fff" font-family="Digital-7, Digital-7" font-size="33.68" isolation="isolate"><tspan x="0" y="0">update</tspan></text>
-  </g>
-  <g id="settings_option_group">
-    <g id="option1_time_format">
-      <rect id="option1_time_button" x="648.02" y="1130.89" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="option1_time_shape_ui_color" d="M744.38,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option1_time_24hr_b_text_white" transform="translate(694.0457 1278.9484) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0" letter-spacing="-.02em">2</tspan><tspan x="12.01" y="0">4 hr</tspan></text>
-      <text id="option1_time_12hr_a_text_white" transform="translate(694.2891 1155.5211)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">12 hr</tspan></text>
-      <path id="option1_time_toggle_b_shape_white" d="M740.18,1187.16c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-      <path id="option1_time_toggle_a_shape_white" d="M740.74,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-    </g>
-    <g id="option2_temp_group">
-      <rect id="option2_temp_button" x="812.25" y="1130.89" width="154.7" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="option2_temp_shape_ui_color" d="M913.01,1186.72v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option2_temp_c_b_text_white" transform="translate(880.0389 1279.179) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">c°</tspan></text>
-      <text id="option2_temp_f_a_text_white" transform="translate(881.8868 1155.7516)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">f°</tspan></text>
-      <path id="option2_temp_toggle_b_shape_white" d="M909.37,1188.48c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-      <path id="option2_temp_toggle_a_shape_white" d="M909.37,1231.04c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-    </g>
-    <g id="option3_dark_group">
-      <rect id="option3_theme_shape_button" x="978.98" y="1130.89" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="option3_theme_shape_ui_color" d="M1074.53,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option3_theme_b_dark_text_white" transform="translate(1028.8978 1278.9484) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">dark</tspan></text>
-      <text id="option3_theme_a_theme_text_white" transform="translate(1018.2512 1155.5211)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">theme</tspan></text>
-      <path id="option3_theme_toggle_b_shape_white" d="M1070.89,1187.35c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-      <path id="option3_theme_toggle_a_shape_white" d="M1070.89,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-    </g>
-    <g id="optionv_visualizer_grpup">
-      <rect id="option4_theme_shape_button" x="1145.31" y="1130.89" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="option4_theme_shape_ui_color" d="M1240.86,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option4_theme_b_dark_text_white" transform="translate(1171.4264 1278.9484) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">visualizer</tspan></text>
-      <text id="option4_theme_a_theme_text_white" transform="translate(1198.6103 1155.5211)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">info</tspan></text>
-      <path id="option4_theme_toggle_b_shape_white" d="M1237.22,1187.35c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-      <path id="option4_theme_toggle_a_shape_white" d="M1237.22,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-    </g>
-    <g id="option5_update_group">
-      <rect id="option5_update_button" x="1311.64" y="1130.89" width="153.58" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="option5_update_shape_ui_color" d="M1407.19,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
-      <text id="option5_update_b_manual_text_white" transform="translate(1388.4300 1278.9484) scale(1 1.0638)" text-anchor="middle" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">manual</tspan></text>
-      <text id="option5_update_a_auto_text_white" transform="translate(1388.4300 1155.5211)" text-anchor="middle" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">auto</tspan></text>
-      <path id="option5_update_toggle_b_shape_white" d="M1403.55,1187.35c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-      <path id="option5_update_toggle_a_shape_white" d="M1403.55,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
-    </g>
-  </g>
-  <g id="settings_ui_color_group">
-    <g id="ui_color_white_group">
-      <path id="ui_color_white_button" d="M1782.08,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <circle id="ui_color_white_icon" cx="1720.31" cy="1042.78" r="39.65" fill="#fff" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_grey_group">
-      <path id="ui_color_red_button" d="M1616.6,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_red_icon" d="M1594.55,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#777" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_red_group">
-      <path id="ui_color_red_button-2" data-name="ui_color_red_button" d="M1451.12,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_red_icon-2" data-name="ui_color_red_icon" d="M1427.95,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#fb0000" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_orange_group">
-      <path id="ui_color_orange_button" d="M1285.64,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_orange_icon" d="M1261.9,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#e39f00" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_yellow_group">
-      <path id="ui_color_yellow_button" d="M1120.16,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_yellow_icon" d="M1096.41,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#e5ff0c" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_green_group">
-      <path id="ui_color_green_butto" d="M954.68,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_green_icon" d="M930.93,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#00a22d" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-    <g id="ui_color_blue_group">
-      <path id="ui_color_blue_button" d="M789.2,1119.57h-126.78c-7.4,0-13.4-6-13.4-13.4v-126.78c0-7.4,6-13.4,13.4-13.4h126.78c7.4,0,13.4,6,13.4,13.4v126.78c0,7.4-6,13.4-13.4,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
-      <path id="ui_color_blue_icon" d="M765.45,1042.78c0,21.9-17.75,39.65-39.65,39.65s-39.65-17.75-39.65-39.65,17.75-39.65,39.65-39.65,39.65,17.75,39.65,39.65" fill="#4b9eec" stroke="#231f20" stroke-miterlimit="10"/>
-    </g>
-  </g>
-  <g id="settings_input_audio_group">
-    <rect id="settings_pigeon_09_audio_button" x="1755.64" y="723.31" width="39.95" height="39.95" rx="10.35" ry="10.35" fill="#58ff00"/>
-    <g id="settings_input_audio_icon_group">
-      <circle id="settings_input_audio_dot_outter" cx="1776" cy="743.3" r="12.13"/>
-      <circle id="settings_input_audio_dot_middle" cx="1776" cy="743.3" r="7.53" fill="#58ff00"/>
-      <circle id="settings_input_audio_dot_inner" cx="1776" cy="743.3" r="4.95" stroke="#000" stroke-miterlimit="10" stroke-width="2"/>
-    </g>
-  </g>
-  <g id="settings_input_metadata_group">
-    <rect id="settings_input_metadata_button" x="1704.45" y="723.31" width="39.3" height="39.3" rx="10.35" ry="10.35" fill="#58ff00"/>
-    <text id="settings_input_metadata_icon" transform="translate(1705.9261 751.9778)" font-family="SharpSans-Extrabold, &apos;Sharp Sans&apos;" font-size="23.6" font-weight="700"><tspan x="0" y="0">&lt;/&gt;</tspan></text>
-  </g>
-  <g id="settings_input_wifi_group">
-    <rect id="settings_input_wifi_button" x="1652.62" y="723.31" width="39.95" height="39.95" rx="10.35" ry="10.35" fill="#58ff00"/>
-    <g id="settings_input_wifi_icon_group">
-      <g clip-path="url(#clippath-9)">
-        <g id="settings_input_wifi_circles_group">
-          <circle id="settings_input_wifi_circle_inner" cx="1672.93" cy="771.4" r="18.21" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
-          <circle id="settings_input_wifi_circle_middle" cx="1672.93" cy="771.4" r="28.85" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
-          <circle id="settings_input_wifi_circle_outter" cx="1672.93" cy="771.4" r="38.18" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
-        </g>
-      </g>
-    </g>
-  </g>
   <g id="settings_pigeon_version_group">
     <text id="settings_pigeon_version_text" transform="translate(1516.6717 830.0938)" fill="#fff" font-family="Digital-7, Digital-7" font-size="56.86" isolation="isolate"><tspan x="0" y="0" xml:space="preserve"> pigeon 0.7.81</tspan></text>
   </g>
-  <g id="settings_timezone_group">
-    <rect id="settings_timezone_button" x="1323.43" y="777.92" width="103.11" height="60.69" rx="18.35" ry="18.35" fill="#231f20"/>
-    <text id="settings_timezone_text" transform="translate(1336.9809 829.244)" fill="#fff" font-family="Digital-7, Digital-7" font-size="60"><tspan x="0" y="0">EST</tspan></text>
-    <text id="settings_timezoe_clock" transform="translate(1163.811 830.0938)" fill="#fff" font-family="Digital-7, Digital-7" font-size="60"><tspan x="0" y="0">10:06:15</tspan></text>
+  <g id="section3_clock">
+    <rect id="clock_container" data-name="clock)container" x="1474.95" y="964.95" width="322.03" height="319.91" rx="14.23" ry="14.23" fill="#231f20"/>
+    <text transform="translate(1593.9709 1329.8291)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="36" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">c</tspan><tspan x="21.56" y="0" letter-spacing="0em">l</tspan><tspan x="30.38" y="0" letter-spacing="0em">o</tspan><tspan x="53.53" y="0" letter-spacing="0em">c</tspan><tspan x="75.1" y="0">k</tspan></text>
+    <g id="clock">
+      <circle id="clock_face" cx="1635.67" cy="1128.68" r="119.96" fill="#b00"/>
+      <rect id="clock_hand_minute" x="1626.68" y="1122.48" width="18.89" height="106.14" rx="6.16" ry="6.16" transform="translate(3272.2485 2351.1072) rotate(-180)" fill="#fff"/>
+      <rect id="clock_hand_hour" x="1595.94" y="1061.3" width="17.11" height="92.17" rx="5.58" ry="5.58" transform="translate(-176.7425 1899.7813) rotate(-58.5949)" fill="#fff"/>
+      <rect id="clock_hand_second" x="1684.31" y="1069.46" width="7.83" height="115.64" rx="2.55" ry="2.55" transform="translate(560.9447 2815.4973) rotate(-89.9999)" fill="#231f20"/>
+      <circle id="clock_center" cx="1635.82" cy="1127.38" r="5.71" fill="#b00"/>
+    </g>
   </g>
-  <g id="settings_zipcode_group">
-    <rect id="zipcode_button" x="948.62" y="778.42" width="137.41" height="60.69" rx="18.35" ry="18.35" fill="#231f20"/>
-    <text id="zipcode_zip_text" transform="translate(859.62 830.09)" fill="#fff" font-family="Digital-7, Digital-7" font-size="60"><tspan x="0" y="0">zip:</tspan></text>
-    <text id="zipcode_00000_text" transform="translate(965.03 829.64)" fill="#fff" font-family="Digital-7, Digital-7" font-size="60"><tspan x="0" y="0">21710</tspan></text>
+  <g id="section2_theme">
+    <g id="menu1_themne">
+      <rect x="1143.36" y="964.95" width="323.16" height="319.91" rx="14.23" ry="14.23" fill="#231f20"/>
+      <g clip-path="url(#clippath-7)">
+        <rect x="1177.94" y="1176.98" width="479.23" height="78.85" transform="translate(-423.5484 1531.7262) rotate(-50.3515)" fill="#590000"/>
+        <rect x="1127.65" y="1148.87" width="479.23" height="52.1" transform="translate(-409.8101 1477.9809) rotate(-50.3513)" fill="#720000"/>
+        <rect x="1084.92" y="1109.75" width="479.23" height="59.12" transform="translate(-397.8612 1432.2013) rotate(-50.3514)" fill="#890000"/>
+        <rect x="1046.9" y="1081.55" width="478.93" height="52.65" transform="translate(-387.4689 1391.4334) rotate(-50.3515)" fill="#a30000"/>
+        <rect x="1005.4" y="1044.09" width="478.63" height="58.16" transform="translate(-375.8183 1346.7962) rotate(-50.3513)" fill="#bc0606"/>
+        <rect x="953.43" y="990.23" width="479.23" height="80.24" transform="translate(-361.5507 1291.5192) rotate(-50.3513)" fill="#d60000"/>
+        <rect x="1182.53" y="1003.55" width="244.34" height="242.72" rx="121.36" ry="121.36" fill="none"/>
+      </g>
+      <text transform="translate(1243.5937 1329.8291)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="36" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">t</tspan><tspan x="14.94" y="0" letter-spacing="0em">h</tspan><tspan x="36.61" y="0">e</tspan><tspan x="59.25" y="0" letter-spacing="0em">m</tspan><tspan x="92.95" y="0" letter-spacing="0em">e</tspan></text>
+    </g>
+  </g>
+  <g id="section2_general">
+    <rect x="1143.36" y="964.95" width="323.16" height="319.91" rx="14.23" ry="14.23" fill="#231f20"/>
+    <rect x="1182.53" y="1003.55" width="244.34" height="242.72" rx="121.36" ry="121.36" fill="#b00"/>
+    <text transform="translate(1243.5937 1329.8291)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="36" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">t</tspan><tspan x="14.94" y="0" letter-spacing="0em">h</tspan><tspan x="36.61" y="0">e</tspan><tspan x="59.25" y="0" letter-spacing="0em">m</tspan><tspan x="92.95" y="0" letter-spacing="0em">e</tspan></text>
+    <text transform="translate(1222.306 1134.1546)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="48" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">pi</tspan><tspan x="43.15" y="0" letter-spacing="0em">g</tspan><tspan x="74.54" y="0" letter-spacing="0em">e</tspan><tspan x="104.69" y="0" letter-spacing="0em">on</tspan></text>
+  </g>
+  <g id="section1_togles">
+    <path id="toggle_01_button" d="M1091.17,1282.99h-400.79c-23.39,0-42.36-12.38-42.36-27.64v-261.52c0-15.26,18.96-27.64,42.36-27.64h400.79c23.39,0,42.36,12.38,42.36,27.64v261.52c0,15.26-18.97,27.64-42.36,27.64" fill="red"/>
+    <g id="toggle_06_group">
+      <rect id="toggle_06_button" x="979.46" y="1130.89" width="154.06" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_06">
+        <path id="toggle6_containter" d="M1074.53,1186.49v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <text id="toggle6_switch_b_white" transform="translate(1045.5404 1278.9484) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle6_switch_a_white" transform="translate(1046.0651 1155.5211)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+        <path id="toggle6_text_b_white" d="M1070.89,1187.35c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle6_text_a_white" d="M1070.89,1230.81c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+      </g>
+    </g>
+    <g id="toggle_05_group">
+      <rect id="toggle_05" x="814.23" y="1130.89" width="153.83" height="152.1" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_05-2" data-name="toggle_05">
+        <path id="toggle5_container" d="M913.01,1186.72v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <text id="toggle5_switch_b_white" transform="translate(884.0184 1279.179) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle5_switch_a_white" transform="translate(884.543 1155.7516)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+        <path id="toggle5_text_b_white" d="M909.37,1188.48c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle5_text_a_white" d="M909.37,1231.04c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+      </g>
+    </g>
+    <g id="toggle_04_group">
+      <rect id="toggle_04_button" x="648.02" y="1131.12" width="154.84" height="151.87" rx="10.35" ry="10.35" fill="#1a1a1a" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_04">
+        <path id="toggle4_container" d="M747.54,1183.9v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <path id="toggle4_switch_1_white" d="M743.9,1184.76c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle4_switch_b_white" d="M743.9,1228.22c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <text id="toggle4_text_b_white" transform="translate(718.5498 1276.359) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle4_text_a_white" transform="translate(719.0745 1152.9317)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+      </g>
+    </g>
+    <g id="toggle_03_group">
+      <path id="toggle_03_button" d="M1119.8,1119.77h-127c-7.41,0-13.42-6-13.42-13.4v-126.78c0-7.4,6.01-13.4,13.42-13.4h127c7.41,0,13.42,6,13.42,13.4v126.78c0,7.4-6.01,13.4-13.42,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_03">
+        <path id="toggle3_container" d="M1078.41,1019.62v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <path id="toggle3_switch_b_white" d="M1074.77,1063.94c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle3_switch_a_white" d="M1074.77,1020.48c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <text id="toggle3_text_b_white" transform="translate(1049.4155 1112.079) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle3_text_a_white" transform="translate(1049.9402 988.6517)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+      </g>
+    </g>
+    <g id="toggle_02_group">
+      <path id="toggle_02_button" d="M954.64,1119.77h-127.01c-7.41,0-13.42-6-13.42-13.4v-126.78c0-7.4,6.01-13.4,13.42-13.4h127.01c7.41,0,13.42,6,13.42,13.4v126.78c0,7.4-6.01,13.4-13.42,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_02">
+        <path id="toggle2_container" d="M913.25,1019.62v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <path id="toggle2_switch_b_white" d="M909.61,1063.94c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle2_switch_a_white" d="M909.61,1020.48c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <text id="toggle2_text_b_white" transform="translate(884.257 1112.079) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle2_text_a_white" transform="translate(884.78 988.65)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+      </g>
+    </g>
+    <g id="toggle_01_group">
+      <path id="toggle_01_button-2" data-name="toggle_01_button" d="M789.38,1119.77h-127.85c-7.46,0-13.51-6-13.51-13.4v-126.78c0-7.4,6.05-13.4,13.51-13.4h127.85c7.46,0,13.51,6,13.51,13.4v126.78c0,7.4-6.05,13.4-13.51,13.4" fill="#231f20" stroke="#231f20" stroke-miterlimit="10" stroke-width="3"/>
+      <g id="toggle_01">
+        <path id="toggle1_container" d="M747.54,1019.62v44.21c0,12.21-9.9,22.11-22.1,22.11s-22.11-9.9-22.11-22.11v-44.21c0-12.21,9.9-22.11,22.11-22.11s22.1,9.9,22.1,22.11" fill="#fb0000"/>
+        <path id="toggle1_switch_b_white" d="M743.9,1063.94c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <path id="toggle1_switch_a_white" d="M743.9,1020.48c0,10.2-8.27,18.47-18.47,18.47s-18.47-8.27-18.47-18.47,8.27-18.46,18.47-18.46,18.47,8.27,18.47,18.46" fill="#fff"/>
+        <text id="toggle1_text_b_white" transform="translate(718.5498 1112.079) scale(1 1.0638)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700" letter-spacing="-.02em"><tspan x="0" y="0">b</tspan></text>
+        <text id="toggle1_text_a_white" transform="translate(719.07 988.65)" fill="#fff" font-family="SharpSans-Bold, &apos;Sharp Sans&apos;" font-size="21" font-weight="700"><tspan x="0" y="0">a</tspan></text>
+      </g>
+    </g>
+    <text transform="translate(822.0468 1329.8291)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="36" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">g</tspan><tspan x="23.54" y="0">e</tspan><tspan x="46.19" y="0" letter-spacing="0em">n</tspan><tspan x="67.9" y="0">e</tspan><tspan x="90.54" y="0" letter-spacing="-.02em">r</tspan><tspan x="104.98" y="0" letter-spacing="0em">a</tspan><tspan x="128.59" y="0">l</tspan></text>
+  </g>
+  <g id="connetions">
+    <g id="settings_input_audio_group">
+      <rect id="settings_pigeon_09_audio_button" x="1755.64" y="723.31" width="39.95" height="39.95" rx="10.35" ry="10.35" fill="#58ff00"/>
+      <g id="settings_input_audio_icon_group">
+        <circle id="settings_input_audio_dot_outter" cx="1776" cy="743.3" r="12.13"/>
+        <circle id="settings_input_audio_dot_middle" cx="1776" cy="743.3" r="7.53" fill="#58ff00"/>
+        <circle id="settings_input_audio_dot_inner" cx="1776" cy="743.3" r="4.95" stroke="#000" stroke-miterlimit="10" stroke-width="2"/>
+      </g>
+    </g>
+    <g id="settings_input_metadata_group">
+      <rect id="settings_input_metadata_button" x="1704.45" y="723.31" width="39.3" height="39.3" rx="10.35" ry="10.35" fill="#58ff00"/>
+      <text id="settings_input_metadata_icon" transform="translate(1705.9261 751.9778)" font-family="SharpSans-Extrabold, &apos;Sharp Sans&apos;" font-size="23.6" font-weight="700"><tspan x="0" y="0">&lt;/&gt;</tspan></text>
+    </g>
+    <g id="settings_input_wifi_group">
+      <rect id="settings_input_wifi_button" x="1652.62" y="723.31" width="39.95" height="39.95" rx="10.35" ry="10.35" fill="#58ff00"/>
+      <g id="settings_input_wifi_icon_group">
+        <g clip-path="url(#clippath-9)">
+          <g id="settings_input_wifi_circles_group">
+            <circle id="settings_input_wifi_circle_inner" cx="1672.93" cy="771.4" r="18.21" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
+            <circle id="settings_input_wifi_circle_middle" cx="1672.93" cy="771.4" r="28.85" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
+            <circle id="settings_input_wifi_circle_outter" cx="1672.93" cy="771.4" r="38.18" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
+          </g>
+        </g>
+      </g>
+    </g>
   </g>
   <g id="exit_group">
     <path id="exit_button" d="M739.17,844.89h-80.12c-8.45,0-15.29-6.85-15.29-15.29v-28.5c0-9.33,7.56-16.89,16.89-16.89h78.52c8.44,0,15.29,6.85,15.29,15.29v30.1c0,8.44-6.85,15.29-15.29,15.29" fill="#231f20"/>
