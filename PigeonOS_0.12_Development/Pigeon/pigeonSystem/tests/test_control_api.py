@@ -128,8 +128,46 @@ class RouteTests(_Base):
         with mock.patch.object(ms, "suggest_now", return_value=rows) as sn:
             st, body = self.call("GET", "/search/suggest", query={"q": ["blade run"], "limit": ["99"]})
         self.assertEqual(st, 200)
-        self.assertEqual(sn.call_args.kwargs["limit"], 6)  # clamped
+        self.assertEqual(sn.call_args.kwargs["limit"], 12)  # clamped
         self.assertEqual(body["results"][0], {"tmdb_id": 78, "kind": "movie", "title": "Blade Runner", "year": 1982})
+
+    def test_suggest_artwork_posters_always_logos_on_request(self) -> None:
+        rows = (
+            {"title": "A New Hope", "year": "1977", "kind": "movie", "tmdb_id": 11, "poster_path": "/p11.jpg"},
+            {"title": "The Clone Wars", "year": "2008", "kind": "tv", "tmdb_id": 4194, "poster_path": ""},
+        )
+        with mock.patch.object(ms, "suggest_now", return_value=rows), mock.patch.object(
+            ms, "logo_urls", return_value={11: "https://image.tmdb.org/t/p/w300/l11.png"}
+        ) as lu:
+            _st, plain = self.call("GET", "/search/suggest", query={"q": ["star wars"]})
+            _st, rich = self.call("GET", "/search/suggest", query={"q": ["star wars"], "logos": ["1"]})
+        self.assertEqual(lu.call_count, 1)  # only the logos=1 request looks logos up
+        first = plain["results"][0]
+        self.assertEqual(first["poster_url"], "https://image.tmdb.org/t/p/w185/p11.jpg")
+        self.assertNotIn("logo_url", first)
+        self.assertNotIn("poster_url", plain["results"][1])
+        self.assertEqual(rich["results"][0]["logo_url"], "https://image.tmdb.org/t/p/w300/l11.png")
+        self.assertNotIn("logo_url", rich["results"][1])
+
+    def test_logo_urls_picks_english_logo_and_survives_failures(self) -> None:
+        rows = (
+            {"kind": "movie", "tmdb_id": 901},
+            {"kind": "movie", "tmdb_id": 902},
+            {"kind": "tv", "tmdb_id": 903},
+        )
+        ms._LOGO_CACHE.clear()
+        self.addCleanup(ms._LOGO_CACHE.clear)
+
+        def images(kind: str, media_id: int) -> dict:
+            if media_id == 902:
+                raise RuntimeError("boom")
+            if media_id == 903:
+                return {"logos": []}
+            return {"logos": [{"iso_639_1": "en", "file_path": "/en.png", "vote_average": 5}]}
+
+        with mock.patch("pigeon.tmdb_poster.fetch_media_images", side_effect=images):
+            out = ms.logo_urls(rows)
+        self.assertEqual(out, {901: "https://image.tmdb.org/t/p/w300/en.png"})
 
     def test_status_provider_wins_over_manual_idle(self) -> None:
         svc = ControlService(status_provider=lambda: {"state": "playing", "now_playing": {"title": "X", "source": "detected"}})

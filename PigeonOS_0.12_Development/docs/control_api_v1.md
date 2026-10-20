@@ -219,19 +219,22 @@ Returns the cached poster image (`image/jpeg`) for the current title, size `w500
 
 Wraps `pigeon/manual_search.py`. Suggestion lookups are debounced and off-thread on the device.
 
-`GET /search/suggest?q=<text>&limit=3`
+`GET /search/suggest?q=<text>&limit=3&logos=1`
 
 ```json
 {
   "query": "blade run",
   "results": [
-    { "tmdb_id": 335984, "kind": "movie", "title": "Blade Runner 2049", "year": 2017 },
-    { "tmdb_id": 78,     "kind": "movie", "title": "Blade Runner",      "year": 1982 }
+    { "tmdb_id": 335984, "kind": "movie", "title": "Blade Runner 2049", "year": 2017,
+      "poster_url": "https://image.tmdb.org/t/p/w185/….jpg",
+      "logo_url": "https://image.tmdb.org/t/p/w300/….png" },
+    { "tmdb_id": 78,     "kind": "movie", "title": "Blade Runner",      "year": 1982,
+      "poster_url": "https://image.tmdb.org/t/p/w185/….jpg" }
   ]
 }
 ```
 
-Query must be ≥ 2 characters (`400` otherwise). `limit` 1–6, default 3 (the device caps its TMDb fetch at 6). The call blocks until TMDb answers, so there is no `pending` state; clients debounce.
+Query must be ≥ 2 characters (`400` otherwise). `limit` 1–12, default 3 (the device caps its TMDb fetch at 12). `poster_url` is included whenever TMDb has a poster. `logo_url` (the title-treatment logo, English only) is included only with `logos=1`, because it costs the device one extra TMDb lookup per result (about a second for 12); a title with no English logo simply has no `logo_url`. Clients load both images straight from TMDb. Both fields are optional additions. The call blocks until TMDb answers, so there is no `pending` state; clients debounce.
 
 `GET /search/current` → `{ "active": true, "entry": { "title": "...", "kind": "movie", "tmdb_id": 335984 } }` or `{ "active": false }`.
 

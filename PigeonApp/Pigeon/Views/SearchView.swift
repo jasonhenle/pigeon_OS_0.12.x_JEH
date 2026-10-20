@@ -61,6 +61,15 @@ final class SearchModel: ObservableObject {
             do {
                 let r = try await client.suggest(q)
                 if !Task.isCancelled { self.results = r; self.errorText = nil }
+                // Logos cost the device one TMDb lookup per title, so they fill in after the list shows.
+                if !Task.isCancelled, let rich = try? await client.suggest(q, logos: true), !Task.isCancelled {
+                    let logos = Dictionary(rich.compactMap { s in s.logoUrl.map { (s.id, $0) } }, uniquingKeysWith: { a, _ in a })
+                    self.results = self.results.map { s in
+                        var s = s
+                        s.logoUrl = logos[s.id]
+                        return s
+                    }
+                }
             } catch {
                 if !Task.isCancelled { self.errorText = error.localizedDescription }
             }
@@ -147,7 +156,8 @@ struct DeviceSearchSection: View {
 struct SuggestionRow: View {
     let suggestion: Suggestion
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            artwork
             VStack(alignment: .leading, spacing: 4) {
                 Text(suggestion.title).font(Theme.uiBold(18)).foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
@@ -159,6 +169,24 @@ struct SuggestionRow: View {
             Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
         }
         .tile()
+    }
+
+    /// The title's logo on a dark tile so versions can be told apart at a glance;
+    /// the poster stands in until (or unless) a logo exists.
+    @ViewBuilder private var artwork: some View {
+        if let url = (suggestion.logoUrl ?? suggestion.posterUrl).flatMap(URL.init(string:)) {
+            let isLogo = suggestion.logoUrl != nil
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFit().padding(isLogo ? 6 : 0)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 96, height: 56)
+            .background(Color.black, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 }
 
