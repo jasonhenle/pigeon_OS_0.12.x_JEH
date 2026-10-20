@@ -12,7 +12,10 @@ from typing import Any, Mapping
 ROOM_NAME_MAX = 24
 ROOM_SLOTS = 3
 
-UI_COLORS = ("blue", "green", "yellow", "orange", "red", "grey", "white")
+# Offered on the device's theme menu (and by the app); orange / grey / white are
+# no longer offered but a client may still set them and an install may still use them.
+UI_COLORS = ("blue", "green", "yellow", "pink", "red")
+_LEGACY_UI_COLORS = ("orange", "grey", "white")
 # option name -> allowed values (first is the default)
 OPTION_VALUES: dict[str, tuple[str, ...]] = {
     "time_format": ("12", "24"),
@@ -20,6 +23,7 @@ OPTION_VALUES: dict[str, tuple[str, ...]] = {
     "color_format": ("color", "dark"),
     "zone4_mode": ("info", "visualizer"),
     "auto_update": ("auto", "manual"),
+    "clock_format": ("digital", "analog"),
 }
 
 
@@ -128,7 +132,7 @@ def patch_pigeon_settings(body: Mapping[str, Any]) -> None:
             for k, v in options.items():
                 if k not in OPTION_VALUES or str(v) not in OPTION_VALUES[k]:
                     errors.append(f"options.{k}")
-    if "ui_color" in body and str(body.get("ui_color")) not in UI_COLORS:
+    if "ui_color" in body and str(body.get("ui_color")) not in UI_COLORS + _LEGACY_UI_COLORS:
         errors.append("ui_color")
     unknown = set(body) - {"zip", "timezone", "options", "ui_color"}
     errors += sorted(unknown)
