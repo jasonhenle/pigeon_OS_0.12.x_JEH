@@ -361,11 +361,9 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
   "timezone": "America/New_York",
   "timezone_choices": ["America/New_York", "America/Chicago"],
   "options": { "time_format": "12", "temp_format": "f", "color_format": "color",
-               "zone4_mode": "info", "auto_update": "auto",
-               "clock_format": "digital" },
+               "zone4_mode": "info", "clock_format": "digital" },
   "option_values": { "time_format": ["12", "24"], "temp_format": ["f", "c"],
                      "color_format": ["color", "dark"], "zone4_mode": ["info", "visualizer"],
-                     "auto_update": ["auto", "manual"],
                      "clock_format": ["digital", "analog"] },
   "ui_color": "blue",
   "ui_color_choices": ["blue", "green", "yellow", "pink", "red"]

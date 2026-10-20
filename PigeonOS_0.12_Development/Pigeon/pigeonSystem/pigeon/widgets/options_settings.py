@@ -3,9 +3,9 @@
 ``option1`` 12 / 24 hour, ``option2`` °F / °C, ``option3`` theme / dark
 (dark = red-tinted monochrome UI; the "dark" tile in the theme menu), ``option4``
 info / visualizer (what the now-playing zone 4 shows; no tile any more),
-``option5`` auto / manual update (auto installs the latest OS only while
-nothing is playing; manual only via the Update button), ``option6`` digital /
-analog clock.
+``option6`` digital / analog clock. Updates are always automatic (the OS
+installs the latest release only while nothing is playing); the old
+auto / manual ``option5`` is gone and any saved "manual" reads as auto.
 The zone 11 now-playing layout (TT across zones 1–3, input / volume / TRT strip
 in zone 4) is the permanent default. A long
 encoder press still flips into the visualizer, see :mod:`pigeon.visualizer_mode`.
@@ -43,7 +43,6 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (2, "temp_format", "f", "c"),
     (3, "color_format", "color", "dark"),
     (4, "zone4_mode", "info", "visualizer"),
-    (5, "auto_update", "auto", "manual"),
     (6, "clock_format", "digital", "analog"),
 )
 
@@ -70,8 +69,6 @@ def _normalize(raw: object) -> dict[str, Any]:
     )
     z4 = str(raw.get("zone4_mode") or out["zone4_mode"]).strip().lower()
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
-    au = str(raw.get("auto_update") or out["auto_update"]).strip().lower()
-    out["auto_update"] = "manual" if au in ("manual", "off", "false") else "auto"
     cf = str(raw.get("clock_format") or out["clock_format"]).strip().lower()
     out["clock_format"] = "analog" if cf in ("analog", "analogue") else "digital"
     return out
@@ -169,8 +166,20 @@ def temp_uses_celsius(state: MainSettingsState | None = None) -> bool:
     return _vals(state)["temp_format"] == "c"
 
 
+# While the theme menu previews a color tile, the dark filter steps aside so the
+# color shows as itself; committing a color also leaves dark mode.
+_MONO_PREVIEW_OFF = False
+
+
+def set_mono_preview_off(off: bool) -> None:
+    global _MONO_PREVIEW_OFF
+    _MONO_PREVIEW_OFF = bool(off)
+
+
 def ui_is_monochrome(state: MainSettingsState | None = None) -> bool:
-    """option3 = dark: red-tinted monochrome UI."""
+    """option3 = dark: red-on-black monochrome UI."""
+    if _MONO_PREVIEW_OFF:
+        return False
     return _vals(state)["color_format"] == "dark"
 
 
@@ -191,8 +200,9 @@ def zone11_selected(state: MainSettingsState | None = None) -> bool:
 
 
 def auto_update_enabled(state: MainSettingsState | None = None) -> bool:
-    """option5 = auto: install the latest OS while nothing is playing."""
-    return _vals(state)["auto_update"] == "auto"
+    """Auto-update is mandatory: install the latest OS while nothing is playing."""
+    _ = state
+    return True
 
 
 def ui_is_bright(state: MainSettingsState | None = None) -> bool:
@@ -295,6 +305,7 @@ __all__ = [
     "ui_ink_hex",
     "ui_ink_rgb",
     "ui_is_bright",
+    "set_mono_preview_off",
     "ui_is_monochrome",
     "ui_paper_bgr",
     "write_options",

@@ -67,7 +67,7 @@ class FocusRingTests(unittest.TestCase):
     def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
             ps.pigeon_focus_ring("general"),
-            ("exit", "option:2", "reset", "restart", "update", "option:5", "section2", "section3"),
+            ("exit", "option:2", "reset", "restart", "update", "section2", "section3"),
         )
         self.assertEqual(
             ps.pigeon_focus_ring("theme"),
@@ -247,7 +247,7 @@ class PageStateTests(_IsolatedStateTest):
     def test_general_tiles(self) -> None:
         root = self._root(self._state("general"))
         texts = self._texts(root)
-        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "AUTO", "MANUAL", "TBD"):
+        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "TBD"):
             self.assertIn(label, texts, label)
 
     def test_clock_tiles(self) -> None:
@@ -260,8 +260,6 @@ class PageStateTests(_IsolatedStateTest):
         for values, slot_n, top in (
             ({}, 1, True),
             ({"temp_format": "c"}, 1, False),
-            ({"auto_update": "manual"}, 5, False),
-            ({"auto_update": "auto"}, 5, True),
         ):
             root = self._root(self._state("general", options_values=values))
             group = ps._by_id(root, f"toggle_0{slot_n}_group")
@@ -402,6 +400,28 @@ class NavigationTests(_IsolatedStateTest):
         self.assertEqual(w.activate(), "ui_color_swatch:ui:green")
         self.assertFalse(ui_is_monochrome())
 
+    def test_color_tiles_preview_in_full_color_while_in_dark_mode(self) -> None:
+        from pigeon.widgets.options_settings import set_mono_preview_off, ui_is_monochrome
+
+        self.addCleanup(set_mono_preview_off, False)
+        w = self._widget()
+        self._open_menu(w, "theme")
+        self._focus(w, "color:dark")
+        w.activate()
+        self.assertTrue(ui_is_monochrome())
+        self._focus(w, "color:green")  # preview: not dimmed
+        self.assertFalse(ui_is_monochrome())
+        self.assertEqual(w.state.theme.ui.upper(), "#00A22D")
+        self._focus(w, "color:dark")  # back on dark: dark again
+        self.assertTrue(ui_is_monochrome())
+        self._focus(w, "color:red")
+        self.assertFalse(ui_is_monochrome())
+        self._focus(w, "section2")  # off the tiles: dark again
+        self.assertTrue(ui_is_monochrome())
+        self._focus(w, "exit")
+        w.activate()
+        self.assertTrue(ui_is_monochrome())
+
     def test_temp_toggle_persists(self) -> None:
         w = self._widget()
         self._focus(w, "option:2")
@@ -410,15 +430,10 @@ class NavigationTests(_IsolatedStateTest):
 
         self.assertEqual(read_options()["temp_format"], "c")
 
-    def test_auto_update_toggle(self) -> None:
-        from pigeon.widgets.options_settings import auto_update_enabled
+    def test_auto_update_is_mandatory(self) -> None:
+        from pigeon.widgets.options_settings import auto_update_enabled, write_options
 
-        w = self._widget()
-        self.assertTrue(auto_update_enabled())
-        self._focus(w, "option:5")
-        self.assertEqual(w.activate(), "options_toggle:5")
-        self.assertFalse(auto_update_enabled())
-        w.activate()
+        write_options({"auto_update": "manual"})
         self.assertTrue(auto_update_enabled())
 
     def test_clock_mode_and_format_toggles(self) -> None:

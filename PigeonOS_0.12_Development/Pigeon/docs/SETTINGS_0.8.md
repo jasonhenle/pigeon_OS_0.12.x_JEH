@@ -45,7 +45,7 @@ are drawn dim and skipped by focus.
 
 | Menu | 1 | 2 | 3 | 4 | 5 | 6 |
 |------|---|---|---|---|---|---|
-| general | °F / °C | RESET | RESTART | UPDATE | AUTO / MANUAL | TBD |
+| general | °F / °C | RESET | RESTART | UPDATE | TBD | TBD |
 | theme | blue | green | yellow | pink | red | dark |
 | clock | 12 HR / 24 HR | ZIP | TIME ZONE | DIGITAL / ANALOG | TBD | TBD |
 
@@ -55,7 +55,8 @@ are drawn dim and skipped by focus.
   update popup (green dot when one is available).
 - **Theme tiles** preview live while focused; activating commits. Leaving the
   menu falls back to the committed color. **dark** switches `color_format` to the
-  red-on-black UI (no preview); any color tile switches it back. `orange`,
+  red-on-black UI; while dark is on, focusing a color tile shows that color
+  undimmed, and committing one leaves dark mode. `orange`,
   `grey` and `white` are no longer offered but stay valid saved keys.
 - **ZIP** opens the numeric keypad. The zip is guessed once from the public IP
   when settings opens (`pigeon/pigeon_locale.py`); a typed zip wins, sets the
@@ -63,7 +64,8 @@ are drawn dim and skipped by focus.
 - **TIME ZONE** opens a dropdown over section2 (`CST -1:00` = offset from the
   current zone). It applies to Pigeon's clocks only (`pigeon_now()`).
 - **Toggles** write `settings_options`: option 1 `time_format`, 2 `temp_format`,
-  5 `auto_update`, 6 `clock_format` (digital / analog). Option 3 (`color_format`)
+  6 `clock_format` (digital / analog). Updates are always automatic; there is no
+  auto / manual option. Option 3 (`color_format`)
   is the dark theme tile; option 4 (`zone4_mode`) has no tile (long encoder press
   still flips the visualizer).
 - **Lights**: wifi green while associated; metadata / audio green when seen in

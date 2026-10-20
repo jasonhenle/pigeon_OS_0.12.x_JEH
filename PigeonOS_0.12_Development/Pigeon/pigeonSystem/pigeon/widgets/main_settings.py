@@ -852,6 +852,7 @@ class MainSettingsState:
         self.close_update_popup()
         self.close_preferences()
         self.show_pigeon_settings = False
+        self._set_mono_preview_off(False)
         self.show_location_picker = True
         self.renaming_location_id = ""
         self.renaming_location_slot = 0
@@ -1147,6 +1148,7 @@ class MainSettingsState:
         self.close_metadata_debug()
         self._restore_committed_ui_color()
         self.show_pigeon_settings = False
+        self._set_mono_preview_off(False)
         self.pigeon_view = "general"
         self.pigeon_needs_update_prefetch = False
         self.ensure_focus_ring()
@@ -1191,12 +1193,20 @@ class MainSettingsState:
             persist=False,
         )
 
+    @staticmethod
+    def _set_mono_preview_off(off: bool) -> None:
+        from pigeon.widgets.options_settings import set_mono_preview_off
+
+        set_mono_preview_off(off)
+
     def sync_pigeon_color_preview(self) -> None:
         """Color row: focused swatch themes the UI live; elsewhere the committed one."""
         from pigeon.widgets.pigeon_settings import color_key_for_focus
         from pigeon.widgets.ui_color_settings import apply_color_keys_to_state
 
         preview = color_key_for_focus(self.pigeon_focused_id)
+        # In dark mode a focused color tile shows as that color, not dimmed.
+        self._set_mono_preview_off(self.show_pigeon_settings and preview is not None)
         if preview is None:
             self._restore_committed_ui_color()
             return
