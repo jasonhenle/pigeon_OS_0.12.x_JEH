@@ -1,4 +1,4 @@
-"""Idle clock saver: SVG clock + weather chrome with cycling color.
+"""Idle clock saver: SVG clock + weather chrome in the UI theme color.
 
 Layout from ``pigeonAssets/clocksaver.svg``:
   • ``tday_month_year_text`` / ``today_month_year_text`` — Sharp Sans Bold date
@@ -50,7 +50,6 @@ _TIME_FORMAT_24 = "%H:%M:%S"
 _TIME_FORMAT_12 = "%I:%M:%S"
 _DATE_FORMAT = "%A, %B %-d" if os.name != "nt" else "%A, %B %#d"
 
-_TIME_COLOR_SEGMENT_S = 10.0
 _TRANSLATE_RE = re.compile(
     r"translate\(\s*([-\d.]+)(?:[,\s]+([-\d.]+))?\s*\)",
     re.IGNORECASE,
@@ -123,29 +122,12 @@ def _anchor_mm_extents(
 
 
 def _time_color_rgba(now_mono: float) -> tuple[int, int, int, int]:
-    """Hold current color 10s, then 10s transition to the next; timeline starts on white."""
-    import colorsys
+    """Digital saver ink: the UI theme color (same as the analog clock), no cycling."""
+    del now_mono
+    from pigeon.widgets.view_circles import np_theme_from_settings
 
-    H = float(_TIME_COLOR_SEGMENT_S)
-    t = max(0.0, float(now_mono))
-    seg = int(t // H)
-    u = (t % H) / H if H > 0 else 0.0
-
-    def _rgb_block(k: int) -> tuple[float, float, float]:
-        if k <= 0:
-            return (1.0, 1.0, 1.0)
-        hue = ((k - 1) * 0.3021688479) % 1.0
-        return colorsys.hsv_to_rgb(hue, 0.72, 0.96)
-
-    if seg % 2 == 0:
-        r, g, b = _rgb_block(seg // 2)
-        return (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)), 255)
-    a = _rgb_block(seg // 2)
-    b = _rgb_block(seg // 2 + 1)
-    r = a[0] + (b[0] - a[0]) * u
-    g = a[1] + (b[1] - a[1]) * u
-    bl = a[2] + (b[2] - a[2]) * u
-    return (int(round(r * 255)), int(round(g * 255)), int(round(bl * 255)), 255)
+    blue, green, red = np_theme_from_settings().ui_bgr
+    return (int(red), int(green), int(blue), 255)
 
 
 def _rgba_to_hex(rgba: tuple[int, int, int, int]) -> str:
@@ -344,7 +326,7 @@ def _set_visible(el: ET.Element | None, visible: bool) -> None:
 
 
 def _paint_cycle_color(root: ET.Element, color_hex: str) -> None:
-    """Retint fills/strokes to the cycle color; keep knock-out blacks and empty fills."""
+    """Retint fills/strokes to the ink color; keep knock-out blacks and empty fills."""
     for el in root.iter():
         tag = el.tag.rsplit("}", 1)[-1].lower()
         if tag in ("svg", "g", "defs", "clippath", "mask"):
@@ -357,7 +339,7 @@ def _paint_cycle_color(root: ET.Element, color_hex: str) -> None:
         # Background plate stays black / hidden separately.
         if tag == "rect" and fill in ("#040603", "#000", "#000000"):
             continue
-        # Crescent cutout stays opaque black so the moon reads on any cycle color.
+        # Crescent cutout stays opaque black so the moon reads on any ink color.
         if fill in ("#000", "#000000", "black") and stroke in ("", "none"):
             continue
         if fill and fill not in ("none", "transparent"):
@@ -1865,7 +1847,7 @@ def clock_saver_composite_bgra(
     """
     Full-frame idle face (zone 9).
 
-    Digital options → color-cycled digital clocksaver; analog → centered NP
+    Digital options → theme-colored digital clocksaver; analog → centered NP
     clock widget (with digital HH:MM kept on). Automatic-widget Clocksaver
     layouts always use the digital face. Returns ``(full_frame, empty_date)``
     so existing compose call sites that blit both packs keep working.

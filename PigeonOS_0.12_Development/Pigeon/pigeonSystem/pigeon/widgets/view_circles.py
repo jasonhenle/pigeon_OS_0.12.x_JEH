@@ -1653,13 +1653,15 @@ def _apply_clock_black_rings(clock: ET.Element, *, zone: int | None = None) -> N
     host.insert(1, disc)
 
 
-def _punch_clock_open_ring_white(bgra: np.ndarray) -> np.ndarray:
+def _punch_clock_open_ring_white(
+    bgra: np.ndarray, *, view_h: float = CLOCK_VIEW_H
+) -> np.ndarray:
     """Knock out trapped page-white in the middle (open) clock band."""
     if bgra is None or bgra.size == 0 or bgra.ndim < 3 or bgra.shape[2] < 4:
         return bgra
     h, w = int(bgra.shape[0]), int(bgra.shape[1])
     sx = float(w) / CLOCK_VIEW_W
-    sy = float(h) / CLOCK_VIEW_H
+    sy = float(h) / float(view_h)
     cx = CLOCK_LOCAL_CX * sx
     cy = CLOCK_LOCAL_CY * sy
     yy, xx = np.ogrid[:h, :w]
@@ -1945,6 +1947,7 @@ def _apply_standalone_clock_ticks(
     minute = int(now.minute)
     min_idx = 60 if minute == 0 else minute
     ui = _visible_on_dark_hex(theme.tick_active)
+    minute_ui = _darken_hex(ui, factor=_CLOCK_MINUTE_TICK_OPACITY)
 
     face_name = _HOUR_FACE_NAMES.get(h12, "")
     for el, key in list(_iter_named_children(hours_g)):
@@ -1964,7 +1967,8 @@ def _apply_standalone_clock_ticks(
         if not (1 <= idx <= min_idx):
             _detach_element(root, el)
             continue
-        _set_tick_paint(el, color=ui, opacity=_CLOCK_MINUTE_TICK_OPACITY)
+        # Solid fill in the shade the 70%-opacity ticks used to read as on black.
+        _set_tick_paint(el, color=minute_ui)
         if idx == min_idx:
             current_min = el
     _raise_in_group(minutes_g, current_min)
@@ -2053,17 +2057,32 @@ _CLOCK_SECONDS_LAYERS_MAX = 4
 
 
 def _finish_widget_raster(
-    root: ET.Element, widget_key: str, *, dest_w: int, dest_h: int
+    root: ET.Element,
+    widget_key: str,
+    *,
+    dest_w: int,
+    dest_h: int,
+    view_h: float | None = None,
 ) -> np.ndarray:
+    vh = CLOCK_VIEW_H if view_h is None else float(view_h)
+    if widget_key == "clock" and vh != CLOCK_VIEW_H:
+        # Taller artboard: the outer ring's stroke is tangent to the bottom edge.
+        root.set("viewBox", f"0 0 {CLOCK_VIEW_W:g} {vh:.4f}")
     bgra = _rasterize_svg_tree(root, dest_w=dest_w, dest_h=dest_h)
     bgra = _decanvas_white_bgra(bgra)
     if widget_key == "clock":
-        bgra = _punch_clock_open_ring_white(bgra)
+        bgra = _punch_clock_open_ring_white(bgra, view_h=vh)
     return bgra
 
 
 def _clock_seconds_layers(
-    path: Path, *, dest_w: int, dest_h: int, theme: _NpTheme, odd_minute: bool
+    path: Path,
+    *,
+    dest_w: int,
+    dest_h: int,
+    theme: _NpTheme,
+    odd_minute: bool,
+    view_h: float = CLOCK_VIEW_H,
 ) -> tuple[np.ndarray, ...]:
     """Seconds-ring pixels with every tick flipped vs none, plus each pixel's angle.
 
@@ -2071,7 +2090,14 @@ def _clock_seconds_layers(
     minute, and only its colors depend on the minute's parity, so these are
     rasterized once per size / theme / parity.
     """
-    key = (str(path), int(dest_w), int(dest_h), theme.cache_key, bool(odd_minute))
+    key = (
+        str(path),
+        int(dest_w),
+        int(dest_h),
+        theme.cache_key,
+        bool(odd_minute),
+        round(float(view_h), 3),
+    )
     hit = _CLOCK_SECONDS_LAYERS.get(key)
     if hit is not None:
         return hit
@@ -2084,13 +2110,15 @@ def _clock_seconds_layers(
             _remove_by_key(root, "clock_exterior_seconds_fill")
         else:
             _apply_exterior_seconds_fill(root, None, sec_idx=wedge_idx, theme=theme)
-        return _finish_widget_raster(root, "clock", dest_w=dest_w, dest_h=dest_h)
+        return _finish_widget_raster(
+            root, "clock", dest_w=dest_w, dest_h=dest_h, view_h=view_h
+        )
 
     # Tick 60 never flips (``:00`` resets the ring), but the wedge reaches it.
     flipped = render(59, 60)
     unflipped = render(0, None)
     sx = float(dest_w) / CLOCK_VIEW_W
-    sy = float(dest_h) / CLOCK_VIEW_H
+    sy = float(dest_h) / float(view_h)
     yy, xx = np.ogrid[:dest_h, :dest_w]
     # The seconds live on the outer ring; keep minute ticks touching its inner edge.
     on_ring = np.hypot((xx + 0.5) / sx - CLOCK_LOCAL_CX, (yy + 0.5) / sy - CLOCK_LOCAL_CY) >= (
@@ -2117,12 +2145,22 @@ def _clock_seconds_layers(
 
 
 def _blend_clock_seconds(
-    face: np.ndarray, *, path: Path, now: datetime, theme: _NpTheme
+    face: np.ndarray,
+    *,
+    path: Path,
+    now: datetime,
+    theme: _NpTheme,
+    view_h: float = CLOCK_VIEW_H,
 ) -> np.ndarray:
     """``face`` (the clock at ``:00``) with the seconds ring advanced to ``now``."""
     h, w = face.shape[:2]
     ys, xs, deg, px_per_deg, flipped, unflipped = _clock_seconds_layers(
-        path, dest_w=w, dest_h=h, theme=theme, odd_minute=bool(now.minute % 2)
+        path,
+        dest_w=w,
+        dest_h=h,
+        theme=theme,
+        odd_minute=bool(now.minute % 2),
+        view_h=view_h,
     )
     edge = 6.0 * max(1, min(59, int(now.second)))
     # Ticks and wedge both span 12 o'clock → ``edge``; antialias both ends.
@@ -2144,6 +2182,7 @@ def _rasterize_named_widget(
     zone: int | None = None,
     include_play_overlay: bool = True,
     include_clock_ticks: bool | None = None,
+    view_h: float | None = None,
 ) -> np.ndarray | None:
     path = _now_playing_widget_path(assets_dir, widget_key, zone)
     if not path.is_file():
@@ -2163,10 +2202,17 @@ def _rasterize_named_widget(
             zone=zone,
             include_play_overlay=include_play_overlay,
             include_clock_ticks=include_clock_ticks,
+            view_h=view_h,
         )
         if face is None:
             return None
-        return _blend_clock_seconds(face, path=path, now=now, theme=theme)
+        return _blend_clock_seconds(
+            face,
+            path=path,
+            now=now,
+            theme=theme,
+            view_h=CLOCK_VIEW_H if view_h is None else view_h,
+        )
     h12 = now.hour % 12
     if h12 == 0:
         h12 = 12
@@ -2181,6 +2227,7 @@ def _rasterize_named_widget(
         bool(paint_ticks),
         h12 if paint_ticks else -1,
         int(now.minute) if paint_ticks else -1,
+        None if view_h is None else round(float(view_h), 3),
     )
     cached = _NAMED_WIDGET_CACHE.get(cache_key)
     if cached is not None:
@@ -2210,7 +2257,9 @@ def _rasterize_named_widget(
         if overlay is None:
             overlay = _find_by_id(root, "_50_percent_overlay")
         _detach_element(root, overlay)
-    bgra = _finish_widget_raster(root, widget_key, dest_w=dest_w, dest_h=dest_h)
+    bgra = _finish_widget_raster(
+        root, widget_key, dest_w=dest_w, dest_h=dest_h, view_h=view_h
+    )
     while len(_NAMED_WIDGET_CACHE) >= _NAMED_WIDGET_CACHE_MAX:
         _NAMED_WIDGET_CACHE.pop(next(iter(_NAMED_WIDGET_CACHE)))
     _NAMED_WIDGET_CACHE[cache_key] = bgra
@@ -2224,7 +2273,10 @@ _SAVER_CLOCK_SCALE = 1.6
 # Ink extent of the clock artboard around the disc center, in design px at scale 1:
 # date line top is this far above the center, the outer ring this far below.
 _SAVER_CLOCK_INK_ABOVE = 264.0
-_SAVER_CLOCK_INK_BELOW = 199.0
+_SAVER_CLOCK_INK_BELOW = 200.0
+# The outer ring's stroke is tangent to the artboard's bottom edge; the saver renders
+# with this much extra artboard below so it isn't shaved flat.
+_SAVER_CLOCK_PAD_BOTTOM = 4.0
 _CENTERED_CLOCK_CACHE: dict[tuple[object, ...], np.ndarray] = {}
 _CENTERED_CLOCK_CACHE_MAX = 2
 
@@ -2350,10 +2402,11 @@ def render_centered_clock_widget_bgra(
             assets_dir=assets_dir,
             widget_key="clock",
             dest_w=dest_w,
-            dest_h=dest_h,
+            dest_h=int(round(dest_h * (CLOCK_VIEW_H + _SAVER_CLOCK_PAD_BOTTOM) / CLOCK_VIEW_H)),
             now=when,
             theme=th,
             zone=None,
+            view_h=CLOCK_VIEW_H + _SAVER_CLOCK_PAD_BOTTOM,
         )
     except Exception:
         patch = None
@@ -6332,8 +6385,8 @@ class ViewCirclesWidget:
 
     # Larger than the cast-info names (CAST_ACTOR_SIZE_PX): the strip has no second line.
     _ZONE11_INFO_PX = 68
-    _ZONE11_APP_ID_PX = 36
-    _ZONE11_APP_ID_GAP = 14
+    _ZONE11_APP_ID_PX = 46
+    _ZONE11_APP_ID_GAP = 10
     # Fixed multiple of the header size; independent of the art so it never jumps
     # when the title / poster finishes loading.
     _ZONE11_VOLUME_SCALE = 2.0
@@ -6344,7 +6397,6 @@ class ViewCirclesWidget:
     _ZONE11_HEADER_DROP_PX = 14
     _ZONE11_VOLUME_RIGHT_PAD_PX = 14
     _ZONE11_STACK_CLOCK_GAP_PX = 24
-    _ZONE11_APP_ID_MAX_PX = 60  # a lone label must not balloon to the full row height
 
     def _zone11_clock_half_width(self) -> float:
         """Half the width of the centered header clock at its widest (``88:88AM``)."""
@@ -6398,7 +6450,9 @@ class ViewCirclesWidget:
             return None
         size = int(round(_header_digital7_size_px() * float(scale)))
         if clock:
-            patch = _matching_hhmm_patch(label, size_px=size, fill_rgb=fill_rgb)
+            patch = _matching_hhmm_patch(
+                label, size_px=size, fill_rgb=fill_rgb, pad_y=size // 2
+            )
         else:
             patch, _tw, _th = _text_patch_digital7(
                 label.upper(), size_px=size, fill_rgb=fill_rgb
@@ -6420,23 +6474,28 @@ class ViewCirclesWidget:
         _paste_patch_bgra(out, patch, x, y)
         return (x, y, int(pw), int(ph))
 
-    def _zone11_bar_track(self) -> tuple[int, int] | None:
-        """``(track_x, track_w)`` of the status bar the elapsed time rides along."""
+    def _zone11_bar_rect(self) -> tuple[int, int, int, int] | None:
+        """``(x, y, w, h)`` of the status bar track the elapsed time rides along."""
         for i, name in enumerate(self._assignments()[:5]):
             if is_status_bar_widget(name, i + 1):
                 zone = _zone_spec(i + 1)
-                tx, _ty, tw, _th, _trx = design_rect_from_local(
+                tx, ty, tw, th, _trx = design_rect_from_local(
                     zone,
                     STATUS_BAR_TRACK,
                     view_w=STATUS_BAR_VIEW_W,
                     view_h=STATUS_BAR_VIEW_H,
                 )
-                return int(tx), int(tw)
+                return int(tx), int(ty), int(tw), int(th)
         return None
 
+    def _zone11_bar_track(self) -> tuple[int, int] | None:
+        """``(track_x, track_w)`` of the status bar the elapsed time rides along."""
+        rect = self._zone11_bar_rect()
+        return None if rect is None else (rect[0], rect[2])
+
     def _draw_zone11_info(self, out: np.ndarray) -> None:
-        """Top-right: volume (2x header size). Top-left under the clock: app id, input id
-        (stacked). Zone 4 strip: elapsed
+        """Top-right: volume (2x header size). Top-left: input id (same size). Under the
+        status bar: app id. Zone 4 strip: elapsed
         riding the status bar's playhead (gray, fading before it meets the TRT) and
         the TRT in the title's UI color."""
         zone = _zone_spec(4)
@@ -6447,45 +6506,33 @@ class ViewCirclesWidget:
         # Drop the unit: the big readout is self-explanatory and the width matters.
         vol = re.sub(r"\s*dB\s*$", "", vol)
 
-        # Top-left label stack (app id, then input id), sized so the pair is about as
-        # tall as the volume / clock row. The input id takes the app id's row when
-        # there is no app id, so the stack never has a gap.
+        # Top-left: input id at the header size (same as the clock / volume). It is
+        # shrunk only as far as needed to clear the centered clock.
         z = ZONE11
-        labels = [
-            lb for lb in (self._zone11_service_label(), self._receiver_readout()) if lb
-        ]
-        gap = int(self._ZONE11_APP_ID_GAP)
-        target_h = self._zone11_header_ink_h() * float(self._ZONE11_VOLUME_SCALE)
-        # Clear of the centered clock on the right.
         max_w = int(
             float(z.w) * 0.5
             - self._zone11_clock_half_width()
             - float(self._ZONE11_STACK_CLOCK_GAP_PX)
         )
-        size = self._ZONE11_APP_ID_PX
-        patches: list[np.ndarray] = []
-        for _fit in range(2):
-            patches = [
-                pt
-                for pt in (
-                    _cast_line_patch(lb, size_px=size, max_width_px=max(80, max_w))
-                    for lb in labels
-                )
-                if pt is not None
-            ]
-            if not patches:
-                break
-            total = sum(int(pt.shape[0]) for pt in patches) + gap * (len(patches) - 1)
-            if total <= 0 or abs(total - target_h) < 3:
-                break
-            size = max(20, min(self._ZONE11_APP_ID_MAX_PX, int(round(size * target_h / float(total)))))
-        y = int(round(self._zone11_header_top()))
-        for pt in patches:
-            ph, pw = pt.shape[:2]
-            px = int(round(float(z.x)))
-            _paste_patch_bgra(out, pt, px, y)
-            self._tt_time_paint_rects.append((px, y, int(pw), int(ph)))
-            y += int(ph) + gap
+        size = int(round(_header_digital7_size_px() * float(self._ZONE11_VOLUME_SCALE)))
+        pt = _cast_line_patch(self._receiver_readout(), size_px=size, max_width_px=max(80, max_w))
+        if pt is not None:
+            px, py = int(round(float(z.x))), int(round(self._zone11_header_top()))
+            _paste_patch_bgra(out, pt, px, py)
+            self._tt_time_paint_rects.append((px, py, int(pt.shape[1]), int(pt.shape[0])))
+
+        # Bottom-left, just under the status bar: streaming app id.
+        bar = self._zone11_bar_rect()
+        app = _cast_line_patch(
+            self._zone11_service_label(),
+            size_px=self._ZONE11_APP_ID_PX,
+            max_width_px=max(80, int(float(z.w) * 0.5)),
+        )
+        if bar is not None and app is not None:
+            bx, by, _bw, bh = bar
+            ax, ay = bx, by + bh + int(self._ZONE11_APP_ID_GAP)
+            _paste_patch_bgra(out, app, ax, ay)
+            self._tt_time_paint_rects.append((ax, ay, int(app.shape[1]), int(app.shape[0])))
 
         # Top-right: volume.
         rect = self._paste_zone11_corner_text(
@@ -6532,7 +6579,10 @@ class ViewCirclesWidget:
             return
         # Same size and gray as the volume readout in the top-right corner.
         patch = _matching_hhmm_patch(
-            elapsed, size_px=_header_digital7_size_px(), fill_rgb=_look_chrome_rgb()
+            elapsed,
+            size_px=_header_digital7_size_px(),
+            fill_rgb=_look_chrome_rgb(),
+            pad_y=_header_digital7_size_px() // 2,
         )
         a = patch[:, :, 3] > 8
         rows, pcols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]

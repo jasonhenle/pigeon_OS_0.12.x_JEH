@@ -72,13 +72,13 @@ class Zone11LayoutTests(unittest.TestCase):
 
     def test_clock_top_center_volume_top_right_labels_top_left(self) -> None:
         frame = self._frame(self._widget())
-        clock = self._ink(frame, 330, 0, 930, 140)
+        clock = self._ink(frame, 470, 0, 930, 140)
         vol = self._ink(frame, 930, 0, DESIGN_W, 140)
-        labels = self._ink(frame, 0, 0, 330, 140)
+        labels = self._ink(frame, 0, 0, 470, 140)
         self.assertTrue(clock.any(), "clock missing top-center")
         self.assertTrue(vol.any(), "volume missing top-right")
         self.assertTrue(labels.any(), "labels missing top-left")
-        cx0, cx1 = self._cols(clock, 330)
+        cx0, cx1 = self._cols(clock, 470)
         self.assertLess(abs((cx0 + cx1) / 2.0 - DESIGN_W / 2.0), 20)
         _, vx1 = self._cols(vol, 930)
         self.assertGreater(vx1, DESIGN_W - 80)
@@ -86,15 +86,15 @@ class Zone11LayoutTests(unittest.TestCase):
 
     def test_clock_and_volume_are_the_same_size(self) -> None:
         frame = self._frame(self._widget())
-        ch = np.where(self._ink(frame, 330, 0, 930, 140).any(axis=1))[0]
+        ch = np.where(self._ink(frame, 470, 0, 930, 140).any(axis=1))[0]
         vh = np.where(self._ink(frame, 930, 0, DESIGN_W, 140).any(axis=1))[0]
         self.assertLessEqual(abs(int(ch.max() - ch.min()) - int(vh.max() - vh.min())), 12)
         self.assertLessEqual(abs(int(ch.min()) - int(vh.min())), 4)  # shared top
 
     def test_label_stack_is_comparable_in_height_to_the_clock(self) -> None:
         frame = self._frame(self._widget())
-        labels = np.where(self._ink(frame, 0, 0, 330, 140).any(axis=1))[0]
-        clock = np.where(self._ink(frame, 330, 0, 930, 140).any(axis=1))[0]
+        labels = np.where(self._ink(frame, 0, 0, 470, 140).any(axis=1))[0]
+        clock = np.where(self._ink(frame, 470, 0, 930, 140).any(axis=1))[0]
         lh, ch = int(labels.max() - labels.min()), int(clock.max() - clock.min())
         self.assertLess(abs(lh - ch), ch * 0.25)
         self.assertLessEqual(abs(int(labels.min()) - int(clock.min())), 6)
@@ -179,26 +179,24 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertTrue(vol_mask.any() and el_mask.any())
         self.assertLessEqual(abs(int(vol[vol_mask].max()) - int(el[el_mask].max())), 12)
 
-    def test_input_id_stacks_under_app_id_and_takes_its_place_when_missing(self) -> None:
-        def rows(frame: np.ndarray) -> list[int]:
-            reg = frame[0:150, 0:95].astype(int)
-            band = (reg.max(axis=2) > 90) & (reg.max(axis=2) < 200)
-            ys = np.where(band.any(axis=1))[0]
-            groups: list[int] = []
-            prev = -10
-            for y in ys:
-                if y - prev > 3:
-                    groups.append(int(y))
-                prev = int(y)
-            return groups
+    def test_input_id_top_left_and_app_id_under_status_bar(self) -> None:
+        def top_left_rows(frame: np.ndarray) -> list[int]:
+            band = self._ink(frame, 0, 0, 470, 150)
+            return [int(y) for y in np.where(band.any(axis=1))[0]]
 
-        both = rows(self._frame(self._widget_at(0.3, "peacock")))
-        only_input = rows(self._frame(self._widget_at(0.3, "")))
-        self.assertEqual(len(both), 2, both)  # app id, then input id
-        self.assertEqual(len(only_input), 1, only_input)  # input id, no gap
-        self.assertLessEqual(abs(only_input[0] - both[0]), 3)
-        # Nothing is drawn under the status bar any more.
-        self.assertFalse(self._ink(self._frame(self._widget_at(0.3)), 40, 716, DESIGN_W, 790).any())
+        with_app = self._frame(self._widget_at(0.3, "peacock"))
+        no_app = self._frame(self._widget_at(0.3, ""))
+        rows = top_left_rows(with_app)
+        self.assertTrue(rows, "input id missing top-left")
+        # Single line (no stacked app id), at the clock's top and size.
+        clock = np.where(self._ink(with_app, 470, 0, 930, 140).any(axis=1))[0]
+        self.assertLessEqual(abs(rows[0] - int(clock.min())), 4)
+        self.assertLess(abs((rows[-1] - rows[0]) - int(clock.max() - clock.min())), 12)
+        self.assertEqual(top_left_rows(no_app), rows)
+        # App id sits just under the status bar, left-aligned to it; gone when unset.
+        under = self._ink(with_app, 40, 716, DESIGN_W, 790)
+        self.assertTrue(under.any(), "app id missing under the status bar")
+        self.assertFalse(self._ink(no_app, 40, 716, DESIGN_W, 790).any())
 
     def test_volume_adjustment_never_brings_up_zone3_volume(self) -> None:
         w = self._widget()
