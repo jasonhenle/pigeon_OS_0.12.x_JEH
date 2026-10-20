@@ -23,7 +23,7 @@ from typing import Callable
 import numpy as np
 
 SUGGEST_ROWS = 3
-_SUGGEST_FETCH = 6
+_SUGGEST_FETCH = 12
 _DEBOUNCE_S = 0.28
 _POSTER_SIZE = "w500"
 _FILE = "manual_search.json"
@@ -348,6 +348,60 @@ def suggest_now(
         )
     )
     return tuple({k: v for k, v in r.items() if k != "_pop"} for r in rows[:max(1, int(limit))])
+
+
+_TMDB_IMG = "https://image.tmdb.org/t/p"
+_LOGO_CACHE: dict[tuple[str, int], str] = {}
+_LOGO_FETCH_WORKERS = 6
+_LOGO_FETCH_TIMEOUT_S = 6.0
+
+
+def poster_url(row: dict) -> str | None:
+    path = str(row.get("poster_path") or "")
+    return f"{_TMDB_IMG}/w185{path}" if path.startswith("/") else None
+
+
+def logo_urls(rows) -> dict[int, str]:
+    """Title-treatment logo URL (tmdb_id → url) for each row that has one.
+
+    One TMDb images lookup per title, run in parallel and cached for the
+    session. A title with no English logo, or a failed lookup, is left out.
+    """
+    from concurrent.futures import ThreadPoolExecutor, wait
+
+    from pigeon.tmdb_poster import _logo_path_from_images, fetch_media_images
+
+    def _one(kind: str, tmdb_id: int) -> str:
+        key = (kind, tmdb_id)
+        if key in _LOGO_CACHE:
+            return _LOGO_CACHE[key]
+        try:
+            path = _logo_path_from_images(fetch_media_images(kind, tmdb_id)) or ""
+        except Exception:
+            return ""  # not cached: a later search may succeed
+        _LOGO_CACHE[key] = path
+        return path
+
+    wanted = [
+        (str(r.get("kind")), int(r["tmdb_id"]))
+        for r in rows
+        if r.get("kind") in ("movie", "tv") and int(r.get("tmdb_id") or 0) > 0
+    ]
+    out: dict[int, str] = {}
+    if not wanted:
+        return out
+    pool = ThreadPoolExecutor(max_workers=_LOGO_FETCH_WORKERS)
+    try:
+        futures = {pool.submit(_one, k, i): i for k, i in wanted}
+        wait(futures, timeout=_LOGO_FETCH_TIMEOUT_S)
+        for fut, tmdb_id in futures.items():
+            if fut.done():
+                path = fut.result()
+                if path.startswith("/"):
+                    out[tmdb_id] = f"{_TMDB_IMG}/w300{path}"
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return out
 
 
 def request_suggestions(query: str) -> None:

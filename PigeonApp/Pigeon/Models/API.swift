@@ -71,6 +71,9 @@ struct Suggestion: Codable, Equatable, Identifiable {
     var kind: String?
     var title: String
     var year: Int?
+    /// TMDb artwork, when the device has it: the title-treatment logo and the poster.
+    var logoUrl: String?
+    var posterUrl: String?
     var id: String { "\(tmdbId ?? 0)-\(kind ?? "")-\(title)-\(year ?? 0)" }
 
     var subtitle: String {

@@ -26,13 +26,31 @@ PREFIX = "/api/v1"
 MAX_BODY = 64 * 1024
 KEEPALIVE_S = 15.0
 POLL_S = 2.0
-SUGGEST_MAX = 6
+SUGGEST_MAX = 12
 
 Response = tuple[int, "dict[str, Any] | None"]
 
 
 def _err(status: int, code: str, message: str, **details: Any) -> Response:
     return status, {"error": {"code": code, "message": message, "details": details}}
+
+
+
+def _suggestion_json(row: dict, logos: dict[int, str]) -> dict[str, Any]:
+    """One search hit: ids, title, year, plus artwork URLs when known."""
+    tmdb_id = row.get("tmdb_id") or None
+    out: dict[str, Any] = {
+        "tmdb_id": tmdb_id,
+        "kind": row.get("kind"),
+        "title": row.get("title"),
+        "year": int(row["year"]) if str(row.get("year") or "").isdigit() else None,
+    }
+    poster = ms.poster_url(row)
+    if poster:
+        out["poster_url"] = poster
+    if tmdb_id and tmdb_id in logos:
+        out["logo_url"] = logos[tmdb_id]
+    return out
 
 
 class ControlService:
@@ -270,11 +288,8 @@ class ControlService:
                 rows = ms.suggest_now(q, limit=limit, strict=True)
             except ms.SuggestionSearchError as exc:
                 return _err(503, exc.code, str(exc))
-            return 200, {"query": q, "results": [
-                {"tmdb_id": r.get("tmdb_id") or None, "kind": r.get("kind"),
-                 "title": r.get("title"), "year": int(r["year"]) if str(r.get("year") or "").isdigit() else None}
-                for r in rows
-            ]}
+            logos = ms.logo_urls(rows) if (query.get("logos") or [""])[0] == "1" else {}
+            return 200, {"query": q, "results": [_suggestion_json(r, logos) for r in rows]}
         if route == "/search/current":
             if method == "GET":
                 return 200, self._manual_body()
@@ -367,11 +382,7 @@ class ControlService:
             if not q:
                 return _err(400, "bad_request", "Nothing to search for.", fields=["fields"])
             rows = ms.suggest_now(q, limit=SUGGEST_MAX)
-            return 200, {"query": q, "candidates": [
-                {"tmdb_id": r.get("tmdb_id") or None, "kind": r.get("kind"), "title": r.get("title"),
-                 "year": int(r["year"]) if str(r.get("year") or "").isdigit() else None}
-                for r in rows
-            ]}
+            return 200, {"query": q, "candidates": [_suggestion_json(r, {}) for r in rows]}
         if route == "/now-playing/override" and method == "PUT":
             if not isinstance(body, dict):
                 return _err(400, "bad_request", "JSON object required.")
