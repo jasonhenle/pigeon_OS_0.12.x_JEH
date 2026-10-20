@@ -1684,12 +1684,22 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
     def _schedule_next_render() -> None:
         elapsed_ms = int((time.perf_counter() - _render_tick_t0) * 1000.0)
         interval = _next_render_ms()
-        if _PIGEON_EXT and (
-            _idle_audio_meter_active()
-            or _np_drawing_live_audio()
-            or _np_wants_live_audio()
+        loading_anim = bool(
+            _view_one_uses_now_playing_screen()
+            and view_circles_widget is not None
+            and (view_circles_widget.searching or view_circles_widget.reveal_active())
+        )
+        if loading_anim or (
+            _PIGEON_EXT
+            and (
+                _idle_audio_meter_active()
+                or _np_drawing_live_audio()
+                or _np_wants_live_audio()
+            )
         ):
-            # Aim at *interval* wall time, not compose-duration + interval.
+            # Aim at *interval* wall time, not compose-duration + interval. The loading
+            # stripes / wipe need it too: "render, then wait max(interval, render)"
+            # made every frame ~2x its render time (14 fps for a 36 ms render).
             delay = _live_pace_delay_ms(_render_tick_t0, time.perf_counter(), interval)
         else:
             _LIVE_PACE[0] = None
