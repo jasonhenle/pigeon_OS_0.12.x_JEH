@@ -7,10 +7,10 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    # The one place the app's version lives (Info.plist reads these). The version-bump
-    # commit sets them to pigeon/version.py: MARKETING_VERSION = MAJOR.MINOR.PATCH,
-    # CURRENT_PROJECT_VERSION = PATCH. A test in pigeonSystem/tests checks they agree.
-    MARKETING_VERSION: "0.12.47"
+    # The app's own version, independent of PigeonOS (the app shows the device's version
+    # separately). Info.plist reads these. Bump CURRENT_PROJECT_VERSION on every iOS
+    # release and MARKETING_VERSION for notable changes, then run tools/sync-pigeon-ios.sh.
+    MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "47"
 targets:
   Pigeon:
