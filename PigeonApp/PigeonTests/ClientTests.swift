@@ -272,7 +272,7 @@ final class NowPlayingFixSearchTests: XCTestCase {
 
     func testResultsThenEmptyThenErrorStates() async {
         var reply: Result<[Suggestion], Error> = .success([heat])
-        let m = model { _, _, _ in try reply.get() }
+        let m = model { _, _, _, _ in try reply.get() }
         XCTAssertEqual(m.searchState, .idle)
 
         m.query = "heat"
@@ -299,7 +299,10 @@ final class NowPlayingFixSearchTests: XCTestCase {
 
     func testYearAndTypeChangesClearAndResearchWithFilters() async {
         var calls: [[String?]] = []
-        let m = model { q, kind, year in calls.append([q, kind, year]); return [self.heat] }
+        let m = model { q, kind, year, logos in
+            if !logos { calls.append([q, kind, year]) }
+            return [self.heat]
+        }
         m.query = "heat"
         await m.searchTask?.value
         XCTAssertEqual(m.results.count, 1)
@@ -323,9 +326,18 @@ final class NowPlayingFixSearchTests: XCTestCase {
         XCTAssertEqual(m.searchState, .needsYear)
     }
 
+    func testLogosFillInAfterTheFastResults() async {
+        let withLogo = Suggestion(tmdbId: 949, kind: "movie", title: "Heat", year: 1995, logoUrl: "https://x/heat.png")
+        let m = model { _, _, _, logos in logos ? [withLogo] : [self.heat] }
+        m.query = "heat"
+        await m.searchTask?.value
+        XCTAssertEqual(m.results.first?.logoUrl, "https://x/heat.png")
+        XCTAssertEqual(m.searchState, .results)
+    }
+
     func testLateReplyForAnOldQueryIsIgnored() async {
         let old = Suggestion(tmdbId: 1, kind: "movie", title: "Old", year: 2000)
-        let m = model { q, _, _ in
+        let m = model { q, _, _, _ in
             if q == "old title" {
                 // Deliberately ignores cancellation, like a reply already on the wire.
                 try? await Task.sleep(for: .milliseconds(150))
@@ -344,7 +356,7 @@ final class NowPlayingFixSearchTests: XCTestCase {
     }
 
     func testLateErrorForAnOldQueryIsIgnored() async {
-        let m = model { q, _, _ in
+        let m = model { q, _, _, _ in
             if q == "old title" {
                 try? await Task.sleep(for: .milliseconds(100))
                 throw PigeonError.transport("timed out")
