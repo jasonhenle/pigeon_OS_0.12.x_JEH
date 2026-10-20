@@ -198,6 +198,54 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertTrue(under.any(), "app id missing under the status bar")
         self.assertFalse(self._ink(no_app, 40, 716, DESIGN_W, 790).any())
 
+    def _loading_widget(self) -> vc.ViewCirclesWidget:
+        w = self._widget()
+        w._state.searching = True
+        w._tt_bgra = None
+        return w
+
+    def test_loading_shows_header_and_a_shimmering_status_bar_only(self) -> None:
+        w = self._loading_widget()
+        canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
+        w.render(canvas)
+        self.assertEqual(w._shimmer_rects, [])  # no skeleton boxes
+        bar = w._loading_bar_rect()
+        self.assertIsNotNone(bar)
+        assert bar is not None
+        bx, by, bw, bh, _r = bar
+        self.assertTrue(self._ink(canvas, 0, 0, DESIGN_W, 140).any(), "header missing")
+        self.assertFalse(self._ink(canvas, 0, 160, DESIGN_W, by - 90).any(), "middle not empty")
+        first = canvas[by : by + bh, bx : bx + bw].copy()
+        w._shimmer_phase = lambda: 0.9  # type: ignore[method-assign]
+        w.render(canvas)
+        self.assertFalse(np.array_equal(first, canvas[by : by + bh, bx : bx + bw]))
+
+    def test_reveal_wipes_left_to_right_then_settles(self) -> None:
+        import time
+
+        w = self._widget()
+        tt = w._tt_bgra
+        w._state.searching = True
+        w._tt_bgra = None
+        canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
+        w.render(canvas)
+        w.update_state(
+            progress=0.4, elapsed_text="0:41:12", remaining_text="1:12:30",
+            volume_text="-22.5 dB", incoming_audio="DOLBY", playback_config="X",
+            has_now_playing=True, has_position=True, content_active=True,
+            paused=False, service_name="peacock", content_mode="video",
+            tt_bgra=tt, tt_title="Title", receiver_name="DENON",
+            receiver_input="APPLE TV", has_receiver=True, searching=False,
+        )
+        self.assertTrue(w.reveal_active())
+        w._reveal_t0 = time.monotonic() - 0.15
+        w.render(canvas)
+        title = self._ink(canvas, 0, 200, DESIGN_W, 360)
+        self.assertTrue(title[:, :300].any(), "left side should be revealed")
+        w._reveal_t0 = time.monotonic() - 1.0
+        w.render(canvas)
+        self.assertFalse(w.reveal_active())
+
     def test_volume_adjustment_never_brings_up_zone3_volume(self) -> None:
         w = self._widget()
         before = w._assignments()
