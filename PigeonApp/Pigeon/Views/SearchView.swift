@@ -117,7 +117,7 @@ struct DeviceSearchSection: View {
             }
             ForEach(model.results) { s in
                 Button { Task { await model.choose(s); focused = false } } label: {
-                    SuggestionRow(suggestion: s)
+                    SuggestionRow(suggestion: s, logoSlot: true)
                 }
                 .buttonStyle(.plain)
             }
@@ -155,9 +155,11 @@ struct DeviceSearchSection: View {
 
 struct SuggestionRow: View {
     let suggestion: Suggestion
+    /// Reserve the logo tile (search results, whose logos load a moment after the list).
+    var logoSlot = false
     var body: some View {
         HStack(spacing: 12) {
-            artwork
+            if logoSlot || suggestion.logoUrl != nil { artwork }
             VStack(alignment: .leading, spacing: 4) {
                 Text(suggestion.title).font(Theme.uiBold(18)).foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
@@ -171,22 +173,24 @@ struct SuggestionRow: View {
         .tile()
     }
 
-    /// The title's logo on a dark tile so versions can be told apart at a glance;
-    /// the poster stands in until (or unless) a logo exists.
-    @ViewBuilder private var artwork: some View {
-        if let url = (suggestion.logoUrl ?? suggestion.posterUrl).flatMap(URL.init(string:)) {
-            let isLogo = suggestion.logoUrl != nil
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFit().padding(isLogo ? 6 : 0)
-                } else {
-                    Color.clear
+    /// The title's logo (title treatment) on a dark tile so versions can be told
+    /// apart at a glance. With ``logoSlot`` the tile is reserved so rows line up while
+    /// logos load; a title with no logo keeps an empty tile and its text.
+    private var artwork: some View {
+        ZStack {
+            Color.black
+            if let url = suggestion.logoUrl.flatMap(URL.init(string:)) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit().padding(6)
+                    } else {
+                        Color.clear
+                    }
                 }
             }
-            .frame(width: 96, height: 56)
-            .background(Color.black, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+        .frame(width: 96, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
