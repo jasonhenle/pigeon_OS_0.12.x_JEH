@@ -87,11 +87,12 @@ class ClockSaverSvgTests(unittest.TestCase):
         ):
             self.assertEqual(cs._time_label(when), "1:30:05")
 
-    def test_time_color_leaves_white_after_hold(self) -> None:
-        white = cs._time_color_rgba(0.0)
-        later = cs._time_color_rgba(20.0)
-        self.assertEqual(white[:3], (255, 255, 255))
-        self.assertNotEqual(later[:3], white[:3])
+    def test_time_color_is_theme_ui_color_and_never_cycles(self) -> None:
+        from pigeon.widgets.view_circles import np_theme_from_settings
+
+        blue, green, red = np_theme_from_settings().ui_bgr
+        for t in (0.0, 20.0, 1234.5):
+            self.assertEqual(cs._time_color_rgba(t), (red, green, blue, 255))
 
     def test_face_fits_widget_well(self) -> None:
         face = cs.render_clock_saver_face_bgra(width=386, height=249)
