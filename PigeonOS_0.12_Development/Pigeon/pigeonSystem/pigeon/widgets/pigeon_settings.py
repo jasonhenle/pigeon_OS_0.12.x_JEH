@@ -80,7 +80,6 @@ DEFAULT_VIEW = "general"
 # Option numbers (see :mod:`pigeon.widgets.options_settings`).
 OPT_TIME = 1
 OPT_TEMP = 2
-OPT_AUTO_UPDATE = 5
 OPT_CLOCK_FORMAT = 6
 
 
@@ -99,7 +98,7 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
     Slot("button", "update", "UPDATE"),
-    Slot("toggle", f"option:{OPT_AUTO_UPDATE}", choices=("AUTO", "MANUAL")),
+    Slot("tbd_toggle", choices=("TBD", "TBD")),
     Slot("tbd_toggle", choices=("TBD", "TBD")),
 )
 _THEME_SLOTS: tuple[Slot, ...] = tuple(
@@ -556,6 +555,36 @@ def _first_text(el: ET.Element) -> ET.Element | None:
     return next((n for n in el.iter() if _local(n) == "text"), None)
 
 
+def _circularize(root: ET.Element) -> None:
+    """Swap fully-rounded rects for true circles.
+
+    The section2/3 discs are rects with ``rx`` ≥ half the side, and the two
+    sides differ by a point or two, so they rasterize as a lopsided squircle.
+    """
+    parents = {c: p for p in root.iter() for c in p}
+    for rect in [e for e in root.iter() if _local(e) == "rect"]:
+        try:
+            x, y = float(rect.get("x") or 0), float(rect.get("y") or 0)
+            w, h = float(rect.get("width") or 0), float(rect.get("height") or 0)
+            rx = float(rect.get("rx") or 0)
+        except ValueError:
+            continue
+        side = min(w, h)
+        if side <= 0 or rx < side * 0.49 or w > side * 1.1 or h > side * 1.1:
+            continue
+        circle = ET.Element(_sibling_tag(rect, "circle"))
+        for key, val in rect.attrib.items():
+            if key not in ("x", "y", "width", "height", "rx", "ry"):
+                circle.set(key, val)
+        circle.set("cx", f"{x + w / 2:.2f}")
+        circle.set("cy", f"{y + h / 2:.2f}")
+        circle.set("r", f"{side / 2:.2f}")
+        parent = parents[rect]
+        parent.insert(list(parent).index(rect), circle)
+        parent.remove(rect)
+        parents[circle] = parent
+
+
 def _shift_x(group: ET.Element, dx: float) -> None:
     """Move a group's rects and texts right by ``dx`` in place.
 
@@ -566,6 +595,8 @@ def _shift_x(group: ET.Element, dx: float) -> None:
         tag = _local(el)
         if tag == "rect":
             el.set("x", f"{float(el.get('x') or 0) + dx:.2f}")
+        elif tag == "circle":
+            el.set("cx", f"{float(el.get('cx') or 0) + dx:.2f}")
         elif tag == "text":
             m = re.search(r"translate\(\s*([-\d.]+)[,\s]+([-\d.]+)", el.get("transform") or "")
             if m:
@@ -660,7 +691,7 @@ def _sync_sections(root: ET.Element, state: MainSettingsState, *, focused: str, 
             _set_paint(stripe, fill=_theme_ramp_hex(fill, ui_hex))
     for node in (general2, general3):
         disc = next(
-            (n for n in node.iter() if _local(n) == "rect" and (n.get("fill") or "").lower() == "#b00"),
+            (n for n in node.iter() if _local(n) in ("rect", "circle") and (n.get("fill") or "").lower() == "#b00"),
             None,
         )
         if disc is not None:
@@ -701,6 +732,7 @@ def apply_pigeon_settings_svg_state(root: ET.Element, state: MainSettingsState) 
         focused = "exit" if state.update_popup_focused_choice == "back" else ""
     view = normalize_view(getattr(state, "pigeon_view", DEFAULT_VIEW))
     ui_hex = _ui_hex(state)
+    _circularize(root)
 
     _sync_pill(root, button_id="exit_button", text_id="exit_text", selected=focused == "exit")
     _set_text_content(_by_id(root, "exit_text"), "BACK" if update_screen else "EXIT")
@@ -1134,7 +1166,6 @@ def factory_reset_pigeon_persisted_state() -> None:
 
 
 __all__ = [
-    "OPT_AUTO_UPDATE",
     "OPT_CLOCK_FORMAT",
     "OPT_TEMP",
     "OPT_TIME",

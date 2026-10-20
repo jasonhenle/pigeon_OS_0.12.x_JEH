@@ -2789,6 +2789,24 @@ def _fade_bgra(patch: np.ndarray, opacity: float) -> np.ndarray:
     return out
 
 
+def _black_rounded_plate(w: int, h: int) -> np.ndarray:
+    """Opaque black rounded rectangle (BGRA), anti-aliased by 4x supersampling."""
+    import cv2
+
+    w, h = max(2, int(w)), max(2, int(h))
+    k = 4
+    big = np.zeros((h * k, w * k), np.uint8)
+    r = int(min(w, h) * 0.5 * 0.7) * k
+    cv2.rectangle(big, (r, 0), (w * k - 1 - r, h * k - 1), 255, -1)
+    cv2.rectangle(big, (0, r), (w * k - 1, h * k - 1 - r), 255, -1)
+    for cx, cy in ((r, r), (w * k - 1 - r, r), (r, h * k - 1 - r), (w * k - 1 - r, h * k - 1 - r)):
+        cv2.circle(big, (cx, cy), r, 255, -1)
+    alpha = cv2.resize(big, (w, h), interpolation=cv2.INTER_AREA)
+    out = np.zeros((h, w, 4), np.uint8)
+    out[:, :, 3] = alpha
+    return out
+
+
 def _paste_patch_bgra(canvas: np.ndarray, patch: np.ndarray, x: int, y: int) -> None:
     if patch is None or patch.size == 0 or canvas is None or canvas.size == 0:
         return
@@ -6490,8 +6508,15 @@ class ViewCirclesWidget:
         ph, pw = patch.shape[:2]
         px = int(round(cx - pw / 2.0))
         py = int(round(top + (max_h - ph) / 2.0))
+        # Black rounded plate behind the digits so the TRT reads on any artwork.
+        pad_x = max(10, int(round(ph * 0.45)))
+        pad_y = max(6, int(round(ph * 0.28)))
+        plate = _black_rounded_plate(int(pw) + 2 * pad_x, int(ph) + 2 * pad_y)
+        _paste_patch_bgra(out, plate, px - pad_x, py - pad_y)
         _paste_patch_bgra(out, patch, px, py)
-        self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
+        self._tt_time_paint_rects.append(
+            (px - pad_x, py - pad_y, int(plate.shape[1]), int(plate.shape[0]))
+        )
 
     def _draw_tt_countdown(
         self, out: np.ndarray, *, zone: int, wide: bool = False, part: str = "all"

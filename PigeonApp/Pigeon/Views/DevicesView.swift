@@ -408,8 +408,13 @@ final class PigeonSettingsModel: ObservableObject {
         await send(.init(zip: nil, timezone: nil, options: [key: value], uiColor: nil))
     }
 
+    /// Picking a color also leaves dark mode, like the device's theme menu.
     func setColor(_ key: String) async {
-        await send(.init(zip: nil, timezone: nil, options: nil, uiColor: key))
+        await send(.init(zip: nil, timezone: nil, options: ["color_format": "color"], uiColor: key))
+    }
+
+    func setDark() async {
+        await send(.init(zip: nil, timezone: nil, options: ["color_format": "dark"], uiColor: nil))
     }
 
     func setTimezone(_ name: String) async {
@@ -439,10 +444,10 @@ struct PigeonSettingsCard: View {
         ("time_format", "Clock", ["12": "12 hr", "24": "24 hr"]),
         ("temp_format", "Temperature", ["f": "°F", "c": "°C"]),
         ("clock_format", "Clock face", ["digital": "Digital", "analog": "Analog"]),
-        ("color_format", "Look", ["color": "Theme", "dark": "Dark"]),
         ("zone4_mode", "Playback bar", ["info": "Info", "visualizer": "Visualizer"]),
-        ("auto_update", "Software update", ["auto": "Auto", "manual": "Manual"]),
     ]
+
+    private func isDark(_ d: PigeonSettings) -> Bool { d.options["color_format"] == "dark" }
 
     private static let swatches: [String: Color] = [
         "blue": Color(hex: 0x4EA6F7), "green": Color(hex: 0x00A32E), "yellow": Color(hex: 0xE6FF0A),
@@ -487,7 +492,7 @@ struct PigeonSettingsCard: View {
                     }
                 }
 
-                // The switches
+                // The switches (clock, temperature, clock face, playback bar)
                 ForEach(Self.rows, id: \.key) { row in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(row.title).font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
@@ -510,10 +515,19 @@ struct PigeonSettingsCard: View {
                             Button { Task { await model.setColor(key) } } label: {
                                 Circle().fill(Self.swatches[key] ?? .gray)
                                     .frame(width: 34, height: 34)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: d.uiColor == key ? 3 : 0).padding(-4))
+                                    .overlay(Circle().stroke(Color.white, lineWidth: d.uiColor == key && !isDark(d) ? 3 : 0).padding(-4))
                             }
                             .buttonStyle(.plain)
                         }
+                        // Dark: monochrome red on black.
+                        Button { Task { await model.setDark() } } label: {
+                            Circle().fill(.black)
+                                .overlay(Circle().stroke(Color(hex: 0xD60000), lineWidth: 5))
+                                .frame(width: 34, height: 34)
+                                .overlay(Circle().stroke(Color.white, lineWidth: isDark(d) ? 3 : 0).padding(-4))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Dark")
                     }
                 }
                 Text("Pigeon \(d.version)").font(Theme.ui(12)).foregroundStyle(Theme.secondaryText)
