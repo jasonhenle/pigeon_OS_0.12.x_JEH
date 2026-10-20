@@ -317,7 +317,6 @@ struct NowPlayingFixView: View {
     // What Pigeon is showing right now.
     private func matchCard(_ d: NowPlayingDetail) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            LCDLabel(text: "Showing on \(deviceName)", size: 18, color: Theme.accent)
             Text(d.match?.title ?? "Nothing matched yet").font(Theme.uiBold(22)).foregroundStyle(.white)
             let bits = [d.match?.kind == "tv" ? "TV" : (d.match?.kind == "movie" ? "Movie" : nil), d.match?.year]
                 .compactMap { $0 }.filter { !$0.isEmpty }
