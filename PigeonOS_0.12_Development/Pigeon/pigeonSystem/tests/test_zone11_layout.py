@@ -108,6 +108,28 @@ class Zone11LayoutTests(unittest.TestCase):
         x0, x1 = self._cols(vol, 600)
         self.assertLess(x1 - x0, 380)
 
+    def test_art_top_leaves_room_for_the_volume(self) -> None:
+        import cv2
+
+        w = self._widget()
+        tt = np.zeros((600, 400, 4), np.uint8)
+        cv2.rectangle(tt, (0, 0), (399, 599), (200, 120, 60, 255), -1)
+        w.update_state(
+            progress=0.4,
+            elapsed_text="0:41:12",
+            remaining_text="1:12:30",
+            volume_text="-22.5 dB",
+            tt_bgra=tt,
+            tt_title="x",
+        )
+        frame = self._frame(w)
+        vol = self._ink(frame, 900, 0, DESIGN_W, 200)
+        vol_bottom = int(np.where(vol.any(axis=1))[0].max())
+        art = frame[:, 300:900].astype(int)
+        colored = (art[:, :, 0] - art[:, :, 2]) > 60  # blue-ish art, BGR
+        art_top = int(np.where(colored[:500].any(axis=1))[0].min())
+        self.assertGreaterEqual(art_top, vol_bottom - 20)  # small overlap allowed
+
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
         w = self._widget()
         w.update_state(
