@@ -45,7 +45,7 @@ are drawn dim and skipped by focus.
 
 | Menu | 1 | 2 | 3 | 4 | 5 | 6 |
 |------|---|---|---|---|---|---|
-| general | °F / °C | RESET | RESTART | UPDATE | TBD | TBD |
+| general | UPDATE | RESET | RESTART | °F / °C | TBD | TBD |
 | theme | blue | green | yellow | pink | red | dark |
 | clock | 12 HR / 24 HR | ZIP | TIME ZONE | DIGITAL / ANALOG | TBD | TBD |
 
