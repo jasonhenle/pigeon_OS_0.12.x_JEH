@@ -438,6 +438,7 @@ struct PigeonSettingsCard: View {
     private static let rows: [(key: String, title: String, labels: [String: String])] = [
         ("time_format", "Clock", ["12": "12 hr", "24": "24 hr"]),
         ("temp_format", "Temperature", ["f": "°F", "c": "°C"]),
+        ("clock_format", "Clock face", ["digital": "Digital", "analog": "Analog"]),
         ("color_format", "Look", ["color": "Theme", "dark": "Dark"]),
         ("zone4_mode", "Playback bar", ["info": "Info", "visualizer": "Visualizer"]),
         ("auto_update", "Software update", ["auto": "Auto", "manual": "Manual"]),
@@ -445,6 +446,7 @@ struct PigeonSettingsCard: View {
 
     private static let swatches: [String: Color] = [
         "blue": Color(hex: 0x4EA6F7), "green": Color(hex: 0x00A32E), "yellow": Color(hex: 0xE6FF0A),
+        "pink": Color(hex: 0xFF5CA8),
         "orange": Color(hex: 0xE39F00), "red": Color(hex: 0xFF0000), "grey": Color(hex: 0x777777),
         "white": .white,
     ]
@@ -485,7 +487,7 @@ struct PigeonSettingsCard: View {
                     }
                 }
 
-                // The five switches
+                // The switches
                 ForEach(Self.rows, id: \.key) { row in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(row.title).font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)

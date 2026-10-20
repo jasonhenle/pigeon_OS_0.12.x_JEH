@@ -86,6 +86,15 @@ class PigeonSettingsTests(_Base):
         self.assertTrue(d["timezone_choices"])
         self.assertRegex(d["version"], r"^\d+\.\d+\.\d+$")
 
+    def test_pink_and_analog_clock_are_offered_and_legacy_colors_still_accepted(self) -> None:
+        d = self.call("GET", "/pigeon-settings")[1]
+        self.assertEqual(d["ui_color_choices"], ["blue", "green", "yellow", "pink", "red"])
+        self.assertEqual(d["option_values"]["clock_format"], ["digital", "analog"])
+        d = self.call("PATCH", "/pigeon-settings", {"options": {"clock_format": "analog"}, "ui_color": "pink"})[1]
+        self.assertEqual(d["options"]["clock_format"], "analog")
+        self.assertEqual(d["ui_color"], "pink")
+        self.assertEqual(self.call("PATCH", "/pigeon-settings", {"ui_color": "orange"})[1]["ui_color"], "orange")
+
     def test_patch_options_and_color_persist_and_refresh_ui(self) -> None:
         st, d = self.call("PATCH", "/pigeon-settings",
                           {"options": {"time_format": "24", "temp_format": "c"}, "ui_color": "green"})
