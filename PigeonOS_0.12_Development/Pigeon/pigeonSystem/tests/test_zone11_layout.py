@@ -94,11 +94,11 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertGreater(ay, cy)
         self.assertLess(ay - cy, 40)
 
-    def test_volume_is_triple_size_alone_top_right(self) -> None:
+    def test_volume_is_enlarged_alone_top_right(self) -> None:
         frame = self._frame(self._widget())
         vol = self._ink(frame, 600, 0, DESIGN_W, 200)
         ys = np.where(vol.any(axis=1))[0]
-        self.assertGreater(int(ys.max() - ys.min()), 80)
+        self.assertGreater(int(ys.max() - ys.min()), 60)
         self.assertGreater(self._cols(vol, 600)[1], DESIGN_W - 80)
 
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:

@@ -6313,6 +6313,8 @@ class ViewCirclesWidget:
     _ZONE11_APP_ID_GAP = 14
     _ZONE11_VOLUME_MAX_SCALE = 8.0
     _ZONE11_VOLUME_GAP = 12
+    # Fraction of the largest clear-fitting size actually used.
+    _ZONE11_VOLUME_FIT_FRACTION = 0.5
 
     def _zone11_service_label(self) -> str:
         """Streaming app / incoming source name (the status bar's service text)."""
@@ -6371,7 +6373,7 @@ class ViewCirclesWidget:
     def _zone11_volume_scale(
         self, vol: str, avoid: list[tuple[int, int, int, int]]
     ) -> float:
-        """Largest scale (>= 1) at which the top-right volume clears every ``avoid`` rect."""
+        """Half the largest scale (>= 1) at which the top-right volume clears every ``avoid`` rect."""
         if not vol:
             return 1.0
         base_size = _header_digital7_size_px()
@@ -6407,7 +6409,7 @@ class ViewCirclesWidget:
                 lo = mid
             else:
                 hi = mid
-        return lo
+        return max(1.0, lo * float(self._ZONE11_VOLUME_FIT_FRACTION))
 
     def _zone11_bar_track(self) -> tuple[int, int] | None:
         """``(track_x, track_w)`` of the status bar the elapsed time rides along."""
