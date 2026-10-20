@@ -2217,9 +2217,10 @@ def _rasterize_named_widget(
     return bgra
 
 
-# Idle saver (zone 9 / full frame): scale NP clock so the disc matches digital
-# clocksaver digit height (~368px after letterbox) with a little extra presence.
-_SAVER_CLOCK_SCALE = 1.15
+# Idle / paused saver (zone 9 / full frame): scale of the NP analog clock. Larger
+# than the digital clocksaver digit height (~368px); the ceiling is the date line
+# at the top of the artboard, which touches the screen edge around 1.5.
+_SAVER_CLOCK_SCALE = 1.35
 _CENTERED_CLOCK_CACHE: dict[tuple[object, ...], np.ndarray] = {}
 _CENTERED_CLOCK_CACHE_MAX = 2
 
@@ -6275,8 +6276,8 @@ class ViewCirclesWidget:
             max(1, zh - pad_top - pad_bottom),
         )
 
-    # How far the art may reach up into the enlarged volume readout (design px).
-    _ZONE11_ART_VOLUME_OVERLAP_PX = 12
+    # How far the art may reach up into the enlarged volume readout (design px); 0 = none.
+    _ZONE11_ART_VOLUME_OVERLAP_PX = 0
 
     def _zone11_volume_bottom(self) -> float:
         """Design-Y of the bottom of the top-right volume ink (``_ZONE11_VOLUME_SCALE``)."""
