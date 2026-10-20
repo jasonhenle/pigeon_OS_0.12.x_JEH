@@ -67,7 +67,7 @@ class FocusRingTests(unittest.TestCase):
     def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
             ps.pigeon_focus_ring("general"),
-            ("exit", "option:2", "reset", "restart", "update", "section2", "section3"),
+            ("exit", "update", "reset", "restart", "option:2", "section2", "section3"),
         )
         self.assertEqual(
             ps.pigeon_focus_ring("theme"),
@@ -258,8 +258,8 @@ class PageStateTests(_IsolatedStateTest):
 
     def test_toggle_knob_follows_the_option(self) -> None:
         for values, slot_n, top in (
-            ({}, 1, True),
-            ({"temp_format": "c"}, 1, False),
+            ({}, 4, True),
+            ({"temp_format": "c"}, 4, False),
         ):
             root = self._root(self._state("general", options_values=values))
             group = ps._by_id(root, f"toggle_0{slot_n}_group")
@@ -280,7 +280,7 @@ class PageStateTests(_IsolatedStateTest):
         for key, well in (("white", "#777777"), ("grey", "#777777"), ("blue", "#4B9EEC")):
             theme = ucs.theme_from_color_keys({"accent": "white", "ui": key, "button": "black"})
             root = self._root(self._state("general", theme=theme))
-            group = ps._by_id(root, "toggle_01_group")
+            group = ps._by_id(root, "toggle_04_group")
             container, _k, _l = ps._toggle_parts(next(c for c in group if ps._local(c) == "g"))
             self.assertEqual(container.get("fill", "").upper(), well, key)
 
@@ -308,7 +308,7 @@ class PageStateTests(_IsolatedStateTest):
 
     def test_update_badge_only_when_an_update_exists(self) -> None:
         def dots(root: ET.Element) -> int:
-            group = ps._by_id(root, "toggle_04_group")
+            group = ps._by_id(root, "toggle_01_group")
             return len([c for c in group if ps._local(c) == "circle"])
 
         self.assertEqual(dots(self._root(self._state("general"))), 0)
@@ -335,7 +335,7 @@ class NavigationTests(_IsolatedStateTest):
     def test_opens_on_general_at_first_tile(self) -> None:
         w = self._widget()
         self.assertEqual(w.state.pigeon_view, "general")
-        self.assertEqual(w.state.pigeon_focused_id, "option:2")
+        self.assertEqual(w.state.pigeon_focused_id, "update")
 
     def test_section_buttons_open_menus_and_turn_into_general(self) -> None:
         w = self._widget()

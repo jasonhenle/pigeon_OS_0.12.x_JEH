@@ -94,10 +94,10 @@ class Slot:
 
 
 _GENERAL_SLOTS: tuple[Slot, ...] = (
-    Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
+    Slot("button", "update", "UPDATE"),
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
-    Slot("button", "update", "UPDATE"),
+    Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
     Slot("tbd_toggle", choices=("TBD", "TBD")),
     Slot("tbd_toggle", choices=("TBD", "TBD")),
 )
