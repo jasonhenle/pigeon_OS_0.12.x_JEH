@@ -6275,18 +6275,41 @@ class ViewCirclesWidget:
             max(1, zh - pad_top - pad_bottom),
         )
 
+    # How far the art may reach up into the enlarged volume readout (design px).
+    _ZONE11_ART_VOLUME_OVERLAP_PX = 12
+
+    def _zone11_volume_bottom(self) -> float:
+        """Design-Y of the bottom of the top-right volume ink (``_ZONE11_VOLUME_SCALE``)."""
+        patch, _tw, _th = _text_patch_digital7(
+            "0", size_px=_header_digital7_size_px(), fill_rgb=_look_chrome_rgb()
+        )
+        rows = np.where((patch[:, :, 3] > 8).any(axis=1))[0]
+        h0 = float(rows.max() - rows.min() + 1) if rows.size else 0.0
+        top = float(header_clock_baseline_y()) - h0
+        return top + h0 * float(self._ZONE11_VOLUME_SCALE)
+
     def _draw_zone11_art(self, out: np.ndarray) -> None:
-        """TT (or album art) as large as zones 1-3 allow, with room above it."""
+        """TT (or album art) scaled down so the volume readout has room above it.
+
+        The art keeps its bottom-middle anchor (where it sat when centered in the full
+        box) and only its top edge is pulled down, to the volume's bottom less a small
+        overlap allowance.
+        """
         z = ZONE11
         bx, by, bw, bh = self._zone11_art_box()
-        patch = self._tt_countdown_tt_patch(z, dest_wh=(bw, bh))
+        new_top = max(
+            by,
+            int(round(self._zone11_volume_bottom() - self._ZONE11_ART_VOLUME_OVERLAP_PX)),
+        )
+        nbh = max(1, bh - (new_top - by))
+        patch = self._tt_countdown_tt_patch(z, dest_wh=(bw, nbh))
         if patch is None or patch.size == 0:
             if self._tt_widget_loading():
-                sh_h = max(56, int(round(bh * 0.42)))
+                sh_h = max(56, int(round(nbh * 0.42)))
                 _draw_shimmer_rounded_rect(
                     out,
                     x=bx + (bw - int(bw * 0.8)) // 2,
-                    y=by + (bh - sh_h) // 2,
+                    y=new_top + (nbh - sh_h) // 2,
                     w=int(bw * 0.8),
                     h=sh_h,
                     radius=int(round(float(WIDGET_SHIMMER_RADIUS))),
@@ -6294,9 +6317,12 @@ class ViewCirclesWidget:
                 )
             return
         ph, pw = int(patch.shape[0]), int(patch.shape[1])
-        _paste_patch_bgra(
-            out, patch, bx + (bw - pw) // 2, by + (bh - ph) // 2
-        )
+        # Bottom of the art as it was when centered in the full box.
+        full = self._tt_countdown_tt_patch(z, dest_wh=(bw, bh))
+        full_ph = int(full.shape[0]) if full is not None and full.size else ph
+        bottom = by + (bh - full_ph) // 2 + full_ph
+        y = max(new_top, bottom - ph)
+        _paste_patch_bgra(out, patch, bx + (bw - pw) // 2, min(y, by + bh - ph))
 
     # Larger than the cast-info names (CAST_ACTOR_SIZE_PX): the strip has no second line.
     _ZONE11_INFO_PX = 68
