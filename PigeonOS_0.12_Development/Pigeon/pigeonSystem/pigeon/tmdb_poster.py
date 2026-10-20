@@ -41,6 +41,7 @@ import json
 import os
 import random
 import re
+import unicodedata
 import secrets
 import shutil
 import subprocess
@@ -192,11 +193,25 @@ def split_query_and_year(raw: str | None) -> tuple[str, int | None]:
     return cleaned, y
 
 
+_TRAILING_PAREN_RE = re.compile(r"\s*[\(\[][^()\[\]]*[\)\]]\s*$")
+
+
+def strip_trailing_parenthetical(raw: str | None) -> str:
+    """``Title (Taylor's Version)`` → ``Title``. Unchanged when nothing would be left."""
+    text = str(raw or "").strip()
+    stripped = _TRAILING_PAREN_RE.sub("", text).strip()
+    return stripped or text
+
+
 def _norm_query(s: str) -> str:
     """Normalize a query/title for substring + token matching (ASCII-ish, punctuation-insensitive)."""
     s = (s or "").strip().lower()
     if not s:
         return ""
+    # Fold accents so "Café" and "Cafe" are the same title.
+    s = "".join(
+        c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
+    )
     out: list[str] = []
     prev_space = False
     for ch in s:

@@ -1554,6 +1554,13 @@ def spawn_tmdb_poster_fetch(
                 candidates = [q] + [c for c in candidates if c != q]
             if not candidates:
                 candidates = [q]
+            # "Title (Taylor's Version)" / "(Extended Cut)": TMDb lists the bare title.
+            from pigeon.tmdb_poster import strip_trailing_parenthetical
+
+            for cand in list(candidates):
+                bare = strip_trailing_parenthetical(cand)
+                if bare and bare not in candidates:
+                    candidates.append(bare)
             clk_dur = apple_tv_playback_clock
             player_dur = player_duration_seconds(
                 md_raw if isinstance(md_raw, dict) else None,
