@@ -6409,7 +6409,7 @@ class ViewCirclesWidget:
                 ph, pw = patch.shape[:2]
                 px = int(round(float(x0) + float(col_w) * 0.5 - pw / 2.0))
                 py = int(round(mid_y - ph / 2.0))
-                _paste_patch_bgra(out, patch, px, py)
+                self._paste_trt_with_plate(out, patch, px, py)
                 trt_left = float(px)
                 trt_bottom = float(py + ph)
 
@@ -6508,7 +6508,11 @@ class ViewCirclesWidget:
         ph, pw = patch.shape[:2]
         px = int(round(cx - pw / 2.0))
         py = int(round(top + (max_h - ph) / 2.0))
-        # Black rounded plate behind the digits so the TRT reads on any artwork.
+        self._paste_trt_with_plate(out, patch, px, py)
+
+    def _paste_trt_with_plate(self, out: np.ndarray, patch: np.ndarray, px: int, py: int) -> None:
+        """Paste TRT digits on a black rounded plate so they read on any artwork."""
+        ph, pw = patch.shape[:2]
         pad_x = max(10, int(round(ph * 0.45)))
         pad_y = max(6, int(round(ph * 0.28)))
         plate = _black_rounded_plate(int(pw) + 2 * pad_x, int(ph) + 2 * pad_y)
