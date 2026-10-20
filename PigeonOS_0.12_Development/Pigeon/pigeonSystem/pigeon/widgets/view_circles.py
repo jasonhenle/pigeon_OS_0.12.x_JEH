@@ -4105,6 +4105,15 @@ class ViewCirclesWidget:
         self._reveal_failed = False
         self._reveal_gen = 0
         self._reveal_pending_mono = 0.0
+        # Fast path: the loading / wipe frames kept as BGR-on-black so a frame is a few
+        # slice copies instead of a full-frame alpha blend.
+        self._loading_bgr: np.ndarray | None = None
+        self._anim_out: np.ndarray | None = None
+        self._anim_regions: dict[int, np.ndarray] = {}
+        self._reveal_new_bgr: np.ndarray | None = None
+        self._reveal_new_opaque = False
+        self._loading_opaque = False
+        self._anim_done_x = 0
         self._hold_out: np.ndarray | None = None
         self._reveal_t0: float | None = None
         self._reveal_new: np.ndarray | None = None
@@ -7328,6 +7337,9 @@ class ViewCirclesWidget:
         self._reveal_live = None
         self._reveal_rows = None
         self._hold_out = None
+        self._reveal_new_bgr = None
+        self._anim_out = None
+        self._anim_done_x = 0
 
     def reveal_wiping(self) -> bool:
         """True while the wipe itself is running (not while the page is still building)."""
@@ -7375,6 +7387,9 @@ class ViewCirclesWidget:
             self._ticking_under_sig = None
             self._ticking_base = base
             self._ticking_base_key = key
+            self._reveal_new_bgr = premultiply_bgra_on_black(base)
+            self._reveal_new_opaque = int(base[:, :, 3].min()) == 255
+            self._anim_done_x = 0
             self._reveal_new = base
             self._reveal_live = live
             self._reveal_out = out
@@ -7447,29 +7462,108 @@ class ViewCirclesWidget:
             out[rows, x_new:x_old] = np.clip(res + 0.5, 0, 255).astype(np.uint8)
         return out
 
+    def _reveal_advance(self) -> str:
+        """Move the reveal along: ``none``, ``hold`` (page building) or ``wipe``."""
+        if not self.reveal_active():
+            return "none"
+        if self._reveal_failed:
+            self._end_reveal()
+            return "none"
+        if self._reveal_pending:
+            if not self._reveal_started:
+                self._start_reveal_build()
+                if self._reveal_failed:
+                    self._end_reveal()
+                    return "none"
+            if self._reveal_ready:
+                self._stamp_current_poster_protect()
+                self._reveal_pending = False
+                self._reveal_t0 = time.monotonic()
+                return "wipe"
+            return "hold"
+        if self._reveal_new is not None:
+            return "wipe"
+        self._end_reveal()
+        return "none"
+
+    def _anim_bar_region(self, step: int) -> np.ndarray | None:
+        """Stripes composited over the loading page's bar, as BGR-on-black (cached per phase)."""
+        bar, base = self._loading_bar, self._loading_bgr
+        if bar is None or base is None:
+            return None
+        hit = self._anim_regions.get(step)
+        if hit is not None:
+            return hit
+        x, y, w, h, radius = bar
+        patch = _candy_stripe_step_bgra(
+            int(w), int(h), int(radius), step,
+            tuple(int(c) for c in self._effective_np_theme().ui_bgr),
+        )
+        region = alpha_blend_bgra_over_bgr(base[y : y + h, x : x + w], patch)
+        self._anim_regions[step] = region
+        return region
+
+    def _anim_bgr_frame(self, canvas_bgr: np.ndarray) -> np.ndarray | None:
+        """Loading / hold / wipe frame as BGR-on-black, or None to use the general path.
+
+        Only for the zone 11 bar-only loading page with a hard-edged wipe: the page is
+        static apart from the stripes and the wipe edge, so a frame is a handful of
+        slice copies.
+        """
+        if self._REVEAL_FEATHER_PX > 0 or self._loading_regions or self._live_audio_widgets_on():
+            return None
+        snap, bar = self._loading_snapshot, self._loading_bar
+        if snap is None or bar is None:
+            return None
+        if self._state.searching:
+            key = (self._cache_sig(ticking=False), self._ticking_sig())
+            if key != self._ticking_base_key:
+                return None  # the loading page changed: the general path rebuilds it
+        base = self._loading_bgr
+        if base is None or base.shape[:2] != snap.shape[:2] or self._anim_out is None:
+            base = self._loading_bgr = premultiply_bgra_on_black(snap)
+            self._loading_opaque = int(snap[:, :, 3].min()) == 255
+            self._anim_out = base.copy()
+            self._anim_regions.clear()
+            self._anim_done_x = 0
+        out = self._anim_out
+        step = int(
+            ((time.monotonic() / float(self._BAR_STRIPE_PERIOD_S)) % 1.0) * _CANDY_STEPS
+        ) % _CANDY_STEPS
+        region = self._anim_bar_region(step)
+        if region is None:
+            return None
+        bx, by, bw, bh, _r = bar
+        new = self._reveal_new_bgr
+        wiping = self._reveal_t0 is not None and new is not None
+        # BGR-on-black replaces the canvas outright only if every page involved is
+        # opaque (or the canvas underneath is black anyway).
+        if not (self._loading_opaque and (not wiping or self._reveal_new_opaque)):
+            if canvas_bgr.any():
+                return None
+        x_new = 0
+        if self._reveal_t0 is not None and new is not None:
+            p = max(0.0, min(1.0, (time.monotonic() - self._reveal_t0) / float(self._REVEAL_S)))
+            p = p * p * (3.0 - 2.0 * p)
+            w = int(out.shape[1])
+            x_new = max(0, min(w, int(p * w)))
+            if x_new > self._anim_done_x:
+                out[:, self._anim_done_x : x_new] = new[:, self._anim_done_x : x_new]
+                self._anim_done_x = x_new
+        x0 = max(bx, x_new)
+        if x0 < bx + bw:
+            out[by : by + bh, x0 : bx + bw] = region[:, x0 - bx :]
+        return out
+
     def bgra_frame(self) -> np.ndarray | None:
         if not self._state.chrome_visible:
             return None
-        revealing = self.reveal_active()
-        if revealing:
-            if self._reveal_failed:
-                self._end_reveal()
-                revealing = False
-            elif self._reveal_pending:
-                if not self._reveal_started:
-                    self._start_reveal_build()
-                if self._reveal_ready:
-                    self._stamp_current_poster_protect()
-                    self._reveal_pending = False
-                    self._reveal_t0 = time.monotonic()
-                    return self._reveal_step()
-                if self._hold_out is not None:
-                    return self._loading_hold_frame()
-            elif self._reveal_new is not None:
-                return self._reveal_step()
-            else:
-                self._end_reveal()
-                revealing = False
+        mode = self._reveal_advance()
+        revealing = mode != "none"
+        if mode == "wipe":
+            return self._reveal_step()
+        if mode == "hold" and self._hold_out is not None:
+            return self._loading_hold_frame()
         sig = self._cache_sig(ticking=False)
         if self._cached_bgra is None or self._cached_sig != sig:
             self._cached_bgra = self._render_static_bgra()
@@ -7513,8 +7607,10 @@ class ViewCirclesWidget:
             snap = self._loading_snapshot
             if snap is None or snap.shape != work.shape:
                 self._loading_snapshot = work.copy()
+                self._loading_bgr = None
             elif rebuilt:
                 snap[:] = work
+                self._loading_bgr = None
             self._loading_regions = list(self._shimmer_rects)
             self._loading_bar = self._loading_bar_rect()
         if self._has_live_shimmer():
@@ -7529,6 +7625,12 @@ class ViewCirclesWidget:
             canvas_bgr[:] = (0, 0, 0)
             return
         if self._has_live_shimmer() or self.reveal_active():
+            mode = self._reveal_advance()
+            if mode != "none" or self._state.searching:
+                fast = self._anim_bgr_frame(canvas_bgr)
+                if fast is not None and fast.shape == canvas_bgr.shape:
+                    canvas_bgr[:] = fast
+                    return
             frame = self.bgra_frame()
             if frame is None:
                 return
