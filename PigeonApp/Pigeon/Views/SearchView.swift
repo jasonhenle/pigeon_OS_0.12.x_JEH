@@ -188,7 +188,7 @@ final class NowPlayingFixModel: ObservableObject {
     @Published var errorText: String?
     @Published private(set) var notice: String?
 
-    typealias Search = (_ query: String, _ kind: String?, _ year: String?) async throws -> [Suggestion]
+    typealias Search = (_ query: String, _ kind: String?, _ year: String?, _ logos: Bool) async throws -> [Suggestion]
 
     private let client: PigeonClient
     private let search: Search
@@ -201,7 +201,9 @@ final class NowPlayingFixModel: ObservableObject {
     init(client: PigeonClient, debounce: Duration = .milliseconds(300), search: Search? = nil) {
         self.client = client
         self.debounceDelay = debounce
-        self.search = search ?? { q, kind, year in try await client.suggest(q, kind: kind, year: year) }
+        self.search = search ?? { q, kind, year, logos in
+            try await client.suggest(q, logos: logos, kind: kind, year: year)
+        }
     }
 
     func load() async {
@@ -255,10 +257,17 @@ final class NowPlayingFixModel: ObservableObject {
             try? await Task.sleep(for: self.debounceDelay)
             guard !Task.isCancelled, generation == self.searchGeneration else { return }
             do {
-                let found = try await self.search(q, k, y.isEmpty ? nil : y)
+                let year = y.isEmpty ? nil : y
+                let found = try await self.search(q, k, year, false)
                 guard generation == self.searchGeneration else { return }
                 self.results = found
                 self.searchState = found.isEmpty ? .empty : .results
+                // Logos cost the device one TMDb call per title, so they arrive a moment later.
+                guard !found.isEmpty, let rich = try? await self.search(q, k, year, true),
+                      generation == self.searchGeneration else { return }
+                let logos = Dictionary(rich.compactMap { r in r.logoUrl.map { (r.id, $0) } },
+                                       uniquingKeysWith: { a, _ in a })
+                self.results = self.results.map { r in var r = r; r.logoUrl = logos[r.id]; return r }
             } catch {
                 guard generation == self.searchGeneration else { return }
                 self.searchState = .failed(error.localizedDescription)
@@ -364,7 +373,7 @@ struct NowPlayingFixView: View {
                 Text(message).font(Theme.ui(14)).foregroundStyle(Theme.bad)
             }
             ForEach(model.results) { c in
-                Button { Task { await model.pick(c) } } label: { SuggestionRow(suggestion: c) }
+                Button { Task { await model.pick(c) } } label: { SuggestionRow(suggestion: c, logoSlot: true) }
                     .buttonStyle(.plain)
             }
         }
