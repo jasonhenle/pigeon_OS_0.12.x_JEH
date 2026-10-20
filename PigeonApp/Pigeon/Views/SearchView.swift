@@ -2,20 +2,15 @@ import SwiftUI
 
 @MainActor
 final class SearchModel: ObservableObject {
-    @Published var query = ""
-    @Published private(set) var results: [Suggestion] = []
     @Published private(set) var current = ManualSearchState(active: false, entry: nil)
-    @Published private(set) var isSearching = false
     @Published private(set) var nowPlaying: NowPlaying?
     @Published var errorText: String?
 
     private var client: PigeonClient?
-    private var debounce: Task<Void, Never>?
     private var events: Task<Void, Never>?
 
     func attach(_ client: PigeonClient?) {
         self.client = client
-        results = []
         current = ManualSearchState(active: false, entry: nil)
         nowPlaying = nil
         errorText = nil
@@ -41,49 +36,12 @@ final class SearchModel: ObservableObject {
         }
     }
 
-    func detach() { events?.cancel(); debounce?.cancel() }
+    func detach() { events?.cancel() }
 
     func refreshCurrent() async {
         guard let client else { return }
         do { current = try await client.currentSearch() }
         catch { errorText = error.localizedDescription }
-    }
-
-    func queryChanged() {
-        debounce?.cancel()
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 2 else { results = []; isSearching = false; return }
-        debounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled, let self, let client = self.client else { return }
-            self.isSearching = true
-            defer { self.isSearching = false }
-            do {
-                let r = try await client.suggest(q)
-                if !Task.isCancelled { self.results = r; self.errorText = nil }
-                // Logos cost the device one TMDb lookup per title, so they fill in after the list shows.
-                if !Task.isCancelled, let rich = try? await client.suggest(q, logos: true), !Task.isCancelled {
-                    let logos = Dictionary(rich.compactMap { s in s.logoUrl.map { (s.id, $0) } }, uniquingKeysWith: { a, _ in a })
-                    self.results = self.results.map { s in
-                        var s = s
-                        s.logoUrl = logos[s.id]
-                        return s
-                    }
-                }
-            } catch {
-                if !Task.isCancelled { self.errorText = error.localizedDescription }
-            }
-        }
-    }
-
-    func choose(_ s: Suggestion) async {
-        guard let client else { return }
-        do {
-            current = try await client.setCurrentSearch(s)
-            query = ""
-            results = []
-            errorText = nil
-        } catch { errorText = error.localizedDescription }
     }
 
     func clear() async {
@@ -93,44 +51,31 @@ final class SearchModel: ObservableObject {
     }
 }
 
-/// Search and "playing now" for one device, shown at the top of its detail page.
-struct DeviceSearchSection: View {
+/// "Playing now" for one device on its detail page.
+struct PlayingNowSection: View {
     @EnvironmentObject private var store: DeviceStore
     @StateObject private var model = SearchModel()
-    @FocusState private var focused: Bool
     let device: KnownDevice
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            searchField
             if let text = model.errorText {
                 Text(text).font(Theme.ui(14)).foregroundStyle(Theme.bad)
             }
-            if model.query.isEmpty {
-                LCDLabel(text: "Playing now", size: 18, color: Theme.accent)
-                let detected = model.nowPlaying.flatMap { $0.source == "detected" ? $0 : nil }
-                let manual = model.current.active ? model.current.entry : nil
-                if let np = detected {
-                    NavigationLink {
-                        NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
-                    } label: { DetectedCard(nowPlaying: np) }
-                        .buttonStyle(.plain)
-                }
-                if let e = manual {
-                    CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
-                }
-                if detected == nil && manual == nil {
-                    Text("Nothing playing").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
-                }
+            LCDLabel(text: "Playing now", size: 18, color: Theme.accent)
+            let detected = model.nowPlaying.flatMap { $0.source == "detected" ? $0 : nil }
+            let manual = model.current.active ? model.current.entry : nil
+            if let np = detected {
+                NavigationLink {
+                    NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
+                } label: { DetectedCard(nowPlaying: np) }
+                    .buttonStyle(.plain)
             }
-            ForEach(model.results) { s in
-                Button { Task { await model.choose(s); focused = false } } label: {
-                    SuggestionRow(suggestion: s, logoSlot: true)
-                }
-                .buttonStyle(.plain)
+            if let e = manual {
+                CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
             }
-            if model.results.isEmpty, model.query.count >= 2, !model.isSearching {
-                Text("No matches").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
+            if detected == nil && manual == nil {
+                Text("Nothing playing").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
             }
         }
         .onAppear { reattach() }
@@ -139,26 +84,6 @@ struct DeviceSearchSection: View {
     }
 
     private func reattach() { model.attach(store.client(for: device)) }
-
-    private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondaryText)
-            TextField("Search for a movie or show", text: $model.query)
-                .font(Theme.ui(20))
-                .focused($focused)
-                .submitLabel(.search)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .onChange(of: model.query) { _, _ in model.queryChanged() }
-            if model.isSearching { ProgressView() }
-            else if !model.query.isEmpty {
-                Button { model.query = "" } label: { Image(systemName: "xmark.circle.fill") }
-                    .foregroundStyle(Theme.secondaryText)
-            }
-        }
-        .padding(16)
-        .background(Theme.tile, in: RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
-    }
 }
 
 struct SuggestionRow: View {

@@ -93,8 +93,7 @@ struct DeviceDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).tile()
 
-                    // Search for a movie or show, then what's playing now.
-                    DeviceSearchSection(device: device)
+                    PlayingNowSection(device: device)
 
                     if caps?.capabilities.contains("display_brightness") == true {
                         BrightnessCard(client: store.client(for: device))
