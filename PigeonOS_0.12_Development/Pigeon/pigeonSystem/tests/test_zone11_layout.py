@@ -246,6 +246,33 @@ class Zone11LayoutTests(unittest.TestCase):
         w.render(canvas)
         self.assertFalse(w.reveal_active())
 
+    def test_shimmer_keeps_moving_on_the_uncovered_side_during_the_reveal(self) -> None:
+        import time
+
+        w = self._widget()
+        tt = w._tt_bgra
+        w._state.searching = True
+        w._tt_bgra = None
+        canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
+        w.render(canvas)
+        bx, by, bw, bh, _r = w._loading_bar_rect()  # type: ignore[misc]
+        w._state.searching = False
+        w._tt_bgra = tt
+        w._cached_bgra = None
+        w._reveal_t0 = time.monotonic()
+        shots = []
+        for phase_t in (0.0, 0.2):
+            w._reveal_t0 = time.monotonic() - 0.02  # wipe barely started
+            real = time.monotonic
+            time.monotonic = lambda t=real() + phase_t: t  # type: ignore[assignment]
+            try:
+                w._reveal_t0 = time.monotonic() - 0.02
+                w.render(canvas)
+            finally:
+                time.monotonic = real
+            shots.append(canvas[by : by + bh, bx + bw // 2 : bx + bw].copy())
+        self.assertFalse(np.array_equal(shots[0], shots[1]))
+
     def test_volume_adjustment_never_brings_up_zone3_volume(self) -> None:
         w = self._widget()
         before = w._assignments()

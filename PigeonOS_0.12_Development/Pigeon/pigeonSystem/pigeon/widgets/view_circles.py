@@ -4048,6 +4048,7 @@ class ViewCirclesWidget:
         self._shimmer_work: np.ndarray | None = None
         # Last frame shown while TMDb was loading, and when the reveal wipe off it began.
         self._loading_snapshot: np.ndarray | None = None
+        self._reveal_old: np.ndarray | None = None
         self._reveal_t0: float | None = None
         # ``_overlay_ticking`` result reused across loading / reveal frames.
         self._ticking_base: np.ndarray | None = None
@@ -4493,9 +4494,11 @@ class ViewCirclesWidget:
         """Zone 11 while TMDb is in flight: header + status bar only, the bar shimmers."""
         return bool(self._state.searching) and self._zone11_on()
 
-    def _loading_bar_rect(self) -> tuple[int, int, int, int, int] | None:
+    def _loading_bar_rect(
+        self, *, loading: bool | None = None
+    ) -> tuple[int, int, int, int, int] | None:
         """Status bar track ``(x, y, w, h, radius)`` that carries the loading shimmer."""
-        if not self._zone11_loading():
+        if not (self._zone11_loading() if loading is None else bool(loading) and self._zone11_on()):
             return None
         for i, name in enumerate(self._assignments()[:5]):
             if is_status_bar_widget(name, i + 1):
@@ -4511,14 +4514,18 @@ class ViewCirclesWidget:
     def _has_live_shimmer(self) -> bool:
         return bool(self._shimmer_rects) or self._loading_bar_rect() is not None
 
-    def _paint_live_shimmers(self, out: np.ndarray) -> None:
+    # The bar sweeps faster than the skeleton plates: it is the only thing moving.
+    _BAR_SHIMMER_PERIOD_S = 0.8
+
+    def _paint_live_shimmers(self, out: np.ndarray, *, loading: bool | None = None) -> None:
         phase = self._shimmer_phase()
         for x, y, w, h, radius in self._shimmer_rects:
             _draw_shimmer_rounded_rect(
                 out, x=x, y=y, w=w, h=h, radius=radius, phase=phase
             )
-        bar = self._loading_bar_rect()
+        bar = self._loading_bar_rect(loading=loading)
         if bar is not None:
+            phase = (time.monotonic() / float(self._BAR_SHIMMER_PERIOD_S)) % 1.0
             x, y, w, h, radius = bar
             # Track gray with a UI-color highlight: the same bar the final page fills.
             _draw_shimmer_rounded_rect(
@@ -7230,11 +7237,22 @@ class ViewCirclesWidget:
         return True
 
     def _apply_reveal(self, frame: np.ndarray) -> None:
-        """Wipe ``frame`` (the finished page) on from the left over the loading snapshot, in place."""
-        old = self._loading_snapshot
+        """Wipe ``frame`` (the finished page) on from the left over the loading page, in place.
+
+        The loading page keeps shimmering underneath until the wipe covers it, so the
+        animation never freezes when the content lands.
+        """
+        snap = self._loading_snapshot
         t0 = self._reveal_t0
-        if old is None or t0 is None or old.shape != frame.shape:
+        if snap is None or t0 is None or snap.shape != frame.shape:
             return
+        old = self._reveal_old
+        if old is None or old.shape != snap.shape:
+            old = snap.copy()
+            self._reveal_old = old
+        else:
+            old[:] = snap
+        self._paint_live_shimmers(old, loading=True)
         p = max(0.0, min(1.0, (time.monotonic() - t0) / float(self._REVEAL_S)))
         p = 1.0 - (1.0 - p) ** 2  # fast off the line, settles at the right edge
         w = int(frame.shape[1])
@@ -7296,16 +7314,17 @@ class ViewCirclesWidget:
         if self._live_audio_widgets_on():
             self._draw_live_audio_widgets(work)
         self._draw_zone4_eq(work)
-        if self._has_live_shimmer():
-            self._paint_live_shimmers(work)
         if self._state.searching:
+            # Snapshot without the shimmer; the wipe repaints it live over this.
             snap = self._loading_snapshot
             if snap is None or snap.shape != work.shape:
                 snap = work.copy()
                 self._loading_snapshot = snap
             else:
                 snap[:] = work
-        elif revealing:
+        if self._has_live_shimmer():
+            self._paint_live_shimmers(work)
+        if not self._state.searching and revealing:
             self._apply_reveal(work)
         return frame
 
