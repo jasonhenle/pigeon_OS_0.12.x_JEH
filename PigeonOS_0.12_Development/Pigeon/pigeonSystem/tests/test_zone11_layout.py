@@ -81,18 +81,25 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertLess(lx0, 80)
         self.assertGreater(rx1, DESIGN_W - 80)
         # The old center-ish clock slot is empty.
-        mid = self._ink(frame, 400, 0, 900, 70)
+        mid = self._ink(frame, 250, 0, 450, 70)
         self.assertFalse(mid.any())
 
-    def test_app_id_sits_under_the_volume(self) -> None:
+    def test_app_id_sits_under_the_clock(self) -> None:
         frame = self._frame(self._widget())
-        vol = self._ink(frame, 900, 0, DESIGN_W, 66)
-        app = self._ink(frame, 900, 70, DESIGN_W, 120)
-        self.assertTrue(vol.any() and app.any())
-        vy = np.where(vol.any(axis=1))[0].max()
+        clock = self._ink(frame, 0, 0, 400, 66)
+        app = self._ink(frame, 0, 70, 400, 150)
+        self.assertTrue(clock.any() and app.any())
+        cy = np.where(clock.any(axis=1))[0].max()
         ay = np.where(app.any(axis=1))[0].min() + 70
-        self.assertGreater(ay, vy)
-        self.assertLess(ay - vy, 40)
+        self.assertGreater(ay, cy)
+        self.assertLess(ay - cy, 40)
+
+    def test_volume_is_triple_size_alone_top_right(self) -> None:
+        frame = self._frame(self._widget())
+        vol = self._ink(frame, 600, 0, DESIGN_W, 200)
+        ys = np.where(vol.any(axis=1))[0]
+        self.assertGreater(int(ys.max() - ys.min()), 80)
+        self.assertGreater(self._cols(vol, 600)[1], DESIGN_W - 80)
 
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
         w = self._widget()
@@ -130,9 +137,9 @@ class Zone11LayoutTests(unittest.TestCase):
         # Near the end it would collide with the TRT: gone.
         self.assertIsNone(self._elapsed_cols(self._frame(self._widget_at(0.97))))
 
-    def test_elapsed_uses_the_volume_gray_and_size(self) -> None:
+    def test_elapsed_uses_the_clock_gray_and_size(self) -> None:
         frame = self._frame(self._widget_at(0.30))
-        vol = frame[0:66, 900:DESIGN_W].astype(int)
+        vol = frame[0:66, 0:400].astype(int)  # header clock
         el = frame[540:640, 60:870].astype(int)
         vol_mask = vol.max(axis=2) > 90
         el_mask = (el.max(axis=2) > 90) & ((el.max(axis=2) - el.min(axis=2)) < 25)
@@ -144,8 +151,8 @@ class Zone11LayoutTests(unittest.TestCase):
 
     def test_input_id_stacks_under_app_id_and_takes_its_place_when_missing(self) -> None:
         def rows(frame: np.ndarray) -> list[int]:
-            reg = frame[66:200, 1000:DESIGN_W].astype(int)
-            band = reg.max(axis=2) > 90
+            reg = frame[66:150, 0:400].astype(int)
+            band = (reg.max(axis=2) > 90) & (reg.max(axis=2) < 200)
             ys = np.where(band.any(axis=1))[0]
             groups: list[int] = []
             prev = -10
