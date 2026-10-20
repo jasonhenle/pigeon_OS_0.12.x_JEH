@@ -284,8 +284,14 @@ class ControlService:
             except ValueError:
                 return _err(400, "bad_request", "limit must be an integer.", fields=["limit"])
             limit = max(1, min(SUGGEST_MAX, limit))
+            kind = (query.get("kind") or [""])[0]
+            if kind not in ("", "movie", "tv"):
+                return _err(400, "bad_request", "kind must be movie or tv.", fields=["kind"])
+            year = (query.get("year") or [""])[0]
+            if year and not re.fullmatch(r"\d{4}", year):
+                return _err(400, "bad_request", "year must be four digits.", fields=["year"])
             try:
-                rows = ms.suggest_now(q, limit=limit, strict=True)
+                rows = ms.suggest_now(q, limit=limit, strict=True, kind=kind or None, year=year or None)
             except ms.SuggestionSearchError as exc:
                 return _err(503, exc.code, str(exc))
             logos = ms.logo_urls(rows) if (query.get("logos") or [""])[0] == "1" else {}

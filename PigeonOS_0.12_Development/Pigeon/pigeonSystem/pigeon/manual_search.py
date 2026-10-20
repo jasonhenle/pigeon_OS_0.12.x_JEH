@@ -24,6 +24,7 @@ import numpy as np
 
 SUGGEST_ROWS = 3
 _SUGGEST_FETCH = 12
+_SUGGEST_PAGE = 20  # one full TMDb results page
 _DEBOUNCE_S = 0.28
 _POSTER_SIZE = "w500"
 _FILE = "manual_search.json"
@@ -269,7 +270,7 @@ class SuggestionSearchError(RuntimeError):
         super().__init__(message)
         self.code = code
 
-def _search_multi(query: str) -> list[dict]:
+def _search_multi(query: str, cap: int = _SUGGEST_FETCH) -> list[dict]:
     from pigeon.tmdb_poster import (
         TMDB_API_BASE,
         TMDB_UI_LANGUAGE,
@@ -311,15 +312,24 @@ def _search_multi(query: str) -> list[dict]:
                 "_pop": float(item.get("popularity") or 0.0),
             }
         )
-        if len(out) >= _SUGGEST_FETCH:
+        if len(out) >= cap:
             break
     return out
 
 
 def suggest_now(
-    query: str, limit: int = SUGGEST_ROWS, *, strict: bool = False
+    query: str,
+    limit: int = SUGGEST_ROWS,
+    *,
+    strict: bool = False,
+    kind: str | None = None,
+    year: str | int | None = None,
 ) -> tuple[dict, ...]:
-    """Blocking search (worker threads / tests). Title-prefix matches first."""
+    """Blocking search (worker threads / tests). Title-prefix matches first.
+
+    ``kind`` (``movie`` / ``tv``) and ``year`` narrow the hits; with either set
+    the whole first TMDb page is searched so the filter has something to keep.
+    """
     q = " ".join(str(query or "").split())
     if len(q) < 2:
         return ()
@@ -331,8 +341,10 @@ def suggest_now(
                 "tmdb_not_configured",
                 "TMDb isn't configured on this Pigeon device. Add a TMDb API key or read token under ~/.pigeon_0_6/.",
             )
+    want_kind = kind if kind in ("movie", "tv") else None
+    want_year = str(year).strip() if year is not None and str(year).strip().isdigit() else ""
     try:
-        rows = _search_multi(q)
+        rows = _search_multi(q, _SUGGEST_PAGE if (want_kind or want_year) else _SUGGEST_FETCH)
     except Exception as exc:
         if strict:
             raise SuggestionSearchError(
@@ -340,6 +352,10 @@ def suggest_now(
                 "Pigeon couldn't get results from TMDb. Check the device's internet connection and TMDb credentials, then try again.",
             ) from exc
         return ()
+    if want_kind:
+        rows = [r for r in rows if r["kind"] == want_kind]
+    if want_year:
+        rows = [r for r in rows if r["year"] == want_year]
     nq = _norm(q)
     rows.sort(
         key=lambda r: (

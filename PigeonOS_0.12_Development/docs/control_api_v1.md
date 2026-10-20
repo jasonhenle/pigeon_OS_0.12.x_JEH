@@ -219,7 +219,7 @@ Returns the cached poster image (`image/jpeg`) for the current title, size `w500
 
 Wraps `pigeon/manual_search.py`. Suggestion lookups are debounced and off-thread on the device.
 
-`GET /search/suggest?q=<text>&limit=3&logos=1`
+`GET /search/suggest?q=<text>&limit=3&logos=1&kind=movie&year=1977`
 
 ```json
 {
@@ -234,7 +234,7 @@ Wraps `pigeon/manual_search.py`. Suggestion lookups are debounced and off-thread
 }
 ```
 
-Query must be ≥ 2 characters (`400` otherwise). `limit` 1–12, default 3 (the device caps its TMDb fetch at 12). `poster_url` is included whenever TMDb has a poster. `logo_url` (the title-treatment logo, English only) is included only with `logos=1`, because it costs the device one extra TMDb lookup per result (about a second for 12); a title with no English logo simply has no `logo_url`. Clients load both images straight from TMDb. Both fields are optional additions. The call blocks until TMDb answers, so there is no `pending` state; clients debounce.
+Query must be ≥ 2 characters (`400` otherwise). `limit` 1–12, default 3 (the device caps its TMDb fetch at 12). `poster_url` is included whenever TMDb has a poster. `logo_url` (the title-treatment logo, English only) is included only with `logos=1`, because it costs the device one extra TMDb lookup per result (about a second for 12); a title with no English logo simply has no `logo_url`. Clients load both images straight from TMDb. Both fields are optional additions. `kind` (`movie` or `tv`) and `year` (four digits) narrow the hits; anything else is `400`. The call blocks until TMDb answers, so there is no `pending` state; clients debounce.
 
 `GET /search/current` → `{ "active": true, "entry": { "title": "...", "kind": "movie", "tmdb_id": 335984 } }` or `{ "active": false }`.
 

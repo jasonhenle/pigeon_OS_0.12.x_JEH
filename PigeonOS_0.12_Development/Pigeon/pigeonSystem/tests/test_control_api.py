@@ -131,6 +131,34 @@ class RouteTests(_Base):
         self.assertEqual(sn.call_args.kwargs["limit"], 12)  # clamped
         self.assertEqual(body["results"][0], {"tmdb_id": 78, "kind": "movie", "title": "Blade Runner", "year": 1982})
 
+    def test_suggest_kind_and_year_filters(self) -> None:
+        self.assertEqual(
+            self.call("GET", "/search/suggest", query={"q": ["dune"], "kind": ["book"]})[0], 400
+        )
+        self.assertEqual(
+            self.call("GET", "/search/suggest", query={"q": ["dune"], "year": ["19"]})[0], 400
+        )
+        with mock.patch.object(ms, "suggest_now", return_value=()) as sn:
+            st, _ = self.call(
+                "GET", "/search/suggest", query={"q": ["dune"], "kind": ["movie"], "year": ["2021"]}
+            )
+        self.assertEqual(st, 200)
+        self.assertEqual((sn.call_args.kwargs["kind"], sn.call_args.kwargs["year"]), ("movie", "2021"))
+
+    def test_suggest_now_filters_rows_by_kind_and_year(self) -> None:
+        rows = [
+            {"title": "Dune", "year": "2021", "kind": "movie", "tmdb_id": 1, "poster_path": "", "_pop": 9.0},
+            {"title": "Dune", "year": "1984", "kind": "movie", "tmdb_id": 2, "poster_path": "", "_pop": 8.0},
+            {"title": "Dune", "year": "2000", "kind": "tv", "tmdb_id": 3, "poster_path": "", "_pop": 7.0},
+        ]
+        with mock.patch.object(ms, "_search_multi", side_effect=lambda q, cap=12: [dict(r) for r in rows]):
+            self.assertEqual([r["tmdb_id"] for r in ms.suggest_now("dune", 12, kind="tv")], [3])
+            self.assertEqual([r["tmdb_id"] for r in ms.suggest_now("dune", 12, year="1984")], [2])
+            self.assertEqual(
+                [r["tmdb_id"] for r in ms.suggest_now("dune", 12, kind="movie", year=2021)], [1]
+            )
+            self.assertEqual(len(ms.suggest_now("dune", 12)), 3)
+
     def test_suggest_artwork_posters_always_logos_on_request(self) -> None:
         rows = (
             {"title": "A New Hope", "year": "1977", "kind": "movie", "tmdb_id": 11, "poster_path": "/p11.jpg"},
