@@ -1,7 +1,7 @@
 # Pigeon Remote (iOS companion app)
 
 Controls Pigeon Clock and Pigeon Marquee devices over the Control API
-(`../PigeonOS_0.12_Development/docs/control_api_v1.md`). SwiftUI, iOS 17+. Search is the first tab.
+(`../PigeonOS_0.12_Development/docs/control_api_v1.md`). SwiftUI, iOS 17+. Runs on iPhone and iPad.
 
     brew install xcodegen
     cd PigeonApp && xcodegen generate && open Pigeon.xcodeproj

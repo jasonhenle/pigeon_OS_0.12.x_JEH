@@ -165,6 +165,16 @@ struct DetectedCard: View {
 
 // MARK: Fix a wrong match
 
+/// Where the TMDb search box stands. Anything but `.results` shows no rows.
+enum SearchState: Equatable {
+    case idle
+    case needsYear
+    case loading
+    case results
+    case empty
+    case failed(String)
+}
+
 @MainActor
 final class NowPlayingFixModel: ObservableObject {
     @Published private(set) var detail: NowPlayingDetail?
@@ -173,14 +183,26 @@ final class NowPlayingFixModel: ObservableObject {
     @Published var kind = "auto" { didSet { searchSettingsChanged() } }
     @Published var query = "" { didSet { searchSettingsChanged() } }
     @Published private(set) var results: [Suggestion] = []
+    @Published private(set) var searchState: SearchState = .idle
     @Published private(set) var busy = false
     @Published var errorText: String?
     @Published private(set) var notice: String?
 
-    private let client: PigeonClient
-    private var debounce: Task<Void, Never>?
+    typealias Search = (_ query: String, _ kind: String?, _ year: String?) async throws -> [Suggestion]
 
-    init(client: PigeonClient) { self.client = client }
+    private let client: PigeonClient
+    private let search: Search
+    private let debounceDelay: Duration
+    /// The in-flight (debounced) search; tests await it.
+    private(set) var searchTask: Task<Void, Never>?
+    /// Bumped on every change, so a reply for an older query is dropped.
+    private var searchGeneration = 0
+
+    init(client: PigeonClient, debounce: Duration = .milliseconds(300), search: Search? = nil) {
+        self.client = client
+        self.debounceDelay = debounce
+        self.search = search ?? { q, kind, year in try await client.suggest(q, kind: kind, year: year) }
+    }
 
     func load() async {
         do {
@@ -211,19 +233,36 @@ final class NowPlayingFixModel: ObservableObject {
         do { try await work(); errorText = nil } catch { errorText = error.localizedDescription }
     }
 
-    /// Re-runs the TMDb search when the text, year or type changes.
-    private func searchSettingsChanged() {
-        debounce?.cancel()
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 2 else { results = []; return }
+    /// Re-runs the TMDb search when the text, year or type changes. The old results go
+    /// at once; a reply that arrives after a newer change is ignored.
+    func searchSettingsChanged() {
+        searchTask?.cancel()
+        searchGeneration += 1
+        let generation = searchGeneration
+        results = []
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { searchState = .idle; return }
         let y = year.trimmingCharacters(in: .whitespaces)
-        let k = kind
-        debounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled, let self else { return }
-            let found = try? await self.client.suggest(
-                q, kind: k == "auto" ? nil : k, year: y.count == 4 ? y : nil)
-            if let found, !Task.isCancelled { self.results = found }
+        // The device only takes a four-digit year (anything else is a 400).
+        guard y.isEmpty || (y.count == 4 && y.allSatisfy(\.isASCII) && y.allSatisfy(\.isNumber)) else {
+            searchState = .needsYear
+            return
+        }
+        let k = kind == "auto" ? nil : kind
+        searchState = .loading
+        searchTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: self.debounceDelay)
+            guard !Task.isCancelled, generation == self.searchGeneration else { return }
+            do {
+                let found = try await self.search(q, k, y.isEmpty ? nil : y)
+                guard generation == self.searchGeneration else { return }
+                self.results = found
+                self.searchState = found.isEmpty ? .empty : .results
+            } catch {
+                guard generation == self.searchGeneration else { return }
+                self.searchState = .failed(error.localizedDescription)
+            }
         }
     }
 }
@@ -309,6 +348,21 @@ struct NowPlayingFixView: View {
             Picker("Type", selection: $model.kind) {
                 Text("Any").tag("auto"); Text("Movie").tag("movie"); Text("TV").tag("tv")
             }.pickerStyle(.segmented)
+            switch model.searchState {
+            case .idle, .results: EmptyView()
+            case .needsYear:
+                Text("Enter a four-digit year, or clear it.").font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Searching…").font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
+                }
+            case .empty:
+                Text("No matches. Try fewer words, another year, or Any type.")
+                    .font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
+            case .failed(let message):
+                Text(message).font(Theme.ui(14)).foregroundStyle(Theme.bad)
+            }
             ForEach(model.results) { c in
                 Button { Task { await model.pick(c) } } label: { SuggestionRow(suggestion: c) }
                     .buttonStyle(.plain)

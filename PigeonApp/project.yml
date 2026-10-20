@@ -7,8 +7,11 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # The one place the app's version lives (Info.plist reads these). The version-bump
+    # commit sets them to pigeon/version.py: MARKETING_VERSION = MAJOR.MINOR.PATCH,
+    # CURRENT_PROJECT_VERSION = PATCH. A test in pigeonSystem/tests checks they agree.
+    MARKETING_VERSION: "0.12.46"
+    CURRENT_PROJECT_VERSION: "46"
 targets:
   Pigeon:
     type: application
@@ -18,17 +21,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jasonhenle.pigeon
         PRODUCT_NAME: Pigeon
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone and iPad
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Pigeon/Info.plist
     info:
       path: Pigeon/Info.plist
       properties:
         CFBundleDisplayName: Pigeon Remote
-        # Kept in step with pigeon/version.py (MAJOR.MINOR.PATCH, build = PATCH) by the
-        # version-bump commit; a test in pigeonSystem/tests checks they agree.
-        CFBundleShortVersionString: "0.12.46"
-        CFBundleVersion: "46"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
