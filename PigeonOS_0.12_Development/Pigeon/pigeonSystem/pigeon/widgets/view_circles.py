@@ -6283,9 +6283,9 @@ class ViewCirclesWidget:
     _ZONE11_ART_VOLUME_OVERLAP_PX = 0
 
     def _zone11_volume_bottom(self) -> float:
-        """Design-Y of the bottom of the header row ink (``_ZONE11_VOLUME_SCALE``)."""
+        """Design-Y the art must stay below: the header row at ``_ZONE11_ART_RESERVE_SCALE``."""
         return self._zone11_header_top() + self._zone11_header_ink_h() * float(
-            self._ZONE11_VOLUME_SCALE
+            self._ZONE11_ART_RESERVE_SCALE
         )
 
     def _draw_zone11_art(self, out: np.ndarray) -> None:
@@ -6330,7 +6330,10 @@ class ViewCirclesWidget:
     _ZONE11_APP_ID_GAP = 14
     # Fixed multiple of the header size; independent of the art so it never jumps
     # when the title / poster finishes loading.
-    _ZONE11_VOLUME_SCALE = 2.5
+    _ZONE11_VOLUME_SCALE = 2.0
+    # The art keeps clearing the row as it was sized at this scale, so shrinking the
+    # header text opens a gap above the art instead of pulling the art up.
+    _ZONE11_ART_RESERVE_SCALE = 2.5
     # Header row (clock, volume, labels) sits a little lower, and the volume clear of the edge.
     _ZONE11_HEADER_DROP_PX = 14
     _ZONE11_VOLUME_RIGHT_PAD_PX = 14
@@ -6426,7 +6429,7 @@ class ViewCirclesWidget:
         return None
 
     def _draw_zone11_info(self, out: np.ndarray) -> None:
-        """Top-right: volume (2.5x header size). Top-left under the clock: app id, input id
+        """Top-right: volume (2x header size). Top-left under the clock: app id, input id
         (stacked). Zone 4 strip: elapsed
         riding the status bar's playhead (gray, fading before it meets the TRT) and
         the TRT in the title's UI color."""
