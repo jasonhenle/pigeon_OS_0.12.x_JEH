@@ -4097,9 +4097,15 @@ class ViewCirclesWidget:
         self._loading_snapshot: np.ndarray | None = None
         self._loading_regions: list[tuple[int, int, int, int, int]] = []
         self._loading_bar: tuple[int, int, int, int, int] | None = None
-        # Reveal: pending until the finished page is built (that rebuild is slow and
-        # must not eat into the wipe), then ``_reveal_t0`` runs the clock.
+        # Reveal: pending while a worker thread builds the finished page (slow) and the
+        # loading stripes keep running; then ``_reveal_t0`` runs the wipe clock.
         self._reveal_pending = False
+        self._reveal_started = False
+        self._reveal_ready = False
+        self._reveal_failed = False
+        self._reveal_gen = 0
+        self._reveal_pending_mono = 0.0
+        self._hold_out: np.ndarray | None = None
         self._reveal_t0: float | None = None
         self._reveal_new: np.ndarray | None = None
         self._reveal_out: np.ndarray | None = None
@@ -4439,7 +4445,12 @@ class ViewCirclesWidget:
             if want != self._state.searching:
                 self._state.searching = want
                 if not want and self._loading_snapshot is not None:
+                    self._reveal_gen += 1
                     self._reveal_pending = True
+                    self._reveal_started = False
+                    self._reveal_ready = False
+                    self._reveal_failed = False
+                    self._reveal_pending_mono = time.monotonic()
                     self._reveal_t0 = None
                     self._reveal_new = None
                 elif want:
@@ -7292,6 +7303,9 @@ class ViewCirclesWidget:
     def reveal_active(self) -> bool:
         """True while the finished page is wiping on over the loading page."""
         if self._reveal_pending:
+            if time.monotonic() - self._reveal_pending_mono > 5.0:
+                self._end_reveal()  # the build never landed: show the page as is
+                return False
             return True
         t0 = self._reveal_t0
         if t0 is None:
@@ -7302,32 +7316,83 @@ class ViewCirclesWidget:
         return True
 
     def _end_reveal(self) -> None:
+        self._reveal_gen += 1  # a build still running must not publish
         self._reveal_pending = False
+        self._reveal_started = False
+        self._reveal_ready = False
+        self._reveal_failed = False
         self._reveal_t0 = None
         self._loading_snapshot = None
         self._reveal_new = None
         self._reveal_out = None
         self._reveal_live = None
         self._reveal_rows = None
+        self._hold_out = None
 
-    def _prepare_reveal(self, new: np.ndarray) -> bool:
-        """Set up the wipe from the loading snapshot to ``new`` (the finished page).
+    def reveal_wiping(self) -> bool:
+        """True while the wipe itself is running (not while the page is still building)."""
+        return self.reveal_active() and self._reveal_t0 is not None
 
-        Everything that does not change per frame is done here, once, so a wipe frame
-        only touches the columns the edge crossed plus the animating stripes.
-        """
+    def _start_reveal_build(self) -> None:
+        """Build the finished page on a worker thread; the stripes keep animating."""
+        import threading
+
         snap = self._loading_snapshot
-        if snap is None or snap.shape != new.shape:
-            return False
-        self._reveal_new = new.copy()
-        self._reveal_live = snap.copy()
-        self._reveal_out = snap.copy()
-        changed = (new != snap).reshape(new.shape[0], -1).any(axis=1)
-        for _x, y, _w, h, _r in self._loading_live_regions():
-            changed[max(0, y) : max(0, y + h)] = True
-        self._reveal_rows = np.nonzero(changed)[0]
-        self._reveal_done_x = 0
-        return True
+        if snap is None:
+            self._reveal_failed = True
+            return
+        self._reveal_started = True
+        self._hold_out = snap.copy()
+        gen = self._reveal_gen
+        threading.Thread(
+            target=self._build_reveal_page, args=(gen,), name="np-reveal-build", daemon=True
+        ).start()
+
+    def _build_reveal_page(self, gen: int) -> None:
+        try:
+            sig = self._cache_sig(ticking=False)
+            static = self._render_static_bgra()
+            base = static.copy()
+            self._overlay_ticking(base)
+            key = (sig, self._ticking_sig())
+            snap = self._loading_snapshot
+            if gen != self._reveal_gen or snap is None or snap.shape != base.shape:
+                if gen == self._reveal_gen:
+                    self._reveal_failed = True
+                return
+            live = snap.copy()
+            out = snap.copy()
+            changed = (base != snap).reshape(base.shape[0], -1).any(axis=1)
+            for _x, y, _w, h, _r in self._loading_live_regions():
+                changed[max(0, y) : max(0, y + h)] = True
+            if gen != self._reveal_gen:
+                return
+            # Publish: the normal path finds the finished page already cached.
+            self._cached_bgra = static
+            self._cached_sig = sig
+            self._static_bgr = None
+            self._ticking_under = None
+            self._ticking_under_sig = None
+            self._ticking_base = base
+            self._ticking_base_key = key
+            self._reveal_new = base
+            self._reveal_live = live
+            self._reveal_out = out
+            self._reveal_rows = np.nonzero(changed)[0]
+            self._reveal_done_x = 0
+            self._reveal_ready = True
+        except Exception:
+            if gen == self._reveal_gen:
+                self._reveal_failed = True
+
+    def _loading_hold_frame(self) -> np.ndarray:
+        """The loading page, stripes still moving, while the finished page builds."""
+        out, snap = self._hold_out, self._loading_snapshot
+        assert out is not None and snap is not None
+        for x, y, w, h, _r in self._loading_live_regions():
+            out[y : y + h, x : x + w] = snap[y : y + h, x : x + w]
+        self._paint_shimmers(out, self._loading_regions, self._loading_bar)
+        return out
 
     def _loading_live_regions(self) -> list[tuple[int, int, int, int, int]]:
         regions = list(self._loading_regions)
@@ -7386,8 +7451,25 @@ class ViewCirclesWidget:
         if not self._state.chrome_visible:
             return None
         revealing = self.reveal_active()
-        if revealing and not self._reveal_pending and self._reveal_new is not None:
-            return self._reveal_step()
+        if revealing:
+            if self._reveal_failed:
+                self._end_reveal()
+                revealing = False
+            elif self._reveal_pending:
+                if not self._reveal_started:
+                    self._start_reveal_build()
+                if self._reveal_ready:
+                    self._stamp_current_poster_protect()
+                    self._reveal_pending = False
+                    self._reveal_t0 = time.monotonic()
+                    return self._reveal_step()
+                if self._hold_out is not None:
+                    return self._loading_hold_frame()
+            elif self._reveal_new is not None:
+                return self._reveal_step()
+            else:
+                self._end_reveal()
+                revealing = False
         sig = self._cache_sig(ticking=False)
         if self._cached_bgra is None or self._cached_sig != sig:
             self._cached_bgra = self._render_static_bgra()
@@ -7437,13 +7519,6 @@ class ViewCirclesWidget:
             self._loading_bar = self._loading_bar_rect()
         if self._has_live_shimmer():
             self._paint_live_shimmers(work)
-        if not self._state.searching and revealing:
-            # First finished frame (the slow one) is built; the wipe starts now.
-            if self._prepare_reveal(work):
-                self._reveal_pending = False
-                self._reveal_t0 = time.monotonic()
-                return self._reveal_step()
-            self._end_reveal()
         return frame
 
     def render(self, canvas_bgr: np.ndarray) -> None:

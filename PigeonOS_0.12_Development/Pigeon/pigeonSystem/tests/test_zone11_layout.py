@@ -214,6 +214,17 @@ class Zone11LayoutTests(unittest.TestCase):
             receiver_input="APPLE TV", has_receiver=True, searching=False,
         )
 
+    @staticmethod
+    def _wait_for_wipe(w: vc.ViewCirclesWidget, canvas: np.ndarray) -> None:
+        """Render until the background build lands and the wipe clock starts."""
+        import time
+
+        end = time.monotonic() + 10.0
+        while w._reveal_t0 is None and time.monotonic() < end:
+            w.render(canvas)
+            time.sleep(0.01)
+        assert w._reveal_t0 is not None, "finished page never built"
+
     def test_loading_shows_header_and_a_candy_striped_status_bar_only(self) -> None:
         w = self._loading_widget()
         canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
@@ -253,8 +264,11 @@ class Zone11LayoutTests(unittest.TestCase):
         self._finish_loading(w, tt)
         self.assertTrue(w.reveal_active())
         self.assertIsNone(w._reveal_t0)  # clock not running until the page is built
+        # While it builds, the loading page keeps animating (stripes move, no content yet).
+        bx, by, bw, bh, _r = w._loading_bar  # type: ignore[misc]
         w.render(canvas)
-        self.assertIsNotNone(w._reveal_t0)
+        self.assertFalse(self._ink(canvas, 0, 200, DESIGN_W, 360).any())
+        self._wait_for_wipe(w, canvas)
         w._reveal_t0 = time.monotonic() - 0.35
         w.render(canvas)
         title = self._ink(canvas, 0, 200, DESIGN_W, 360)
@@ -277,7 +291,7 @@ class Zone11LayoutTests(unittest.TestCase):
         w.render(canvas)
         bx, by, bw, bh, _r = w._loading_bar_rect()  # type: ignore[misc]
         self._finish_loading(w, tt)
-        w.render(canvas)  # builds the page, starts the clock
+        self._wait_for_wipe(w, canvas)  # builds the page in the background, starts the clock
         shots = []
         real = time.monotonic
         for dt in (0.0, 0.2):
