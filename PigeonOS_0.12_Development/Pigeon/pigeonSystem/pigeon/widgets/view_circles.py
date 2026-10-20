@@ -6511,20 +6511,25 @@ class ViewCirclesWidget:
         self._paste_trt_with_plate(out, patch, px, py)
 
     def _paste_trt_with_plate(self, out: np.ndarray, patch: np.ndarray, px: int, py: int) -> None:
-        """Paste TRT digits on a soft black plate (blurred, 50% opaque)."""
+        """Paste TRT digits on a soft black plate (heavily blurred, 50% opaque)."""
         import cv2
 
         ph, pw = patch.shape[:2]
         pad_x = max(10, int(round(ph * 0.45)))
         pad_y = max(6, int(round(ph * 0.28)))
-        sigma = max(2.0, ph * 0.18)
+        sigma = max(4.0, ph * 0.42)
         margin = int(round(sigma * 3))  # room for the blur to fade out
         plate = cv2.copyMakeBorder(
             _black_rounded_plate(int(pw) + 2 * pad_x, int(ph) + 2 * pad_y),
             margin, margin, margin, margin, cv2.BORDER_CONSTANT, value=(0, 0, 0, 0),
         )
-        alpha = cv2.GaussianBlur(plate[:, :, 3], (0, 0), sigma)
-        plate[:, :, 3] = (alpha.astype(np.float32) * 0.5).astype(np.uint8)
+        alpha = cv2.GaussianBlur(plate[:, :, 3], (0, 0), sigma).astype(np.float32)
+        # A wide blur drains the middle of a short plate; renormalize so the
+        # shape keeps its size (its edge stays the half-strength contour).
+        peak = float(alpha.max())
+        if peak > 0:
+            alpha = np.minimum(alpha * (255.0 / peak), 255.0)
+        plate[:, :, 3] = (alpha * 0.5).astype(np.uint8)
         ox, oy = px - pad_x - margin, py - pad_y - margin
         _paste_patch_bgra(out, plate, ox, oy)
         _paste_patch_bgra(out, patch, px, py)
