@@ -10,8 +10,8 @@ settings:
     # The one place the app's version lives (Info.plist reads these). The version-bump
     # commit sets them to pigeon/version.py: MARKETING_VERSION = MAJOR.MINOR.PATCH,
     # CURRENT_PROJECT_VERSION = PATCH. A test in pigeonSystem/tests checks they agree.
-    MARKETING_VERSION: "0.12.46"
-    CURRENT_PROJECT_VERSION: "46"
+    MARKETING_VERSION: "0.12.47"
+    CURRENT_PROJECT_VERSION: "47"
 targets:
   Pigeon:
     type: application
