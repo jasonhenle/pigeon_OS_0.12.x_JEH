@@ -1,21 +1,15 @@
-"""The iOS app's version is bumped with Pigeon's.
+"""The iOS app (Pigeon Remote) versions itself, independent of PigeonOS.
 
 project.yml holds the only literal (MARKETING_VERSION / CURRENT_PROJECT_VERSION);
-Info.plist reads them as build variables so no second copy can drift.
+Info.plist reads them as build variables, and the checked-in Xcode project agrees.
 """
 
 from __future__ import annotations
 
-import os
 import plistlib
 import re
-import sys
 import unittest
 from pathlib import Path
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from pigeon.version import PATCH, version_string  # noqa: E402
 
 _APP = Path(__file__).resolve().parents[4] / "PigeonApp"
 _PLIST = _APP / "Pigeon" / "Info.plist"
@@ -34,9 +28,9 @@ class IosAppVersionTests(unittest.TestCase):
         if not _YML.is_file():
             self.skipTest("PigeonApp not in this checkout")
 
-    def test_project_yml_matches_pigeon_version(self) -> None:
-        self.assertEqual(_yml_value("MARKETING_VERSION"), version_string())
-        self.assertEqual(_yml_value("CURRENT_PROJECT_VERSION"), str(PATCH))
+    def test_versions_are_well_formed(self) -> None:
+        self.assertRegex(_yml_value("MARKETING_VERSION"), r"^\d+\.\d+\.\d+$")
+        self.assertRegex(_yml_value("CURRENT_PROJECT_VERSION"), r"^\d+$")
 
     def test_info_plist_reads_the_build_settings(self) -> None:
         info = plistlib.loads(_PLIST.read_bytes())
@@ -44,12 +38,12 @@ class IosAppVersionTests(unittest.TestCase):
         self.assertEqual(info["CFBundleVersion"], "$(CURRENT_PROJECT_VERSION)")
         self.assertIsNone(re.search(r"CFBundle(ShortVersionString|Version):\s*\"?\d", _YML.read_text()))
 
-    def test_generated_project_matches_pigeon_version(self) -> None:
+    def test_generated_project_matches_project_yml(self) -> None:
         if not _PBXPROJ.is_file():
             self.skipTest("Xcode project not generated")
         text = _PBXPROJ.read_text()
-        self.assertEqual(set(re.findall(r"MARKETING_VERSION = ([^;]+);", text)), {version_string()})
-        self.assertEqual(set(re.findall(r"CURRENT_PROJECT_VERSION = ([^;]+);", text)), {str(PATCH)})
+        self.assertEqual(set(re.findall(r"MARKETING_VERSION = ([^;]+);", text)), {_yml_value("MARKETING_VERSION")})
+        self.assertEqual(set(re.findall(r"CURRENT_PROJECT_VERSION = ([^;]+);", text)), {_yml_value("CURRENT_PROJECT_VERSION")})
 
     def test_ipad_is_supported(self) -> None:
         self.assertIn('TARGETED_DEVICE_FAMILY: "1,2"', _YML.read_text())
