@@ -70,42 +70,46 @@ class Zone11LayoutTests(unittest.TestCase):
         xs = np.where(mask.any(axis=0))[0]
         return int(xs.min()) + x0, int(xs.max()) + x0
 
-    def test_clock_top_left_and_volume_top_right(self) -> None:
+    def test_clock_top_center_volume_top_right_labels_top_left(self) -> None:
         frame = self._frame(self._widget())
-        left = self._ink(frame, 0, 0, DESIGN_W // 2, 70)
-        right = self._ink(frame, DESIGN_W // 2, 0, DESIGN_W, 70)
-        self.assertTrue(left.any(), "clock missing top-left")
-        self.assertTrue(right.any(), "volume missing top-right")
-        lx0, _ = self._cols(left, 0)
-        _, rx1 = self._cols(right, DESIGN_W // 2)
-        self.assertLess(lx0, 80)
-        self.assertGreater(rx1, DESIGN_W - 80)
-        # The old center-ish clock slot is empty.
-        mid = self._ink(frame, 250, 0, 450, 70)
-        self.assertFalse(mid.any())
+        clock = self._ink(frame, 330, 0, 930, 140)
+        vol = self._ink(frame, 930, 0, DESIGN_W, 140)
+        labels = self._ink(frame, 0, 0, 330, 140)
+        self.assertTrue(clock.any(), "clock missing top-center")
+        self.assertTrue(vol.any(), "volume missing top-right")
+        self.assertTrue(labels.any(), "labels missing top-left")
+        cx0, cx1 = self._cols(clock, 330)
+        self.assertLess(abs((cx0 + cx1) / 2.0 - DESIGN_W / 2.0), 20)
+        _, vx1 = self._cols(vol, 930)
+        self.assertGreater(vx1, DESIGN_W - 80)
+        self.assertLess(vx1, DESIGN_W - 46)  # padded in from the zone edge
 
-    def test_app_id_sits_under_the_clock(self) -> None:
+    def test_clock_and_volume_are_the_same_size(self) -> None:
         frame = self._frame(self._widget())
-        clock = self._ink(frame, 0, 0, 400, 66)
-        app = self._ink(frame, 0, 70, 400, 150)
-        self.assertTrue(clock.any() and app.any())
-        cy = np.where(clock.any(axis=1))[0].max()
-        ay = np.where(app.any(axis=1))[0].min() + 70
-        self.assertGreater(ay, cy)
-        self.assertLess(ay - cy, 40)
+        ch = np.where(self._ink(frame, 330, 0, 930, 140).any(axis=1))[0]
+        vh = np.where(self._ink(frame, 930, 0, DESIGN_W, 140).any(axis=1))[0]
+        self.assertLessEqual(abs(int(ch.max() - ch.min()) - int(vh.max() - vh.min())), 12)
+        self.assertLessEqual(abs(int(ch.min()) - int(vh.min())), 4)  # shared top
+
+    def test_label_stack_is_comparable_in_height_to_the_clock(self) -> None:
+        frame = self._frame(self._widget())
+        labels = np.where(self._ink(frame, 0, 0, 330, 140).any(axis=1))[0]
+        clock = np.where(self._ink(frame, 330, 0, 930, 140).any(axis=1))[0]
+        lh, ch = int(labels.max() - labels.min()), int(clock.max() - clock.min())
+        self.assertLess(abs(lh - ch), ch * 0.25)
+        self.assertLessEqual(abs(int(labels.min()) - int(clock.min())), 6)
 
     def test_volume_is_enlarged_alone_top_right(self) -> None:
         frame = self._frame(self._widget())
-        vol = self._ink(frame, 600, 0, DESIGN_W, 200)
+        vol = self._ink(frame, 930, 0, DESIGN_W, 200)
         ys = np.where(vol.any(axis=1))[0]
         self.assertGreater(int(ys.max() - ys.min()), 60)
-        self.assertGreater(self._cols(vol, 600)[1], DESIGN_W - 80)
 
     def test_volume_readout_has_no_db_unit(self) -> None:
         frame = self._frame(self._widget())
-        vol = self._ink(frame, 600, 0, DESIGN_W, 200)
+        vol = self._ink(frame, 930, 0, DESIGN_W, 200)
         # "-22.5" alone is ~345 px wide at this size; with " DB" it was ~420.
-        x0, x1 = self._cols(vol, 600)
+        x0, x1 = self._cols(vol, 930)
         self.assertLess(x1 - x0, 380)
 
     def test_art_top_leaves_room_for_the_volume(self) -> None:
@@ -123,7 +127,7 @@ class Zone11LayoutTests(unittest.TestCase):
             tt_title="x",
         )
         frame = self._frame(w)
-        vol = self._ink(frame, 900, 0, DESIGN_W, 200)
+        vol = self._ink(frame, 930, 0, DESIGN_W, 200)
         vol_bottom = int(np.where(vol.any(axis=1))[0].max())
         art = frame[:, 300:900].astype(int)
         colored = (art[:, :, 0] - art[:, :, 2]) > 60  # blue-ish art, BGR
@@ -166,28 +170,25 @@ class Zone11LayoutTests(unittest.TestCase):
         # Near the end it would collide with the TRT: gone.
         self.assertIsNone(self._elapsed_cols(self._frame(self._widget_at(0.97))))
 
-    def test_elapsed_uses_the_clock_gray_and_size(self) -> None:
+    def test_elapsed_uses_the_header_gray(self) -> None:
         frame = self._frame(self._widget_at(0.30))
-        vol = frame[0:66, 0:400].astype(int)  # header clock
+        vol = frame[0:140, 930:DESIGN_W].astype(int)  # volume readout
         el = frame[540:640, 60:870].astype(int)
         vol_mask = vol.max(axis=2) > 90
         el_mask = (el.max(axis=2) > 90) & ((el.max(axis=2) - el.min(axis=2)) < 25)
         self.assertTrue(vol_mask.any() and el_mask.any())
         self.assertLessEqual(abs(int(vol[vol_mask].max()) - int(el[el_mask].max())), 12)
-        vh = np.where(vol_mask.any(axis=1))[0]
-        eh = np.where(el_mask.any(axis=1))[0]
-        self.assertLessEqual(abs(int(vh.max() - vh.min()) - int(eh.max() - eh.min())), 4)
 
     def test_input_id_stacks_under_app_id_and_takes_its_place_when_missing(self) -> None:
         def rows(frame: np.ndarray) -> list[int]:
-            reg = frame[66:150, 0:95].astype(int)
+            reg = frame[0:150, 0:95].astype(int)
             band = (reg.max(axis=2) > 90) & (reg.max(axis=2) < 200)
             ys = np.where(band.any(axis=1))[0]
             groups: list[int] = []
             prev = -10
             for y in ys:
                 if y - prev > 3:
-                    groups.append(int(y) + 66)
+                    groups.append(int(y))
                 prev = int(y)
             return groups
 

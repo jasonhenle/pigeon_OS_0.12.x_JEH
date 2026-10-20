@@ -4864,6 +4864,8 @@ class ViewCirclesWidget:
                         ch + 8,
                     )
                 )
+            elif self._zone11_on(assignments):
+                rects.append((0, 0, int(DESIGN_W), int(self._zone11_volume_bottom()) + 4))
             else:
                 top = max(0, int(round(baseline - size - 8.0)))
                 header_h = max(1, int(round(size + 16.0)))
@@ -5411,14 +5413,15 @@ class ViewCirclesWidget:
             return
         if self._header_slot_ticks():
             if self._zone11_on():
-                # Zone 11: clock in the top-left corner (volume / app id own
-                # the top-right).
+                # Zone 11: clock top-center at the volume's size (volume top-right,
+                # app / input labels top-left).
                 self._paste_zone11_corner_text(
                     out,
                     now_playing_header_clock_text(now),
-                    left=True,
+                    align="center",
                     fill_rgb=_look_chrome_rgb(),
                     clock=True,
+                    scale=self._ZONE11_VOLUME_SCALE,
                 )
                 return
             # Digital-7 clock over zone 3; zone 6's header slot holds the TRT.
@@ -6280,14 +6283,10 @@ class ViewCirclesWidget:
     _ZONE11_ART_VOLUME_OVERLAP_PX = 0
 
     def _zone11_volume_bottom(self) -> float:
-        """Design-Y of the bottom of the top-right volume ink (``_ZONE11_VOLUME_SCALE``)."""
-        patch, _tw, _th = _text_patch_digital7(
-            "0", size_px=_header_digital7_size_px(), fill_rgb=_look_chrome_rgb()
+        """Design-Y of the bottom of the header row ink (``_ZONE11_VOLUME_SCALE``)."""
+        return self._zone11_header_top() + self._zone11_header_ink_h() * float(
+            self._ZONE11_VOLUME_SCALE
         )
-        rows = np.where((patch[:, :, 3] > 8).any(axis=1))[0]
-        h0 = float(rows.max() - rows.min() + 1) if rows.size else 0.0
-        top = float(header_clock_baseline_y()) - h0
-        return top + h0 * float(self._ZONE11_VOLUME_SCALE)
 
     def _draw_zone11_art(self, out: np.ndarray) -> None:
         """TT (or album art) scaled down so the volume readout has room above it.
@@ -6332,6 +6331,18 @@ class ViewCirclesWidget:
     # Fixed multiple of the header size; independent of the art so it never jumps
     # when the title / poster finishes loading.
     _ZONE11_VOLUME_SCALE = 2.5
+    # Header row (clock, volume, labels) sits a little lower, and the volume clear of the edge.
+    _ZONE11_HEADER_DROP_PX = 14
+    _ZONE11_VOLUME_RIGHT_PAD_PX = 14
+    _ZONE11_STACK_CLOCK_GAP_PX = 24
+    _ZONE11_APP_ID_MAX_PX = 60  # a lone label must not balloon to the full row height
+
+    def _zone11_clock_half_width(self) -> float:
+        """Half the width of the centered header clock at its widest (``88:88AM``)."""
+        size = int(round(_header_digital7_size_px() * float(self._ZONE11_VOLUME_SCALE)))
+        patch = _matching_hhmm_patch("88:88AM", size_px=size, fill_rgb=_look_chrome_rgb())
+        cols = np.where((patch[:, :, 3] > 8).any(axis=0))[0]
+        return float(cols.max() - cols.min() + 1) / 2.0 if cols.size else 0.0
 
     def _zone11_service_label(self) -> str:
         """Streaming app / incoming source name (the status bar's service text)."""
@@ -6343,25 +6354,40 @@ class ViewCirclesWidget:
             return ""
         return svc
 
+    def _zone11_header_ink_h(self) -> float:
+        """Ink height of one unscaled header digit (the clock's height before scaling)."""
+        patch, _tw, _th = _text_patch_digital7(
+            "0", size_px=_header_digital7_size_px(), fill_rgb=_look_chrome_rgb()
+        )
+        rows = np.where((patch[:, :, 3] > 8).any(axis=1))[0]
+        return float(rows.max() - rows.min() + 1) if rows.size else 0.0
+
+    def _zone11_header_top(self) -> float:
+        """Design-Y of the top of the header row (clock, volume, label stack)."""
+        return (
+            float(header_clock_baseline_y())
+            - self._zone11_header_ink_h()
+            + float(self._ZONE11_HEADER_DROP_PX)
+        )
+
     def _paste_zone11_corner_text(
         self,
         out: np.ndarray,
         label: str,
         *,
-        left: bool,
+        align: str,
         fill_rgb: tuple[int, int, int],
         clock: bool = False,
         scale: float = 1.0,
     ) -> tuple[int, int, int, int] | None:
-        """Header-size Digital-7 pinned to a top corner, ink bottom on the header baseline.
+        """Header-size Digital-7, top-aligned on the header row.
 
-        ``scale`` > 1 enlarges the text; it then keeps the unscaled ink top (the clock's
-        top) and grows downward instead of off the top of the screen.
+        ``align`` is ``left``, ``center`` or ``right`` within zone 11 (right keeps a small
+        inset from the edge).
         """
         if not label:
             return None
-        base_size = _header_digital7_size_px()
-        size = int(round(base_size * float(scale)))
+        size = int(round(_header_digital7_size_px() * float(scale)))
         if clock:
             patch = _matching_hhmm_patch(label, size_px=size, fill_rgb=fill_rgb)
         else:
@@ -6375,15 +6401,13 @@ class ViewCirclesWidget:
         patch = patch[int(rows.min()) : int(rows.max()) + 1, int(cols.min()) : int(cols.max()) + 1]
         ph, pw = patch.shape[:2]
         z = ZONE11
-        x = int(round(float(z.x))) if left else int(round(float(z.x) + float(z.w) - pw))
-        y = int(round(float(header_clock_baseline_y()) - ph))
-        if scale != 1.0:
-            base, _bw, _bh = _text_patch_digital7(
-                "0", size_px=base_size, fill_rgb=fill_rgb
-            )
-            brows = np.where((base[:, :, 3] > 8).any(axis=1))[0]
-            if brows.size:
-                y = int(round(float(header_clock_baseline_y()) - (brows.max() - brows.min() + 1)))
+        if align == "left":
+            x = int(round(float(z.x)))
+        elif align == "center":
+            x = int(round(float(z.x) + (float(z.w) - pw) / 2.0))
+        else:
+            x = int(round(float(z.x) + float(z.w) - pw - float(self._ZONE11_VOLUME_RIGHT_PAD_PX)))
+        y = int(round(self._zone11_header_top()))
         _paste_patch_bgra(out, patch, x, y)
         return (x, y, int(pw), int(ph))
 
@@ -6414,30 +6438,51 @@ class ViewCirclesWidget:
         # Drop the unit: the big readout is self-explanatory and the width matters.
         vol = re.sub(r"\s*dB\s*$", "", vol)
 
-        # Top-left stack under the clock. The input id takes the app id's row when
+        # Top-left label stack (app id, then input id), sized so the pair is about as
+        # tall as the volume / clock row. The input id takes the app id's row when
         # there is no app id, so the stack never has a gap.
         z = ZONE11
-        left_x = float(z.x)
-        y = float(header_clock_baseline_y()) + float(self._ZONE11_APP_ID_GAP)
-        for label in (self._zone11_service_label(), self._receiver_readout()):
-            if not label:
-                continue
-            patch = _cast_line_patch(
-                label, size_px=self._ZONE11_APP_ID_PX, max_width_px=420
-            )
-            if patch is None:
-                continue
-            ph, pw = patch.shape[:2]
-            px, py = int(round(left_x)), int(round(y))
-            _paste_patch_bgra(out, patch, px, py)
-            self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
-            y = py + ph + 8.0
+        labels = [
+            lb for lb in (self._zone11_service_label(), self._receiver_readout()) if lb
+        ]
+        gap = int(self._ZONE11_APP_ID_GAP)
+        target_h = self._zone11_header_ink_h() * float(self._ZONE11_VOLUME_SCALE)
+        # Clear of the centered clock on the right.
+        max_w = int(
+            float(z.w) * 0.5
+            - self._zone11_clock_half_width()
+            - float(self._ZONE11_STACK_CLOCK_GAP_PX)
+        )
+        size = self._ZONE11_APP_ID_PX
+        patches: list[np.ndarray] = []
+        for _fit in range(2):
+            patches = [
+                pt
+                for pt in (
+                    _cast_line_patch(lb, size_px=size, max_width_px=max(80, max_w))
+                    for lb in labels
+                )
+                if pt is not None
+            ]
+            if not patches:
+                break
+            total = sum(int(pt.shape[0]) for pt in patches) + gap * (len(patches) - 1)
+            if total <= 0 or abs(total - target_h) < 3:
+                break
+            size = max(20, min(self._ZONE11_APP_ID_MAX_PX, int(round(size * target_h / float(total)))))
+        y = int(round(self._zone11_header_top()))
+        for pt in patches:
+            ph, pw = pt.shape[:2]
+            px = int(round(float(z.x)))
+            _paste_patch_bgra(out, pt, px, y)
+            self._tt_time_paint_rects.append((px, y, int(pw), int(ph)))
+            y += int(ph) + gap
 
         # Top-right: volume.
         rect = self._paste_zone11_corner_text(
             out,
             vol,
-            left=False,
+            align="right",
             fill_rgb=_look_chrome_rgb(),
             scale=self._ZONE11_VOLUME_SCALE,
         )
