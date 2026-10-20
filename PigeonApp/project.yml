@@ -27,8 +27,8 @@ targets:
         CFBundleDisplayName: Pigeon Remote
         # Kept in step with pigeon/version.py (MAJOR.MINOR.PATCH, build = PATCH) by the
         # version-bump commit; a test in pigeonSystem/tests checks they agree.
-        CFBundleShortVersionString: "0.12.45"
-        CFBundleVersion: "45"
+        CFBundleShortVersionString: "0.12.46"
+        CFBundleVersion: "46"
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

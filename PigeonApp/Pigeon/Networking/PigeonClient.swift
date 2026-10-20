@@ -106,9 +106,12 @@ struct PigeonClient {
     func status() async throws -> DeviceStatus { try await send("GET", "/status") }
 
     /// `logos` asks the device to look up each title's logo too (slower: one TMDb call per result).
-    func suggest(_ q: String, limit: Int = 12, logos: Bool = false) async throws -> [Suggestion] {
+    func suggest(_ q: String, limit: Int = 12, logos: Bool = false,
+                 kind: String? = nil, year: String? = nil) async throws -> [Suggestion] {
         var items: [URLQueryItem] = [.init(name: "q", value: q), .init(name: "limit", value: String(limit))]
         if logos { items.append(.init(name: "logos", value: "1")) }
+        if let kind { items.append(.init(name: "kind", value: kind)) }
+        if let year { items.append(.init(name: "year", value: year)) }
         let r: SuggestResponse = try await send("GET", "/search/suggest", query: items)
         return r.results
     }
