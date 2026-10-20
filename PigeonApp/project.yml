@@ -25,8 +25,10 @@ targets:
       path: Pigeon/Info.plist
       properties:
         CFBundleDisplayName: Pigeon Remote
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Kept in step with pigeon/version.py (MAJOR.MINOR.PATCH, build = PATCH) by the
+        # version-bump commit; a test in pigeonSystem/tests checks they agree.
+        CFBundleShortVersionString: "0.12.45"
+        CFBundleVersion: "45"
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
