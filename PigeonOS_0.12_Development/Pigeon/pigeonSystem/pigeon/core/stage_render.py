@@ -1741,7 +1741,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
         if (
             _view_one_uses_now_playing_screen()
             and view_circles_widget is not None
-            and view_circles_widget.searching
+            and (view_circles_widget.searching or view_circles_widget.reveal_active())
         ):
             return 33 if sys.platform.startswith("linux") else 16
         try:

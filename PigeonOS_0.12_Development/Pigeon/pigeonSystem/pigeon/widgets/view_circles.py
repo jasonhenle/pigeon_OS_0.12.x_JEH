@@ -3396,12 +3396,13 @@ def _shimmer_patch_bgra(
     *,
     radius: int,
     phase: float,
+    colors_bgr: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
 ) -> np.ndarray:
     """Rounded skeleton plate with a left-to-right highlight sweep."""
     w = max(1, int(w))
     h = max(1, int(h))
     mask = _rounded_rect_mask(w, h, max(1, int(radius)))
-    base, hi = _shimmer_colors_bgr()
+    base, hi = colors_bgr or _shimmer_colors_bgr()
     xs = np.arange(w, dtype=np.float32)
     band = max(12.0, float(w) * float(WIDGET_SHIMMER_BAND_FRAC))
     center = float(phase) * (float(w) + band) - band * 0.5
@@ -3431,13 +3432,14 @@ def _draw_shimmer_rounded_rect(
     radius: int,
     phase: float | None = None,
     recorder: object | None = None,
+    colors_bgr: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
 ) -> None:
     if w < 2 or h < 2:
         return
     if recorder is not None:
         recorder(int(x), int(y), int(w), int(h), int(max(1, radius)))
     patch = (
-        _shimmer_patch_bgra(w, h, radius=radius, phase=float(phase))
+        _shimmer_patch_bgra(w, h, radius=radius, phase=float(phase), colors_bgr=colors_bgr)
         if phase is not None
         else _shimmer_base_patch_bgra(w, h, radius=radius)
     )
@@ -4044,6 +4046,12 @@ class ViewCirclesWidget:
         self._spin_vol_phase = 0.0
         self._shimmer_rects: list[tuple[int, int, int, int, int]] = []
         self._shimmer_work: np.ndarray | None = None
+        # Last frame shown while TMDb was loading, and when the reveal wipe off it began.
+        self._loading_snapshot: np.ndarray | None = None
+        self._reveal_t0: float | None = None
+        # ``_overlay_ticking`` result reused across loading / reveal frames.
+        self._ticking_base: np.ndarray | None = None
+        self._ticking_base_key: tuple[object, ...] | None = None
         self._volume_line_changed_mono = 0.0
         self._volume_takeover_until = 0.0
 
@@ -4373,6 +4381,10 @@ class ViewCirclesWidget:
             want = bool(searching)
             if want != self._state.searching:
                 self._state.searching = want
+                if not want and self._loading_snapshot is not None:
+                    self._reveal_t0 = time.monotonic()
+                elif want:
+                    self._reveal_t0 = None
                 if want:
                     self._state.search_angle_deg = 0.0
                     self._last_tick_mono = None
@@ -4477,13 +4489,47 @@ class ViewCirclesWidget:
     ) -> None:
         self._shimmer_rects.append((int(x), int(y), int(w), int(h), int(max(1, radius))))
 
+    def _zone11_loading(self) -> bool:
+        """Zone 11 while TMDb is in flight: header + status bar only, the bar shimmers."""
+        return bool(self._state.searching) and self._zone11_on()
+
+    def _loading_bar_rect(self) -> tuple[int, int, int, int, int] | None:
+        """Status bar track ``(x, y, w, h, radius)`` that carries the loading shimmer."""
+        if not self._zone11_loading():
+            return None
+        for i, name in enumerate(self._assignments()[:5]):
+            if is_status_bar_widget(name, i + 1):
+                tx, ty, tw, th, trx = design_rect_from_local(
+                    _zone_spec(i + 1),
+                    STATUS_BAR_TRACK,
+                    view_w=STATUS_BAR_VIEW_W,
+                    view_h=STATUS_BAR_VIEW_H,
+                )
+                return int(tx), int(ty), int(tw), int(th), int(trx)
+        return None
+
+    def _has_live_shimmer(self) -> bool:
+        return bool(self._shimmer_rects) or self._loading_bar_rect() is not None
+
     def _paint_live_shimmers(self, out: np.ndarray) -> None:
-        if not self._shimmer_rects:
-            return
         phase = self._shimmer_phase()
         for x, y, w, h, radius in self._shimmer_rects:
             _draw_shimmer_rounded_rect(
                 out, x=x, y=y, w=w, h=h, radius=radius, phase=phase
+            )
+        bar = self._loading_bar_rect()
+        if bar is not None:
+            x, y, w, h, radius = bar
+            # Track gray with a UI-color highlight: the same bar the final page fills.
+            _draw_shimmer_rounded_rect(
+                out,
+                x=x,
+                y=y,
+                w=w,
+                h=h,
+                radius=radius,
+                phase=phase,
+                colors_bgr=((122, 122, 122), tuple(self._effective_np_theme().ui_bgr)),
             )
 
     def _poster_widget_loading(self) -> bool:
@@ -6363,7 +6409,7 @@ class ViewCirclesWidget:
         nbh = max(1, bh - (new_top - by))
         patch = self._tt_countdown_tt_patch(z, dest_wh=(bw, nbh))
         if patch is None or patch.size == 0:
-            if self._tt_widget_loading():
+            if self._tt_widget_loading() and not self._zone11_loading():
                 sh_h = max(56, int(round(nbh * 0.42)))
                 _draw_shimmer_rounded_rect(
                     out,
@@ -6546,7 +6592,7 @@ class ViewCirclesWidget:
             self._tt_time_paint_rects.append(rect)
 
         # Strip: TRT (right column) and the traveling elapsed time.
-        if self.content_mode == _CONTENT_MODE_MUSIC:
+        if self.content_mode == _CONTENT_MODE_MUSIC or self._zone11_loading():
             return
         mid_y = float(zy) + float(zh) * 0.5
         cols = strip_cast_columns(zone)
@@ -7169,6 +7215,47 @@ class ViewCirclesWidget:
             track_bgr=_VOLUME_CONTAINER_BGR,
         )
 
+    _REVEAL_S = 0.6
+    _REVEAL_FEATHER_PX = 160
+
+    def reveal_active(self) -> bool:
+        """True while the finished page is wiping on over the loading frame."""
+        t0 = self._reveal_t0
+        if t0 is None:
+            return False
+        if time.monotonic() - t0 >= self._REVEAL_S:
+            self._reveal_t0 = None
+            self._loading_snapshot = None
+            return False
+        return True
+
+    def _apply_reveal(self, frame: np.ndarray) -> None:
+        """Wipe ``frame`` (the finished page) on from the left over the loading snapshot, in place."""
+        old = self._loading_snapshot
+        t0 = self._reveal_t0
+        if old is None or t0 is None or old.shape != frame.shape:
+            return
+        p = max(0.0, min(1.0, (time.monotonic() - t0) / float(self._REVEAL_S)))
+        p = 1.0 - (1.0 - p) ** 2  # fast off the line, settles at the right edge
+        w = int(frame.shape[1])
+        feather = int(self._REVEAL_FEATHER_PX)
+        edge = p * float(w + feather)
+        x_new = max(0, min(w, int(edge - feather)))  # frame is final left of this
+        x_old = max(0, min(w, int(math.ceil(edge))))  # snapshot is intact right of this
+        if x_old < w:
+            frame[:, x_old:] = old[:, x_old:]
+        if x_old > x_new:
+            xs = np.arange(x_new, x_old, dtype=np.float32)
+            m = np.clip((edge - xs) / float(feather), 0.0, 1.0)[None, :, None]
+            n = frame[:, x_new:x_old].astype(np.float32)
+            o = old[:, x_new:x_old].astype(np.float32)
+            a_n = n[:, :, 3:4] / 255.0
+            a_o = o[:, :, 3:4] / 255.0
+            a = m * a_n + (1.0 - m) * a_o
+            c = (m * a_n * n[:, :, :3] + (1.0 - m) * a_o * o[:, :, :3]) / np.maximum(a, 1e-4)
+            frame[:, x_new:x_old, :3] = np.clip(c + 0.5, 0, 255).astype(np.uint8)
+            frame[:, x_new:x_old, 3:4] = np.clip(a * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
     def bgra_frame(self) -> np.ndarray | None:
         if not self._state.chrome_visible:
             return None
@@ -7179,10 +7266,12 @@ class ViewCirclesWidget:
             self._static_bgr = None
             self._ticking_under = None
             self._ticking_under_sig = None
+            self._ticking_base = None
         self._stamp_current_poster_protect()
         frame = self._cached_bgra
         if _layout_is_fullscreen_clock(self._assignments()):
             return frame
+        revealing = self.reveal_active()
         work = self._shimmer_work
         cached = frame
         if work is None or work.shape != cached.shape:
@@ -7190,15 +7279,35 @@ class ViewCirclesWidget:
             self._shimmer_work = work
         else:
             work[:] = cached
-        self._overlay_ticking(work)
+        if self._state.searching or revealing:
+            # Nothing but the shimmer / wipe changes between frames: restamping the
+            # clock, volume and bar every frame is most of the frame time.
+            key = (sig, self._ticking_sig())
+            base = self._ticking_base
+            if base is None or base.shape != cached.shape or self._ticking_base_key != key:
+                base = cached.copy()
+                self._overlay_ticking(base)
+                self._ticking_base = base
+                self._ticking_base_key = key
+            work[:] = base
+        else:
+            self._overlay_ticking(work)
         frame = work
         if self._live_audio_widgets_on():
             self._draw_live_audio_widgets(work)
         self._draw_zone4_eq(work)
-        if not self._shimmer_rects:
-            return frame
-        self._paint_live_shimmers(work)
-        return work
+        if self._has_live_shimmer():
+            self._paint_live_shimmers(work)
+        if self._state.searching:
+            snap = self._loading_snapshot
+            if snap is None or snap.shape != work.shape:
+                snap = work.copy()
+                self._loading_snapshot = snap
+            else:
+                snap[:] = work
+        elif revealing:
+            self._apply_reveal(work)
+        return frame
 
     def render(self, canvas_bgr: np.ndarray) -> None:
         if canvas_bgr is None or canvas_bgr.size == 0:
@@ -7207,7 +7316,7 @@ class ViewCirclesWidget:
         if not self._state.chrome_visible:
             canvas_bgr[:] = (0, 0, 0)
             return
-        if self._shimmer_rects:
+        if self._has_live_shimmer() or self.reveal_active():
             frame = self.bgra_frame()
             if frame is None:
                 return

@@ -562,12 +562,12 @@ class NowPlayingFrameTests(unittest.TestCase):
             # Only antialiasing along the moving seconds edge may differ.
             self.assertLess(int(off.sum()), 80, msg=str(when))
 
-    def test_minute_ticks_are_half_opaque(self) -> None:
+    def test_minute_ticks_are_solid_and_darker_than_hours(self) -> None:
         from datetime import datetime
 
         from pigeon.widgets.view_circles import (
-            _CLOCK_MINUTE_TICK_OPACITY,
             _apply_standalone_clock_ticks,
+            _darken_hex,
             _find_by_key,
             _now_playing_widget_path,
             _svg_tree_from_path,
@@ -575,14 +575,17 @@ class NowPlayingFrameTests(unittest.TestCase):
         )
 
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
+        theme = np_theme_from_settings()
         root = _svg_tree_from_path(_now_playing_widget_path(assets, "clock"))
-        _apply_standalone_clock_ticks(
-            root, datetime(2026, 8, 24, 14, 22), theme=np_theme_from_settings()
-        )
+        _apply_standalone_clock_ticks(root, datetime(2026, 8, 24, 14, 22), theme=theme)
         tick = _find_by_key(root, "minutes_22")
         self.assertIsNotNone(tick)
         assert tick is not None
-        self.assertAlmostEqual(float(tick.get("opacity") or 0), _CLOCK_MINUTE_TICK_OPACITY)
+        # Opaque fill and stroke in one darker shade: no translucent outline look.
+        self.assertIsNone(tick.get("opacity"))
+        self.assertEqual(tick.get("fill"), tick.get("stroke"))
+        self.assertNotEqual(tick.get("fill"), theme.ui_hex)
+        self.assertEqual(tick.get("fill"), _darken_hex(theme.ui_hex, factor=0.7))
 
     def test_seconds_ticks_alternate_white_and_ui(self) -> None:
         from datetime import datetime
