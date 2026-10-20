@@ -2217,10 +2217,14 @@ def _rasterize_named_widget(
     return bgra
 
 
-# Idle / paused saver (zone 9 / full frame): scale of the NP analog clock. Larger
-# than the digital clocksaver digit height (~368px); the ceiling is the date line
-# at the top of the artboard, which touches the screen edge around 1.5.
-_SAVER_CLOCK_SCALE = 1.35
+# Idle / paused saver (zone 9 / full frame): scale of the NP analog clock. The date line
+# above the disc and the ring below it are centered as a unit (see the ink extents
+# below), which is what lets the face grow to ~80% of the screen height.
+_SAVER_CLOCK_SCALE = 1.6
+# Ink extent of the clock artboard around the disc center, in design px at scale 1:
+# date line top is this far above the center, the outer ring this far below.
+_SAVER_CLOCK_INK_ABOVE = 264.0
+_SAVER_CLOCK_INK_BELOW = 199.0
 _CENTERED_CLOCK_CACHE: dict[tuple[object, ...], np.ndarray] = {}
 _CENTERED_CLOCK_CACHE_MAX = 2
 
@@ -2332,11 +2336,13 @@ def render_centered_clock_widget_bgra(
     z1 = NOW_PLAYING_ZONES[1]
     dest_w = max(64, int(round(float(z1.w) * s)))
     dest_h = max(64, int(round(float(z1.h) * s)))
-    # Optically center the disc (not the artboard) on the design canvas.
+    # Horizontally center the disc (not the artboard) on the design canvas.
     sx = float(dest_w) / CLOCK_VIEW_W
     sy = float(dest_h) / CLOCK_VIEW_H
     x = int(round(DESIGN_W * 0.5 - CLOCK_LOCAL_CX * sx))
-    y = int(round(DESIGN_H * 0.5 - CLOCK_LOCAL_CY * sy))
+    # Center the whole ink (date + ring), not the disc, so the date clears the top edge.
+    ink_shift = (_SAVER_CLOCK_INK_ABOVE - _SAVER_CLOCK_INK_BELOW) * 0.5 * s
+    y = int(round(DESIGN_H * 0.5 + ink_shift - CLOCK_LOCAL_CY * sy))
     zone = NowPlayingZone(9, float(x), float(y), float(dest_w), float(dest_h), ())
     out = np.zeros((int(DESIGN_H), int(DESIGN_W), 4), dtype=np.uint8)
     try:
