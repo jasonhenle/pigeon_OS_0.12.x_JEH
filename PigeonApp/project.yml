@@ -8,10 +8,11 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     # The app's own version, independent of PigeonOS (the app shows the device's version
-    # separately). Info.plist reads these. Bump CURRENT_PROJECT_VERSION on every iOS
-    # release and MARKETING_VERSION for notable changes, then run tools/sync-pigeon-ios.sh.
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "47"
+    # separately). Info.plist reads these. Every iOS change bumps both together:
+    # MARKETING_VERSION 0.1.N and CURRENT_PROJECT_VERSION N (a test checks they agree).
+    # Then run tools/sync-pigeon-ios.sh.
+    MARKETING_VERSION: "0.1.1"
+    CURRENT_PROJECT_VERSION: "1"
 targets:
   Pigeon:
     type: application

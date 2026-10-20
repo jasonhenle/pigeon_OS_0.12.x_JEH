@@ -29,8 +29,9 @@ class IosAppVersionTests(unittest.TestCase):
             self.skipTest("PigeonApp not in this checkout")
 
     def test_versions_are_well_formed(self) -> None:
-        self.assertRegex(_yml_value("MARKETING_VERSION"), r"^\d+\.\d+\.\d+$")
-        self.assertRegex(_yml_value("CURRENT_PROJECT_VERSION"), r"^\d+$")
+        self.assertRegex(_yml_value("MARKETING_VERSION"), r"^0\.1\.\d+$")
+        # Build number = the patch of 0.1.N, so the two always move together.
+        self.assertEqual(_yml_value("CURRENT_PROJECT_VERSION"), _yml_value("MARKETING_VERSION").split(".")[2])
 
     def test_info_plist_reads_the_build_settings(self) -> None:
         info = plistlib.loads(_PLIST.read_bytes())
