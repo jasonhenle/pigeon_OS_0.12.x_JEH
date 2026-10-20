@@ -1712,6 +1712,18 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
             if _settings_audio_led_listen():
                 return 100
             return 500
+        # Circles loading stripes / reveal wipe while TMDb / artwork is in flight. This
+        # must come before the ``playing`` cadence: content is playing while it loads,
+        # and that slow cadence made both look choppy.
+        if (
+            _view_one_uses_now_playing_screen()
+            and view_circles_widget is not None
+            and (view_circles_widget.searching or view_circles_widget.reveal_active())
+        ):
+            # The wipe is time-based: more frames just make it smoother.
+            if view_circles_widget.reveal_active():
+                return 16
+            return 33 if sys.platform.startswith("linux") else 16
         # Meter face needs a tight cadence even if ATV still reports playing.
         if _PIGEON_EXT and _idle_audio_meter_active():
             return 16
@@ -1737,16 +1749,6 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
             )
         ):
             return 50 if sys.platform.startswith("linux") else 16
-        # Circles loading shimmer while TMDb / artwork is in flight.
-        if (
-            _view_one_uses_now_playing_screen()
-            and view_circles_widget is not None
-            and (view_circles_widget.searching or view_circles_widget.reveal_active())
-        ):
-            # The wipe is time-based: more frames just make it smoother.
-            if view_circles_widget.reveal_active():
-                return 16
-            return 33 if sys.platform.startswith("linux") else 16
         try:
             if _volume_lines.fading():
                 return 50
