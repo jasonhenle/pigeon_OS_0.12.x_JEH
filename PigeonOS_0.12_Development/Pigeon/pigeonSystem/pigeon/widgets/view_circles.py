@@ -6384,6 +6384,8 @@ class ViewCirclesWidget:
         self._tt_time_paint_rects.append((zx, zy, zw, zh))
         recv = self._has_receiver_connection()
         vol = _receiver_volume_display_line(self._state.volume) if recv else ""
+        # Drop the unit: the big readout is self-explanatory and the width matters.
+        vol = re.sub(r"\s*dB\s*$", "", vol)
 
         # Top-left stack under the clock. The input id takes the app id's row when
         # there is no app id, so the stack never has a gap.

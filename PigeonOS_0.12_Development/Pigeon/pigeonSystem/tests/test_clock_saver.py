@@ -187,7 +187,7 @@ class ClockSaverSvgTests(unittest.TestCase):
         )
         self.assertEqual(cs._parse_hhmmss_pairs("12:34:56"), ("12", "34", "56"))
 
-    def test_auto_clocksaver_stays_digital_when_analog_option_on(self) -> None:
+    def test_auto_clocksaver_keeps_analog_face_when_analog_option_on(self) -> None:
         from unittest.mock import patch
 
         from pigeon.auto_widgets import (
@@ -210,7 +210,7 @@ class ClockSaverSvgTests(unittest.TestCase):
                 "pigeon.widgets.options_settings.clock_widget_analog",
                 return_value=True,
             ):
-                self.assertFalse(clock_saver_analog())
+                self.assertTrue(clock_saver_analog())
                 # The face cycles color on time.monotonic() (10 s hold, 10 s
                 # blend), shows seconds and a weather line a background fetch
                 # can fill in between two renders. Pin the cycle to a hold
@@ -223,7 +223,7 @@ class ClockSaverSvgTests(unittest.TestCase):
                             shadow_bgr=None, include_weather=False
                         )
                         digital = cs.render_clock_saver_bgra(
-                            layer_opacity=1.0, prefer_digital=True, include_weather=False
+                            layer_opacity=1.0, prefer_digital=False, include_weather=False
                         )
                         if int(time.time()) == second:
                             break

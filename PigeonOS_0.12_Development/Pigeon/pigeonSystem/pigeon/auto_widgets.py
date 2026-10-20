@@ -122,11 +122,22 @@ def live_plan() -> AutoWidgetPlan | None:
 
 
 def auto_clocksaver_wants_digital(plan: AutoWidgetPlan | None = None) -> bool:
-    """True when automatic widgets are showing Clocksaver (never the analog face)."""
+    """True when automatic widgets are showing Clocksaver and the clock format is digital.
+
+    The clock format option (option6) wins: with ANALOG selected the idle face stays the
+    analog widget instead of flipping to the digital clocksaver once the live plan lands.
+    """
     current = plan if plan is not None else _LIVE_PLAN
     if current is None:
         return False
-    return current.layout in (LAYOUT_ZONE6_CLOCKSAVER, LAYOUT_ZONE8_CLOCKSAVER)
+    if current.layout not in (LAYOUT_ZONE6_CLOCKSAVER, LAYOUT_ZONE8_CLOCKSAVER):
+        return False
+    try:
+        from pigeon.widgets.options_settings import clock_widget_analog
+
+        return not clock_widget_analog()
+    except Exception:
+        return True
 
 
 def room_is_renamed(name: str, *, slot_index: int = 1) -> bool:
