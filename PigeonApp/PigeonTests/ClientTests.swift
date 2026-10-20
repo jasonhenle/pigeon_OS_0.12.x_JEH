@@ -221,4 +221,142 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")
     }
+
+    // MARK: /search/suggest parameters and errors (control_api/server.py `_search`)
+
+    func testSuggestSendsKindYearAndLogosOnlyWhenSet() async throws {
+        var queries: [[String: String]] = []
+        StubURLProtocol.handler = { req in
+            let items = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            queries.append(Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") }))
+            return (200, #"{"query":"heat","results":[{"tmdb_id":949,"kind":"movie","title":"Heat","year":1995}]}"#.data(using: .utf8)!)
+        }
+        let r = try await client().suggest("heat")
+        _ = try await client().suggest("heat", logos: true, kind: "tv", year: "1995")
+        XCTAssertEqual(r.first?.year, 1995)
+        XCTAssertEqual(queries[0], ["q": "heat", "limit": "12"])  // 12 = server SUGGEST_MAX
+        XCTAssertEqual(queries[1], ["q": "heat", "limit": "12", "logos": "1", "kind": "tv", "year": "1995"])
+    }
+
+    func testSearchServiceErrorsKeepTheDevicesMessage() async {
+        for (code, message) in [("tmdb_not_configured", "TMDb isn't configured on this Pigeon device."),
+                                ("search_unavailable", "Pigeon couldn't get results from TMDb.")] {
+            StubURLProtocol.handler = { _ in
+                (503, #"{"error":{"code":"\#(code)","message":"\#(message)","details":{}}}"#.data(using: .utf8)!)
+            }
+            do { _ = try await client().suggest("heat"); XCTFail() } catch {
+                XCTAssertEqual(error as? PigeonError, .api(status: 503, code: code, message: message))
+                XCTAssertEqual(error.localizedDescription, message)
+            }
+        }
+    }
+
+    func testBadFilterErrorEnvelopeWithFieldDetails() async {
+        StubURLProtocol.handler = { _ in
+            (400, #"{"error":{"code":"bad_request","message":"year must be four digits.","details":{"fields":["year"]}}}"#.data(using: .utf8)!)
+        }
+        do { _ = try await client().suggest("heat", year: "19"); XCTFail() } catch {
+            XCTAssertEqual(error as? PigeonError, .api(status: 400, code: "bad_request", message: "year must be four digits."))
+        }
+    }
+}
+
+// MARK: Fix-view search state
+
+@MainActor
+final class NowPlayingFixSearchTests: XCTestCase {
+    private func model(_ search: @escaping NowPlayingFixModel.Search) -> NowPlayingFixModel {
+        NowPlayingFixModel(client: PigeonClient(host: "10.0.0.5"), debounce: .zero, search: search)
+    }
+    private let heat = Suggestion(tmdbId: 949, kind: "movie", title: "Heat", year: 1995)
+
+    func testResultsThenEmptyThenErrorStates() async {
+        var reply: Result<[Suggestion], Error> = .success([heat])
+        let m = model { _, _, _ in try reply.get() }
+        XCTAssertEqual(m.searchState, .idle)
+
+        m.query = "heat"
+        XCTAssertEqual(m.searchState, .loading)
+        await m.searchTask?.value
+        XCTAssertEqual(m.searchState, .results)
+        XCTAssertEqual(m.results, [heat])
+
+        reply = .success([])
+        m.query = "heat 2"
+        XCTAssertTrue(m.results.isEmpty, "old results clear as soon as the query changes")
+        await m.searchTask?.value
+        XCTAssertEqual(m.searchState, .empty)
+
+        reply = .failure(PigeonError.api(status: 503, code: "tmdb_not_configured", message: "TMDb isn't configured."))
+        m.query = "heat 3"
+        await m.searchTask?.value
+        XCTAssertEqual(m.searchState, .failed("TMDb isn't configured."))
+        XCTAssertTrue(m.results.isEmpty)
+
+        m.query = "h"
+        XCTAssertEqual(m.searchState, .idle)
+    }
+
+    func testYearAndTypeChangesClearAndResearchWithFilters() async {
+        var calls: [[String?]] = []
+        let m = model { q, kind, year in calls.append([q, kind, year]); return [self.heat] }
+        m.query = "heat"
+        await m.searchTask?.value
+        XCTAssertEqual(m.results.count, 1)
+
+        m.kind = "tv"
+        XCTAssertTrue(m.results.isEmpty)
+        XCTAssertEqual(m.searchState, .loading)
+        await m.searchTask?.value
+        m.year = "1995"
+        await m.searchTask?.value
+        XCTAssertEqual(calls.last ?? [], ["heat", "tv", "1995"])
+
+        m.year = "199"  // not searchable yet: the device would answer 400
+        XCTAssertEqual(m.searchState, .needsYear)
+        XCTAssertTrue(m.results.isEmpty)
+        let before = calls.count
+        await m.searchTask?.value
+        XCTAssertEqual(calls.count, before)
+
+        m.year = "19a5"
+        XCTAssertEqual(m.searchState, .needsYear)
+    }
+
+    func testLateReplyForAnOldQueryIsIgnored() async {
+        let old = Suggestion(tmdbId: 1, kind: "movie", title: "Old", year: 2000)
+        let m = model { q, _, _ in
+            if q == "old title" {
+                // Deliberately ignores cancellation, like a reply already on the wire.
+                try? await Task.sleep(for: .milliseconds(150))
+                return [old]
+            }
+            return [self.heat]
+        }
+        m.query = "old title"
+        let first = m.searchTask
+        try? await Task.sleep(for: .milliseconds(30))
+        m.query = "heat"
+        await m.searchTask?.value
+        await first?.value  // the old reply lands after the new one
+        XCTAssertEqual(m.results, [heat])
+        XCTAssertEqual(m.searchState, .results)
+    }
+
+    func testLateErrorForAnOldQueryIsIgnored() async {
+        let m = model { q, _, _ in
+            if q == "old title" {
+                try? await Task.sleep(for: .milliseconds(100))
+                throw PigeonError.transport("timed out")
+            }
+            return [self.heat]
+        }
+        m.query = "old title"
+        let first = m.searchTask
+        try? await Task.sleep(for: .milliseconds(20))
+        m.query = "heat"
+        await m.searchTask?.value
+        await first?.value
+        XCTAssertEqual(m.searchState, .results)
+    }
 }
