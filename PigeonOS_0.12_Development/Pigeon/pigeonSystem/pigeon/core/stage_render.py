@@ -1743,6 +1743,9 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
             and view_circles_widget is not None
             and (view_circles_widget.searching or view_circles_widget.reveal_active())
         ):
+            # The wipe is time-based: more frames just make it smoother.
+            if view_circles_widget.reveal_active():
+                return 16
             return 33 if sys.platform.startswith("linux") else 16
         try:
             if _volume_lines.fading():

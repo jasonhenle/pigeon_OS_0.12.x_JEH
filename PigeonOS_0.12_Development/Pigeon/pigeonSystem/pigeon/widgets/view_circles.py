@@ -3422,6 +3422,53 @@ def _shimmer_patch_bgra(
     return patch
 
 
+_CANDY_U_CACHE: dict[tuple[int, int], np.ndarray] = {}
+
+
+_CANDY_STEPS = 48
+
+
+@lru_cache(maxsize=_CANDY_STEPS * 2)
+def _candy_stripe_step_bgra(
+    w: int, h: int, radius: int, step: int, color_bgr: tuple[int, int, int]
+) -> np.ndarray:
+    return _candy_stripe_patch_bgra(
+        w, h, radius=radius, phase=step / float(_CANDY_STEPS), color_bgr=color_bgr
+    )
+
+
+def _candy_stripe_patch_bgra(
+    w: int,
+    h: int,
+    *,
+    radius: int,
+    phase: float,
+    color_bgr: tuple[int, int, int],
+) -> np.ndarray:
+    """Rounded bar of diagonal hard-edged stripes (UI color / a darker shade) scrolling right."""
+    w = max(1, int(w))
+    h = max(1, int(h))
+    u = _CANDY_U_CACHE.get((w, h))
+    if u is None:
+        u = (np.arange(w, dtype=np.float32)[None, :] + np.arange(h, dtype=np.float32)[:, None])
+        if len(_CANDY_U_CACHE) >= 4:
+            _CANDY_U_CACHE.clear()
+        _CANDY_U_CACHE[(w, h)] = u
+    period = max(8.0, float(h) * 1.1)
+    d = np.mod(u - float(phase) * period, period)
+    half = period * 0.5
+    # Signed distance to the nearest stripe edge (+ inside the light stripe), antialiased.
+    e = np.where(d < half, np.minimum(d, half - d), -np.minimum(d - half, period - d))
+    mix = np.clip(e * 0.7 + 0.5, 0.0, 1.0)[:, :, None]
+    light = np.array(color_bgr, dtype=np.float32)
+    dark = light * 0.55
+    rgb = dark + (light - dark) * mix
+    patch = np.empty((h, w, 4), dtype=np.uint8)
+    patch[:, :, :3] = np.clip(rgb + 0.5, 0, 255).astype(np.uint8)
+    patch[:, :, 3] = _rounded_rect_mask(w, h, max(1, int(radius)))
+    return patch
+
+
 def _draw_shimmer_rounded_rect(
     out: np.ndarray,
     *,
@@ -4048,8 +4095,17 @@ class ViewCirclesWidget:
         self._shimmer_work: np.ndarray | None = None
         # Last frame shown while TMDb was loading, and when the reveal wipe off it began.
         self._loading_snapshot: np.ndarray | None = None
-        self._reveal_old: np.ndarray | None = None
+        self._loading_regions: list[tuple[int, int, int, int, int]] = []
+        self._loading_bar: tuple[int, int, int, int, int] | None = None
+        # Reveal: pending until the finished page is built (that rebuild is slow and
+        # must not eat into the wipe), then ``_reveal_t0`` runs the clock.
+        self._reveal_pending = False
         self._reveal_t0: float | None = None
+        self._reveal_new: np.ndarray | None = None
+        self._reveal_out: np.ndarray | None = None
+        self._reveal_live: np.ndarray | None = None
+        self._reveal_rows: np.ndarray | None = None
+        self._reveal_done_x = 0
         # ``_overlay_ticking`` result reused across loading / reveal frames.
         self._ticking_base: np.ndarray | None = None
         self._ticking_base_key: tuple[object, ...] | None = None
@@ -4383,9 +4439,11 @@ class ViewCirclesWidget:
             if want != self._state.searching:
                 self._state.searching = want
                 if not want and self._loading_snapshot is not None:
-                    self._reveal_t0 = time.monotonic()
-                elif want:
+                    self._reveal_pending = True
                     self._reveal_t0 = None
+                    self._reveal_new = None
+                elif want:
+                    self._end_reveal()
                 if want:
                     self._state.search_angle_deg = 0.0
                     self._last_tick_mono = None
@@ -4514,30 +4572,36 @@ class ViewCirclesWidget:
     def _has_live_shimmer(self) -> bool:
         return bool(self._shimmer_rects) or self._loading_bar_rect() is not None
 
-    # The bar sweeps faster than the skeleton plates: it is the only thing moving.
-    _BAR_SHIMMER_PERIOD_S = 0.8
+    # One stripe period crosses the bar this often.
+    _BAR_STRIPE_PERIOD_S = 0.6
 
     def _paint_live_shimmers(self, out: np.ndarray, *, loading: bool | None = None) -> None:
+        self._paint_shimmers(
+            out, self._shimmer_rects, self._loading_bar_rect(loading=loading)
+        )
+
+    def _paint_shimmers(
+        self,
+        out: np.ndarray,
+        rects: list[tuple[int, int, int, int, int]],
+        bar: tuple[int, int, int, int, int] | None,
+    ) -> None:
         phase = self._shimmer_phase()
-        for x, y, w, h, radius in self._shimmer_rects:
+        for x, y, w, h, radius in rects:
             _draw_shimmer_rounded_rect(
                 out, x=x, y=y, w=w, h=h, radius=radius, phase=phase
             )
-        bar = self._loading_bar_rect(loading=loading)
         if bar is not None:
-            phase = (time.monotonic() / float(self._BAR_SHIMMER_PERIOD_S)) % 1.0
             x, y, w, h, radius = bar
-            # Track gray with a UI-color highlight: the same bar the final page fills.
-            _draw_shimmer_rounded_rect(
-                out,
-                x=x,
-                y=y,
-                w=w,
-                h=h,
-                radius=radius,
-                phase=phase,
-                colors_bgr=((122, 122, 122), tuple(self._effective_np_theme().ui_bgr)),
+            phase = (time.monotonic() / float(self._BAR_STRIPE_PERIOD_S)) % 1.0
+            patch = _candy_stripe_step_bgra(
+                int(w),
+                int(h),
+                int(radius),
+                int(phase * _CANDY_STEPS) % _CANDY_STEPS,
+                tuple(int(c) for c in self._effective_np_theme().ui_bgr),
             )
+            _paste_patch_bgra(out, patch, x, y)
 
     def _poster_widget_loading(self) -> bool:
         return bool(self._state.searching)
@@ -7222,61 +7286,108 @@ class ViewCirclesWidget:
             track_bgr=_VOLUME_CONTAINER_BGR,
         )
 
-    _REVEAL_S = 0.6
+    _REVEAL_S = 0.7
     _REVEAL_FEATHER_PX = 160
 
     def reveal_active(self) -> bool:
-        """True while the finished page is wiping on over the loading frame."""
+        """True while the finished page is wiping on over the loading page."""
+        if self._reveal_pending:
+            return True
         t0 = self._reveal_t0
         if t0 is None:
             return False
         if time.monotonic() - t0 >= self._REVEAL_S:
-            self._reveal_t0 = None
-            self._loading_snapshot = None
+            self._end_reveal()
             return False
         return True
 
-    def _apply_reveal(self, frame: np.ndarray) -> None:
-        """Wipe ``frame`` (the finished page) on from the left over the loading page, in place.
+    def _end_reveal(self) -> None:
+        self._reveal_pending = False
+        self._reveal_t0 = None
+        self._loading_snapshot = None
+        self._reveal_new = None
+        self._reveal_out = None
+        self._reveal_live = None
+        self._reveal_rows = None
 
-        The loading page keeps shimmering underneath until the wipe covers it, so the
-        animation never freezes when the content lands.
+    def _prepare_reveal(self, new: np.ndarray) -> bool:
+        """Set up the wipe from the loading snapshot to ``new`` (the finished page).
+
+        Everything that does not change per frame is done here, once, so a wipe frame
+        only touches the columns the edge crossed plus the animating stripes.
         """
         snap = self._loading_snapshot
-        t0 = self._reveal_t0
-        if snap is None or t0 is None or snap.shape != frame.shape:
-            return
-        old = self._reveal_old
-        if old is None or old.shape != snap.shape:
-            old = snap.copy()
-            self._reveal_old = old
-        else:
-            old[:] = snap
-        self._paint_live_shimmers(old, loading=True)
+        if snap is None or snap.shape != new.shape:
+            return False
+        self._reveal_new = new.copy()
+        self._reveal_live = snap.copy()
+        self._reveal_out = snap.copy()
+        changed = (new != snap).reshape(new.shape[0], -1).any(axis=1)
+        for _x, y, _w, h, _r in self._loading_live_regions():
+            changed[max(0, y) : max(0, y + h)] = True
+        self._reveal_rows = np.nonzero(changed)[0]
+        self._reveal_done_x = 0
+        return True
+
+    def _loading_live_regions(self) -> list[tuple[int, int, int, int, int]]:
+        regions = list(self._loading_regions)
+        if self._loading_bar is not None:
+            regions.append(self._loading_bar)
+        return regions
+
+    def _reveal_step(self) -> np.ndarray:
+        """One wipe frame, updated incrementally in a persistent buffer."""
+        out, new, live, snap = (
+            self._reveal_out,
+            self._reveal_new,
+            self._reveal_live,
+            self._loading_snapshot,
+        )
+        assert out is not None and new is not None and live is not None and snap is not None
+        t0 = self._reveal_t0 if self._reveal_t0 is not None else time.monotonic()
         p = max(0.0, min(1.0, (time.monotonic() - t0) / float(self._REVEAL_S)))
-        p = 1.0 - (1.0 - p) ** 2  # fast off the line, settles at the right edge
-        w = int(frame.shape[1])
+        p = p * p * (3.0 - 2.0 * p)  # eases in and out: no jolt at either end
+        w = int(new.shape[1])
         feather = int(self._REVEAL_FEATHER_PX)
         edge = p * float(w + feather)
-        x_new = max(0, min(w, int(edge - feather)))  # frame is final left of this
-        x_old = max(0, min(w, int(math.ceil(edge))))  # snapshot is intact right of this
-        if x_old < w:
-            frame[:, x_old:] = old[:, x_old:]
-        if x_old > x_new:
+        x_new = max(0, min(w, int(edge - feather)))  # final left of this
+        x_old = max(0, min(w, int(math.ceil(edge))))  # loading page intact right of this
+
+        # The loading page keeps animating until the wipe covers it.
+        regions = self._loading_live_regions()
+        for x, y, rw, rh, _r in regions:
+            live[y : y + rh, x : x + rw] = snap[y : y + rh, x : x + rw]
+        self._paint_shimmers(live, self._loading_regions, self._loading_bar)
+        for x, y, rw, rh, _r in regions:
+            if x_old < x + rw:
+                x0 = max(x, x_old)
+                out[y : y + rh, x0 : x + rw] = live[y : y + rh, x0 : x + rw]
+
+        if x_new > self._reveal_done_x:
+            out[:, self._reveal_done_x : x_new] = new[:, self._reveal_done_x : x_new]
+            self._reveal_done_x = x_new
+        rows = self._reveal_rows
+        if x_old > x_new and rows is not None and rows.size:
             xs = np.arange(x_new, x_old, dtype=np.float32)
             m = np.clip((edge - xs) / float(feather), 0.0, 1.0)[None, :, None]
-            n = frame[:, x_new:x_old].astype(np.float32)
-            o = old[:, x_new:x_old].astype(np.float32)
+            n = new[rows, x_new:x_old].astype(np.float32)
+            o = live[rows, x_new:x_old].astype(np.float32)
             a_n = n[:, :, 3:4] / 255.0
             a_o = o[:, :, 3:4] / 255.0
             a = m * a_n + (1.0 - m) * a_o
             c = (m * a_n * n[:, :, :3] + (1.0 - m) * a_o * o[:, :, :3]) / np.maximum(a, 1e-4)
-            frame[:, x_new:x_old, :3] = np.clip(c + 0.5, 0, 255).astype(np.uint8)
-            frame[:, x_new:x_old, 3:4] = np.clip(a * 255.0 + 0.5, 0, 255).astype(np.uint8)
+            res = np.empty_like(n)
+            res[:, :, :3] = c
+            res[:, :, 3:4] = a * 255.0
+            out[rows, x_new:x_old] = np.clip(res + 0.5, 0, 255).astype(np.uint8)
+        return out
 
     def bgra_frame(self) -> np.ndarray | None:
         if not self._state.chrome_visible:
             return None
+        revealing = self.reveal_active()
+        if revealing and not self._reveal_pending and self._reveal_new is not None:
+            return self._reveal_step()
         sig = self._cache_sig(ticking=False)
         if self._cached_bgra is None or self._cached_sig != sig:
             self._cached_bgra = self._render_static_bgra()
@@ -7289,7 +7400,6 @@ class ViewCirclesWidget:
         frame = self._cached_bgra
         if _layout_is_fullscreen_clock(self._assignments()):
             return frame
-        revealing = self.reveal_active()
         work = self._shimmer_work
         cached = frame
         if work is None or work.shape != cached.shape:
@@ -7297,8 +7407,9 @@ class ViewCirclesWidget:
             self._shimmer_work = work
         else:
             work[:] = cached
+        rebuilt = False
         if self._state.searching or revealing:
-            # Nothing but the shimmer / wipe changes between frames: restamping the
+            # Nothing but the stripes / wipe changes between frames: restamping the
             # clock, volume and bar every frame is most of the frame time.
             key = (sig, self._ticking_sig())
             base = self._ticking_base
@@ -7307,6 +7418,7 @@ class ViewCirclesWidget:
                 self._overlay_ticking(base)
                 self._ticking_base = base
                 self._ticking_base_key = key
+                rebuilt = True
             work[:] = base
         else:
             self._overlay_ticking(work)
@@ -7315,17 +7427,23 @@ class ViewCirclesWidget:
             self._draw_live_audio_widgets(work)
         self._draw_zone4_eq(work)
         if self._state.searching:
-            # Snapshot without the shimmer; the wipe repaints it live over this.
+            # The loading page without its animation; the wipe repaints that live.
             snap = self._loading_snapshot
             if snap is None or snap.shape != work.shape:
-                snap = work.copy()
-                self._loading_snapshot = snap
-            else:
+                self._loading_snapshot = work.copy()
+            elif rebuilt:
                 snap[:] = work
+            self._loading_regions = list(self._shimmer_rects)
+            self._loading_bar = self._loading_bar_rect()
         if self._has_live_shimmer():
             self._paint_live_shimmers(work)
         if not self._state.searching and revealing:
-            self._apply_reveal(work)
+            # First finished frame (the slow one) is built; the wipe starts now.
+            if self._prepare_reveal(work):
+                self._reveal_pending = False
+                self._reveal_t0 = time.monotonic()
+                return self._reveal_step()
+            self._end_reveal()
         return frame
 
     def render(self, canvas_bgr: np.ndarray) -> None:
@@ -7340,7 +7458,10 @@ class ViewCirclesWidget:
             if frame is None:
                 return
             if frame.shape[2] >= 4:
-                canvas_bgr[:] = alpha_blend_bgra_over_bgr(canvas_bgr, frame)
+                if frame.shape[:2] == canvas_bgr.shape[:2] and int(frame[:, :, 3].min()) == 255:
+                    canvas_bgr[:] = frame[:, :, :3]  # opaque page: no intermediate copy
+                else:
+                    canvas_bgr[:] = alpha_blend_bgra_over_bgr(canvas_bgr, frame)
             else:
                 h = min(canvas_bgr.shape[0], frame.shape[0])
                 w = min(canvas_bgr.shape[1], frame.shape[1])

@@ -204,7 +204,17 @@ class Zone11LayoutTests(unittest.TestCase):
         w._tt_bgra = None
         return w
 
-    def test_loading_shows_header_and_a_shimmering_status_bar_only(self) -> None:
+    def _finish_loading(self, w: vc.ViewCirclesWidget, tt: np.ndarray) -> None:
+        w.update_state(
+            progress=0.4, elapsed_text="0:41:12", remaining_text="1:12:30",
+            volume_text="-22.5 dB", incoming_audio="DOLBY", playback_config="X",
+            has_now_playing=True, has_position=True, content_active=True,
+            paused=False, service_name="peacock", content_mode="video",
+            tt_bgra=tt, tt_title="Title", receiver_name="DENON",
+            receiver_input="APPLE TV", has_receiver=True, searching=False,
+        )
+
+    def test_loading_shows_header_and_a_candy_striped_status_bar_only(self) -> None:
         w = self._loading_widget()
         canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
         w.render(canvas)
@@ -216,11 +226,22 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertTrue(self._ink(canvas, 0, 0, DESIGN_W, 140).any(), "header missing")
         self.assertFalse(self._ink(canvas, 0, 160, DESIGN_W, by - 90).any(), "middle not empty")
         first = canvas[by : by + bh, bx : bx + bw].copy()
+        # Hard-edged stripes: only two colors (plus antialiased edges), no gradient.
+        row = first[bh // 2].astype(int)
+        flat = sum(1 for i in range(1, len(row)) if (row[i] == row[i - 1]).all())
+        self.assertGreater(flat / len(row), 0.8)
         w._shimmer_phase = lambda: 0.9  # type: ignore[method-assign]
-        w.render(canvas)
+        import time
+
+        real = time.monotonic
+        time.monotonic = lambda: real() + 0.3  # type: ignore[assignment]
+        try:
+            w.render(canvas)
+        finally:
+            time.monotonic = real
         self.assertFalse(np.array_equal(first, canvas[by : by + bh, bx : bx + bw]))
 
-    def test_reveal_wipes_left_to_right_then_settles(self) -> None:
+    def test_reveal_waits_for_the_page_then_wipes_left_to_right_and_settles(self) -> None:
         import time
 
         w = self._widget()
@@ -229,24 +250,23 @@ class Zone11LayoutTests(unittest.TestCase):
         w._tt_bgra = None
         canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
         w.render(canvas)
-        w.update_state(
-            progress=0.4, elapsed_text="0:41:12", remaining_text="1:12:30",
-            volume_text="-22.5 dB", incoming_audio="DOLBY", playback_config="X",
-            has_now_playing=True, has_position=True, content_active=True,
-            paused=False, service_name="peacock", content_mode="video",
-            tt_bgra=tt, tt_title="Title", receiver_name="DENON",
-            receiver_input="APPLE TV", has_receiver=True, searching=False,
-        )
+        self._finish_loading(w, tt)
         self.assertTrue(w.reveal_active())
-        w._reveal_t0 = time.monotonic() - 0.15
+        self.assertIsNone(w._reveal_t0)  # clock not running until the page is built
+        w.render(canvas)
+        self.assertIsNotNone(w._reveal_t0)
+        w._reveal_t0 = time.monotonic() - 0.35
         w.render(canvas)
         title = self._ink(canvas, 0, 200, DESIGN_W, 360)
         self.assertTrue(title[:, :300].any(), "left side should be revealed")
         w._reveal_t0 = time.monotonic() - 1.0
         w.render(canvas)
         self.assertFalse(w.reveal_active())
+        final = self._frame(self._widget())
+        self.assertTrue(self._ink(canvas, 0, 200, DESIGN_W, 360).any())
+        self.assertEqual(final.shape, canvas.shape)
 
-    def test_shimmer_keeps_moving_on_the_uncovered_side_during_the_reveal(self) -> None:
+    def test_stripes_keep_moving_on_the_uncovered_side_during_the_reveal(self) -> None:
         import time
 
         w = self._widget()
@@ -256,17 +276,14 @@ class Zone11LayoutTests(unittest.TestCase):
         canvas = np.zeros((DESIGN_H, DESIGN_W, 3), np.uint8)
         w.render(canvas)
         bx, by, bw, bh, _r = w._loading_bar_rect()  # type: ignore[misc]
-        w._state.searching = False
-        w._tt_bgra = tt
-        w._cached_bgra = None
-        w._reveal_t0 = time.monotonic()
+        self._finish_loading(w, tt)
+        w.render(canvas)  # builds the page, starts the clock
         shots = []
-        for phase_t in (0.0, 0.2):
-            w._reveal_t0 = time.monotonic() - 0.02  # wipe barely started
-            real = time.monotonic
-            time.monotonic = lambda t=real() + phase_t: t  # type: ignore[assignment]
+        real = time.monotonic
+        for dt in (0.0, 0.2):
+            w._reveal_t0 = real() - 0.02 + dt
+            time.monotonic = lambda d=dt: real() + d  # type: ignore[assignment]
             try:
-                w._reveal_t0 = time.monotonic() - 0.02
                 w.render(canvas)
             finally:
                 time.monotonic = real
