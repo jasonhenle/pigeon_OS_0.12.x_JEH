@@ -101,6 +101,13 @@ class Zone11LayoutTests(unittest.TestCase):
         self.assertGreater(int(ys.max() - ys.min()), 60)
         self.assertGreater(self._cols(vol, 600)[1], DESIGN_W - 80)
 
+    def test_volume_readout_has_no_db_unit(self) -> None:
+        frame = self._frame(self._widget())
+        vol = self._ink(frame, 600, 0, DESIGN_W, 200)
+        # "-22.5" alone is ~345 px wide at this size; with " DB" it was ~420.
+        x0, x1 = self._cols(vol, 600)
+        self.assertLess(x1 - x0, 380)
+
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
         w = self._widget()
         w.update_state(

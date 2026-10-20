@@ -238,7 +238,7 @@ class AutoWidgetResolveTests(unittest.TestCase):
         self.assertTrue(plan.zone4_receiver)
         self.assertEqual(plan.zone4_text, "")
 
-    def test_auto_clocksaver_never_uses_analog_face(self) -> None:
+    def test_auto_clocksaver_uses_digital_face_when_clock_format_digital(self) -> None:
         zone8 = resolve_auto_widgets(
             _sig(player_metadata=METADATA_ABSENT, audio_levels=False)
         )
@@ -256,6 +256,22 @@ class AutoWidgetResolveTests(unittest.TestCase):
             self.assertTrue(auto_clocksaver_wants_digital())
         finally:
             set_live_plan(None)
+
+    def test_auto_clocksaver_keeps_analog_face_when_clock_format_analog(self) -> None:
+        from unittest import mock
+
+        zone8 = resolve_auto_widgets(
+            _sig(player_metadata=METADATA_ABSENT, audio_levels=False)
+        )
+        with mock.patch(
+            "pigeon.widgets.options_settings.clock_widget_analog", return_value=True
+        ):
+            self.assertFalse(auto_clocksaver_wants_digital(zone8))
+            set_live_plan(zone8)
+            try:
+                self.assertFalse(auto_clocksaver_wants_digital())
+            finally:
+                set_live_plan(None)
 
     def test_receiver_ok_keeps_volume_on_clocksaver(self) -> None:
         plan = resolve_auto_widgets(
