@@ -6275,15 +6275,6 @@ class ViewCirclesWidget:
             max(1, zh - pad_top - pad_bottom),
         )
 
-    def _zone11_art_rect(self) -> tuple[int, int, int, int] | None:
-        """Painted ``(x, y, w, h)`` of the title / art patch, or None while loading."""
-        bx, by, bw, bh = self._zone11_art_box()
-        patch = self._tt_countdown_tt_patch(ZONE11, dest_wh=(bw, bh))
-        if patch is None or patch.size == 0:
-            return None
-        ph, pw = int(patch.shape[0]), int(patch.shape[1])
-        return (bx + (bw - pw) // 2, by + (bh - ph) // 2, pw, ph)
-
     def _draw_zone11_art(self, out: np.ndarray) -> None:
         """TT (or album art) as large as zones 1-3 allow, with room above it."""
         z = ZONE11
@@ -6311,10 +6302,9 @@ class ViewCirclesWidget:
     _ZONE11_INFO_PX = 68
     _ZONE11_APP_ID_PX = 36
     _ZONE11_APP_ID_GAP = 14
-    _ZONE11_VOLUME_MAX_SCALE = 8.0
-    _ZONE11_VOLUME_GAP = 12
-    # Fraction of the largest clear-fitting size actually used.
-    _ZONE11_VOLUME_FIT_FRACTION = 0.5
+    # Fixed multiple of the header size; independent of the art so it never jumps
+    # when the title / poster finishes loading.
+    _ZONE11_VOLUME_SCALE = 2.5
 
     def _zone11_service_label(self) -> str:
         """Streaming app / incoming source name (the status bar's service text)."""
@@ -6370,47 +6360,6 @@ class ViewCirclesWidget:
         _paste_patch_bgra(out, patch, x, y)
         return (x, y, int(pw), int(ph))
 
-    def _zone11_volume_scale(
-        self, vol: str, avoid: list[tuple[int, int, int, int]]
-    ) -> float:
-        """Half the largest scale (>= 1) at which the top-right volume clears every ``avoid`` rect."""
-        if not vol:
-            return 1.0
-        base_size = _header_digital7_size_px()
-        patch, _tw, _th = _text_patch_digital7(
-            vol.upper(), size_px=base_size, fill_rgb=_look_chrome_rgb()
-        )
-        a = patch[:, :, 3] > 8
-        rows, cols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
-        if rows.size == 0:
-            return 1.0
-        w0, h0 = int(cols.max() - cols.min() + 1), int(rows.max() - rows.min() + 1)
-        z = ZONE11
-        right = float(z.x) + float(z.w)
-        top = float(header_clock_baseline_y()) - h0
-        gap = float(self._ZONE11_VOLUME_GAP)
-
-        def clear(s: float) -> bool:
-            x0, y0, x1, y1 = right - w0 * s, top, right, top + h0 * s
-            for ax, ay, aw, ah in avoid:
-                if (
-                    x0 < ax + aw + gap
-                    and x1 > ax - gap
-                    and y0 < ay + ah + gap
-                    and y1 > ay - gap
-                ):
-                    return False
-            return True
-
-        lo, hi = 1.0, float(self._ZONE11_VOLUME_MAX_SCALE)
-        for _ in range(12):
-            mid = (lo + hi) / 2.0
-            if clear(mid):
-                lo = mid
-            else:
-                hi = mid
-        return max(1.0, lo * float(self._ZONE11_VOLUME_FIT_FRACTION))
-
     def _zone11_bar_track(self) -> tuple[int, int] | None:
         """``(track_x, track_w)`` of the status bar the elapsed time rides along."""
         for i, name in enumerate(self._assignments()[:5]):
@@ -6426,7 +6375,7 @@ class ViewCirclesWidget:
         return None
 
     def _draw_zone11_info(self, out: np.ndarray) -> None:
-        """Top-right: volume (as large as fits). Top-left under the clock: app id, input id
+        """Top-right: volume (2.5x header size). Top-left under the clock: app id, input id
         (stacked). Zone 4 strip: elapsed
         riding the status bar's playhead (gray, fading before it meets the TRT) and
         the TRT in the title's UI color."""
@@ -6441,7 +6390,6 @@ class ViewCirclesWidget:
         z = ZONE11
         left_x = float(z.x)
         y = float(header_clock_baseline_y()) + float(self._ZONE11_APP_ID_GAP)
-        stack_rects: list[tuple[int, int, int, int]] = []
         for label in (self._zone11_service_label(), self._receiver_readout()):
             if not label:
                 continue
@@ -6454,21 +6402,15 @@ class ViewCirclesWidget:
             px, py = int(round(left_x)), int(round(y))
             _paste_patch_bgra(out, patch, px, py)
             self._tt_time_paint_rects.append((px, py, int(pw), int(ph)))
-            stack_rects.append((px, py, int(pw), int(ph)))
             y = py + ph + 8.0
 
-        # Top-right: volume, as large as fits clear of the stack and the title art.
-        clock_top = int(round(float(header_clock_baseline_y()))) - _header_digital7_size_px() * 2 // 3
-        avoid = [(int(z.x), clock_top, 190, int(header_clock_baseline_y()) - clock_top)] + stack_rects
-        art = self._zone11_art_rect()
-        if art is not None:
-            avoid.append(art)
+        # Top-right: volume.
         rect = self._paste_zone11_corner_text(
             out,
             vol,
             left=False,
             fill_rgb=_look_chrome_rgb(),
-            scale=self._zone11_volume_scale(vol, avoid),
+            scale=self._ZONE11_VOLUME_SCALE,
         )
         if rect is not None:
             self._tt_time_paint_rects.append(rect)
