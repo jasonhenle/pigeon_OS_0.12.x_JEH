@@ -106,14 +106,22 @@ struct DeviceSearchSection: View {
             if let text = model.errorText {
                 Text(text).font(Theme.ui(14)).foregroundStyle(Theme.bad)
             }
-            if let np = model.nowPlaying, np.source == "detected", model.query.isEmpty {
-                NavigationLink {
-                    NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
-                } label: { DetectedCard(nowPlaying: np) }
-                    .buttonStyle(.plain)
-            }
-            if model.current.active, let e = model.current.entry, model.query.isEmpty {
-                CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
+            if model.query.isEmpty {
+                LCDLabel(text: "Playing now", size: 18, color: Theme.accent)
+                let detected = model.nowPlaying.flatMap { $0.source == "detected" ? $0 : nil }
+                let manual = model.current.active ? model.current.entry : nil
+                if let np = detected {
+                    NavigationLink {
+                        NowPlayingFixView(client: store.client(for: device), deviceName: device.name)
+                    } label: { DetectedCard(nowPlaying: np) }
+                        .buttonStyle(.plain)
+                }
+                if let e = manual {
+                    CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
+                }
+                if detected == nil && manual == nil {
+                    Text("Nothing playing").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
+                }
             }
             ForEach(model.results) { s in
                 Button { Task { await model.choose(s); focused = false } } label: {
@@ -135,7 +143,7 @@ struct DeviceSearchSection: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondaryText)
-            TextField("Search a movie or show", text: $model.query)
+            TextField("Search for a movie or show", text: $model.query)
                 .font(Theme.ui(20))
                 .focused($focused)
                 .submitLabel(.search)
