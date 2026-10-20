@@ -72,7 +72,7 @@ struct PlayingNowSection: View {
                     .buttonStyle(.plain)
             }
             if let e = manual {
-                CurrentCard(entry: e, deviceName: device.name) { Task { await model.clear() } }
+                PinnedTitleRow(entry: e) { Task { await model.clear() } }
             }
             if detected == nil && manual == nil {
                 Text("Nothing playing").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
@@ -127,19 +127,17 @@ struct SuggestionRow: View {
     }
 }
 
-struct CurrentCard: View {
+/// A title pinned from elsewhere: just its name and a way to let go of it.
+struct PinnedTitleRow: View {
     let entry: ManualEntry
-    let deviceName: String
     var onClear: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LCDLabel(text: "Showing on \(deviceName)", size: 18, color: Theme.accent)
-            Text(entry.title).font(Theme.uiBold(22)).foregroundStyle(.white)
-            Button(role: .destructive, action: onClear) {
-                Text("Clear").font(Theme.uiBold(16)).frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(Theme.tileRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
+        HStack {
+            Text(entry.title).font(Theme.uiBold(20)).foregroundStyle(.white)
+                .multilineTextAlignment(.leading)
+            Spacer()
+            Button("Clear", role: .destructive, action: onClear).font(Theme.uiBold(16))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .tile(selected: true)
@@ -151,7 +149,6 @@ struct DetectedCard: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                LCDLabel(text: "Playing now", size: 18, color: Theme.accent)
                 Text(nowPlaying.title ?? "Unknown title").font(Theme.uiBold(20)).foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
                 Text("Wrong title? Tap to see what Pigeon heard and fix it.")
