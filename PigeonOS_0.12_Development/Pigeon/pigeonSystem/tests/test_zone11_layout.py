@@ -132,7 +132,7 @@ class Zone11LayoutTests(unittest.TestCase):
         art = frame[:, 300:900].astype(int)
         colored = (art[:, :, 0] - art[:, :, 2]) > 60  # blue-ish art, BGR
         art_top = int(np.where(colored[:500].any(axis=1))[0].min())
-        self.assertGreaterEqual(art_top, vol_bottom)  # no overlap
+        self.assertGreaterEqual(art_top, vol_bottom + 10)  # padding below the header text
 
     def _widget_at(self, progress: float, service: str = "peacock") -> vc.ViewCirclesWidget:
         w = self._widget()
