@@ -193,6 +193,7 @@ _ZONE4_ENV = None
 
 
 _NO_WASH = None
+_VC_SEAMS: dict = {}
 
 
 def setUpModule() -> None:
@@ -200,9 +201,15 @@ def setUpModule() -> None:
     says; visualizer layouts are covered in ``test_zone4_eq``. They also read
     chrome against a black page, so the no-poster UI wash is off
     (``NoPosterUiWashTests`` turns it back on)."""
-    global _ZONE4_ENV, _NO_WASH
+    global _ZONE4_ENV, _NO_WASH, _VC_SEAMS
     from pigeon.widgets import view_circles as vc
 
+    # Tests below assign these directly (``_force_default_np_zones`` etc.); put the
+    # originals back afterwards so the replacement does not leak into later modules.
+    _VC_SEAMS = {
+        name: getattr(vc, name)
+        for name in ("_default_zone_widget_assignments", "_header_clock_enabled")
+    }
     _ZONE4_ENV = mock.patch.dict(os.environ, {"PIGEON_ZONE4_EQ": "0"})
     _ZONE4_ENV.start()
     _NO_WASH = mock.patch.object(vc, "_NP_NO_POSTER_UI_WASH", False)
@@ -210,6 +217,10 @@ def setUpModule() -> None:
 
 
 def tearDownModule() -> None:
+    from pigeon.widgets import view_circles as vc
+
+    for name, original in _VC_SEAMS.items():
+        setattr(vc, name, original)
     if _ZONE4_ENV is not None:
         _ZONE4_ENV.stop()
     if _NO_WASH is not None:
@@ -3189,6 +3200,7 @@ class WidgetShimmerTests(unittest.TestCase):
         self.assertGreater(int(cast_region.max()), 40)
 
     def test_shimmer_does_not_bust_the_static_cache(self) -> None:
+        from datetime import datetime
         from unittest.mock import patch
 
         from pigeon.widgets import view_circles as vc
@@ -3218,6 +3230,9 @@ class WidgetShimmerTests(unittest.TestCase):
             tt_title="",
             service_name="Peacock",
         )
+        # ``_cache_sig`` includes the wall-clock minute; freeze it so a minute rollover
+        # between the two frames cannot look like a cache bust.
+        widget._clock_now_for_display = lambda: datetime(2026, 1, 1, 10, 30, 15)  # type: ignore[method-assign]
         with patch(
             "pigeon.widgets.view_circles.widget_shimmer_phase", return_value=0.1
         ):

@@ -11,6 +11,39 @@ import numpy as np
 
 from tests.test_np_layout import _force_default_np_zones  # noqa: E402
 
+_VC_SEAMS: dict = {}
+
+
+def setUpModule() -> None:
+    # ``_force_default_np_zones`` (below) replaces these on view_circles; restore after.
+    from pigeon.widgets import view_circles as vc
+
+    _VC_SEAMS.update(
+        {n: getattr(vc, n) for n in ("_default_zone_widget_assignments", "_header_clock_enabled")}
+    )
+
+
+def tearDownModule() -> None:
+    from pigeon.widgets import view_circles as vc
+
+    for name, original in _VC_SEAMS.items():
+        setattr(vc, name, original)
+
+
+def _hold_clock_still():
+    """Freeze the wall clocks the static-layer cache key reads (it includes the minute)."""
+    import contextlib
+    import datetime as dt
+    import time
+    from unittest import mock
+
+    stack = contextlib.ExitStack()
+    fixed = dt.datetime(2026, 1, 1, 10, 30, 15)
+    mono = time.monotonic()
+    stack.enter_context(mock.patch("pigeon.widgets.view_circles.time.monotonic", return_value=mono))
+    stack.enter_context(mock.patch("pigeon.widgets.view_circles.pigeon_now", return_value=fixed))
+    return stack
+
 
 def _widget():
     from pigeon.widgets.view_circles import ViewCirclesWidget
@@ -79,13 +112,14 @@ class VolumeStaticBaseCacheTests(unittest.TestCase):
         self.assertEqual(reused[2], rebuilt[2])
 
     def test_volume_step_keeps_the_cached_base(self) -> None:
-        w = _settled("-40.0 dB")
-        first = w._static_base
-        self.assertIsNotNone(first)
-        for text in ("-39.5 dB", "-39.0 dB", "-38.5 dB"):
-            _push(w, text)
-            w.bgra_frame()
-        self.assertIs(w._static_base, first)
+        with _hold_clock_still():
+            w = _settled("-40.0 dB")
+            first = w._static_base
+            self.assertIsNotNone(first)
+            for text in ("-39.5 dB", "-39.0 dB", "-38.5 dB"):
+                _push(w, text)
+                w.bgra_frame()
+            self.assertIs(w._static_base, first)
 
     def test_other_changes_rebuild_the_base(self) -> None:
         w = _settled("-40.0 dB")

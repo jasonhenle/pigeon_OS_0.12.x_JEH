@@ -19,6 +19,7 @@ import itertools
 import math
 import os
 import sys
+import threading
 import unittest
 from unittest import mock
 
@@ -414,9 +415,16 @@ def _render(cls, p: dict, rect: tuple, levels: str, channels: int, frames: int =
         ch.level[:], ch.peak[:] = _levels(levels, 10 + n)
     out = _background(channels).copy()
     clock = iter([100.0 + i / 30.0 for i in range(frames + 1)])
+    real_monotonic, owner = time.monotonic, threading.get_ident()
+
+    def fake_monotonic() -> float:
+        # ``zone4_eq.time`` is the global ``time`` module: only this thread may consume the
+        # scripted clock, or a stray background thread from another test drains it.
+        return next(clock) if threading.get_ident() == owner else real_monotonic()
+
     with mock.patch.object(zone4_eq, "params", return_value=p), \
          mock.patch.object(zone4_eq, "want_mic_capture"), \
-         mock.patch.object(zone4_eq.time, "monotonic", side_effect=lambda: next(clock)):
+         mock.patch.object(zone4_eq.time, "monotonic", side_effect=fake_monotonic):
         for f in range(frames):
             eq.render_into(out, rect, 0.37 + f * 0.01, track_bgr=(35, 35, 35))
     return out
