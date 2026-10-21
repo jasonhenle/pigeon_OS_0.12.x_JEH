@@ -301,6 +301,29 @@ def _service_availability_score(
     return 1 if have & watch_provider_ids else 0
 
 
+def _listed_only_elsewhere(
+    item: dict,
+    kind: MediaKind | None,
+    watch_provider_ids: frozenset[int] | None,
+) -> bool:
+    """
+    True when TMDb lists the title on streaming services but **not** the foreground app.
+
+    Unknown listings (no data, failed lookup, app without provider ids) never count: TMDb's
+    watch data is US-only and often empty, so only a positive "available elsewhere" rejects.
+    Set ``PIGEON_TMDB_SERVICE_CHECK=off`` to disable.
+    """
+    if os.environ.get("PIGEON_TMDB_SERVICE_CHECK", "").strip().lower() in {"0", "off", "false", "no"}:
+        return False
+    if not watch_provider_ids or not kind or not isinstance(item, dict):
+        return False
+    mid = item.get("id")
+    if mid is None:
+        return False
+    have = _tmdb_watch_provider_ids(kind, int(mid))
+    return bool(have) and not (have & watch_provider_ids)
+
+
 def _result_pick_key(
     item: dict,
     media_kind: MediaKind | None,
@@ -2156,6 +2179,24 @@ def apply_tmdb_movie_query(
     if item.get(EPISODE_SERIES_FLAG):
         # The episode → series lookup vouched for this show; trust it like an exact title.
         match_tier = 5
+
+    if not item.get(EPISODE_SERIES_FLAG) and not _LAST_FETCH_TRACE.get("forced_pick"):
+        svc_ids = watch_provider_ids_for_streaming_service(
+            app_name=app_name, app_id=app_id, service_hint=hint
+        )
+        if _listed_only_elsewhere(item, kind, svc_ids):
+            shown = _display_title(item, kind)
+            _trace_fetch(
+                outcome="service_mismatch",
+                failure=f"{shown!r} is not listed on {hint or 'this service'}",
+            )
+            return (
+                False,
+                f"TMDb lists {shown!r} on other services but not {hint or 'this one'}.\n\n"
+                f"Searched: {q!r}",
+                None,
+                0,
+            )
 
     display_title = _display_title(item, kind)
     # TMDb may classify an SNL sketch row as a **movie**; still normalize the on-screen title.
