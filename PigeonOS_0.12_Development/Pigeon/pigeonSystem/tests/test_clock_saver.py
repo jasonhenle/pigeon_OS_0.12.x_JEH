@@ -656,17 +656,24 @@ class ClockSaverSecondsBarTests(unittest.TestCase):
         self.assertEqual(hold.pick(["-13.0 dB"], now=50.4), "-13.0 dB")
 
     def test_analog_saver_omits_seconds_bar(self) -> None:
+        from datetime import datetime
         from unittest.mock import patch
 
         from pigeon.np_layout import clock_saver_seconds_track_rect
         from pigeon.widgets.view_circles import render_centered_clock_widget_bgra
 
+        # Both renders read the display time; hold it still so a second ticking over
+        # between the two (slow first render) cannot change the compared pixels.
+        when = datetime(2026, 1, 1, 10, 30, 15)
         with patch(
             "pigeon.widgets.options_settings.clock_widget_analog",
             return_value=True,
+        ), patch(
+            "pigeon.widgets.clock_calendar._resolve_display_time",
+            return_value=when,
         ):
             frame = cs.render_clock_saver_bgra(layer_opacity=1.0)
-        direct = render_centered_clock_widget_bgra()
+            direct = render_centered_clock_widget_bgra()
         tx, ty, tw, th, _ = clock_saver_seconds_track_rect()
         self.assertEqual(
             frame[ty : ty + th, tx : tx + tw].tobytes(),
@@ -789,11 +796,11 @@ class ClockSaverTriggerTests(unittest.TestCase):
 
 class WeatherCacheTests(unittest.TestCase):
     def tearDown(self) -> None:
-        with wx._lock:
-            wx._cache_high = None
-            wx._cache_low = None
-            wx._cache_zip = ""
-            wx._cache_mono = 0.0
+        # Put back the suite-wide fixed temperatures (see ``tests/__init__``) rather than
+        # clearing the cache, which would change layouts in tests that run afterwards.
+        from tests import reseed_test_weather
+
+        reseed_test_weather()
 
     def test_store_and_read_cache(self) -> None:
         wx._store(wx.WeatherTemps(high_f=89, low_f=77, zip_code="21704"))

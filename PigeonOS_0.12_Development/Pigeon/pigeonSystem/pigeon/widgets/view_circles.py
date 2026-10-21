@@ -36,6 +36,12 @@ from pigeon.compositing import (
 )
 from pigeon.design import DESIGN_H, DESIGN_W
 from pigeon.pigeon_locale import pigeon_now
+from pigeon.np_zone_layout import (
+    apply_connection_fallbacks,
+    effective_zone_widgets,
+    layout_is_fullscreen_clock,
+    zone_clock_hides_header,
+)
 from pigeon.np_layout import (
     CAST_ACTOR_SIZE_PX,
     CAST_CHAR_SIZE_PX,
@@ -140,141 +146,189 @@ from pigeon.widgets.playback_overlay import (
     volume_widget_format_label,
     volume_widget_value_text,
 )
+from pigeon.widgets.view_circles_theme import (  # noqa: F401  (re-exported for existing importers)
+    _CLOCK_TICK_OFF_HEX,
+    _COLOR_ACCENT_BGR,
+    _COLOR_BG_HEX,
+    _COLOR_BUTTON_BGR,
+    _COLOR_CENTER_BLACK_BGR,
+    _COLOR_CENTER_BLACK_HEX,
+    _COLOR_CHROME_BGR,
+    _COLOR_CHROME_RGB,
+    _COLOR_UNFILLED_BGR,
+    _COLOR_UNFILLED_HEX,
+    _COLOR_UNFILLED_RGB,
+    _COLOR_UNPLAYED_BGR,
+    _NpTheme,
+    _VOLUME_CONTAINER_BGR,
+    _darken_hex,
+    _hex_to_bgr,
+    _look_chrome_bgr,
+    _look_chrome_hex,
+    _look_chrome_rgb,
+    _look_ink_rgb,
+    _look_is_bright,
+    _visible_on_dark_hex,
+    _zone_clock_center_const,
+    _zone_spec,
+    np_theme_from_settings,
+)
+from pigeon.widgets.view_circles_draw import (  # noqa: F401  (re-exported for existing importers)
+    NP_PIGEON_LOGO_FILENAME,
+    ZONE4_VISUALIZER_WIDGET,
+    ZONE6_VISUALIZER_WIDGET,
+    _ACCENT_OPACITY,
+    _ACCENT_STROKE_OPACITY,
+    _ACCENT_STROKE_PX,
+    _CANDY_STEPS,
+    _CANDY_U_CACHE,
+    _RING_INNER_R,
+    _RING_OUTER_R,
+    _ROUND_END_CAP_SCALE,
+    _TT_ITALIC_SHEAR,
+    _WIDGET_LABEL_BASELINE_GAP_PX,
+    _ZONE4_SUBTITLE_TOP_FRAC,
+    _add_round_sector_end,
+    _black_rounded_plate,
+    _candy_stripe_patch_bgra,
+    _candy_stripe_step_bgra,
+    _cast_line_patch,
+    _draw_circle_pair,
+    _draw_filled_circle_bgra,
+    _draw_progress_ring,
+    _draw_rounded_bar_bgra,
+    _draw_shimmer_rounded_rect,
+    _draw_stacked_cast_pair,
+    _fade_bgra,
+    _font_bbox_top,
+    _ink_crop_bgra,
+    _load_digital7,
+    _load_np_pigeon_logo_bgra,
+    _load_sharp_extrabold,
+    _load_sharp_italic,
+    _load_sharp_light_italic,
+    _load_sharp_medium_italic,
+    _load_sharp_semibold,
+    _load_sharp_semibold_italic,
+    _paste_baseline_centered,
+    _paste_baseline_left,
+    _paste_centered,
+    _paste_ink_centered,
+    _paste_label_above_circle_curved,
+    _paste_label_above_widget,
+    _paste_left_vcenter,
+    _paste_patch_bgra,
+    _paste_stroke_over_blur,
+    _restore_from_backdrop_abs,
+    _restore_masked_region,
+    _rounded_rect_mask,
+    _same_source_art,
+    _shear_italic_bgra,
+    _shimmer_base_patch_bgra,
+    _shimmer_colors_bgr,
+    _shimmer_patch_bgra,
+    _text_patch_digital7,
+    _text_patch_font,
+    _tt_countdown_time_patch,
+    _weak_or_none,
+    _zone4_title_xywh,
+    annular_sector_mask,
+    zone4_visualizer_rect,
+)
+from pigeon.widgets.view_circles_svg import (  # noqa: F401  (re-exported for existing importers)
+    SVG_NS,
+    _CLOCK_EXTERIOR_ACCENT_R,
+    _CLOCK_INTERIOR_ACCENT_R,
+    _CLOCK_MIDDLE_ACCENT_R,
+    _CLOCK_MINUTE_TICK_OPACITY,
+    _FORCE_ANALOG_CLOCK,
+    _HOUR_FACE_NAMES,
+    _accent_circle_r,
+    _annulus_wedge_path_d,
+    _apply_clock_accent_fills,
+    _apply_clock_black_rings,
+    _apply_clock_ticks,
+    _apply_exterior_seconds_fill,
+    _apply_standalone_clock_ticks,
+    _circle_cx_cy_r,
+    _clear_text_content,
+    _clock_accent_key,
+    _clock_group_for_zone,
+    _clock_include_digital_time,
+    _clock_widget_is_analog,
+    _detach_clock_tick_groups,
+    _detach_element,
+    _evenodd_ring_d,
+    _find_by_id,
+    _find_by_key,
+    _find_direct_child_by_key,
+    _fix_seconds_08_label,
+    _hours_group,
+    _iter_named_children,
+    _layer_key,
+    _local_tag,
+    _minutes_group,
+    _paint_seconds_ticks_alternating,
+    _place_in_group,
+    _punch_clock_open_ring_white,
+    _raise_clock_tick_groups,
+    _raise_in_group,
+    _remove_by_key,
+    _remove_element_by_id,
+    _resolve_hour_face_el,
+    _resolve_seconds_el,
+    _seconds_alternate_colors,
+    _seconds_group,
+    _seconds_wedge_path_d,
+    _set_tick_paint,
+    _svg_parent,
+    _zone_clock_center,
+    _zone_volume_center,
+)
+from pigeon.widgets.view_circles_text import (  # noqa: F401  (re-exported for existing importers)
+    _VOLUME_SIZE_REFERENCE_TEXT,
+    _VOLUME_TEXT_INNER_FIT,
+    _ZONE6_VOLUME_MARGIN_PX,
+    _clock_date_baseline_y,
+    _disc_clock_ink_h,
+    _disc_clock_patch,
+    _format_zone0_date,
+    _ordinal_day,
+    _volume_audio_cfg_baseline_y,
+    _volume_input_patch,
+    _volume_readout_patch,
+    _volume_readout_size_px,
+    _zone0_date_align,
+    _zone3_clock_day_baseline_y,
+    _zone6_volume_font_px,
+)
+from pigeon.widgets.view_circles_raster import (  # noqa: F401  (re-exported for existing importers)
+    _SVG_H,
+    _SVG_TEMPLATE_CACHE,
+    _SVG_W,
+    _decanvas_white_bgra,
+    _rasterize_svg_tree,
+    _scale_raster_to_design,
+    _svg_tree_from_path,
+    _svg_viewbox_wh,
+)
+from pigeon.widgets.view_circles_state import (  # noqa: F401  (re-exported for existing importers)
+    ViewCirclesState,
+    _CONTENT_MODE_MUSIC,
+    _CONTENT_MODE_VIDEO,
+    _normalize_content_mode,
+)
+from pigeon.widgets.view_circles_timecode import (  # noqa: F401  (re-exported for existing importers)
+    _draw_volume_selected_pie,
+    _header_digital7_size_px,
+    _header_trt_size_px,
+    _matching_hhmm_patch,
+    format_countdown_timecode,
+    format_status_bar_timecode,
+)
 
-SVG_NS = "http://www.w3.org/2000/svg"
 ET.register_namespace("", SVG_NS)
 ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
-
-_SVG_W = 398.0
-_SVG_H = 488.0
-
-_COLOR_BG_HEX = "#000000"
-_COLOR_ACCENT_BGR = (0, 0, 255)  # #FF0000 — legacy default (mapped to theme.ui)
-_COLOR_UNPLAYED_BGR = (147, 147, 147)  # #939393
-_COLOR_BUTTON_BGR = (35, 35, 35)  # #232323 — legacy; inner discs use pure black
-# ``volume_container`` fill in widget_np_01-02-03_volume.svg; the zone-4 EQ box.
-_VOLUME_CONTAINER_BGR = (35, 35, 35)
-_COLOR_CENTER_BLACK_HEX = "#000000"
-_COLOR_CENTER_BLACK_BGR = (0, 0, 0)
-_COLOR_CHROME_BGR = (147, 147, 147)  # #939393
-_COLOR_CHROME_RGB = (147, 147, 147)
-# Empty volume ring + status-bar track: 30% white / 70% black.
-_COLOR_UNFILLED_HEX = "#4d4d4d"
-_COLOR_UNFILLED_BGR = (77, 77, 77)
-_COLOR_UNFILLED_RGB = (77, 77, 77)
-
-
-def _look_chrome_rgb() -> tuple[int, int, int]:
-    try:
-        from pigeon.widgets.options_settings import ui_chrome_rgb
-
-        return ui_chrome_rgb()
-    except Exception:
-        return _COLOR_CHROME_RGB
-
-
-def _look_chrome_bgr() -> tuple[int, int, int]:
-    return _look_chrome_rgb()
-
-
-def _look_chrome_hex() -> str:
-    try:
-        from pigeon.widgets.options_settings import ui_chrome_hex
-
-        return ui_chrome_hex()
-    except Exception:
-        return "#939393"
-
-
-def _look_ink_rgb() -> tuple[int, int, int]:
-    try:
-        from pigeon.widgets.options_settings import ui_ink_rgb
-
-        return ui_ink_rgb()
-    except Exception:
-        return (255, 255, 255)
-
-
-def _look_is_bright() -> bool:
-    try:
-        from pigeon.widgets.options_settings import ui_is_bright
-
-        return bool(ui_is_bright())
-    except Exception:
-        return False
-
-
-def _hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
-    h = (hex_color or "").strip().lstrip("#")
-    if len(h) == 3:
-        h = f"{h[0]}{h[0]}{h[1]}{h[1]}{h[2]}{h[2]}"
-    if len(h) != 6:
-        return _COLOR_ACCENT_BGR
-    try:
-        r = int(h[0:2], 16)
-        g = int(h[2:4], 16)
-        b = int(h[4:6], 16)
-    except ValueError:
-        return _COLOR_ACCENT_BGR
-    return (b, g, r)
-
-
-def _visible_on_dark_hex(hex_color: str) -> str:
-    """Keep analog ticks off page-white so decanvas / punch cannot eat them."""
-    b, g, r = _hex_to_bgr(hex_color)
-    if r >= 240 and g >= 240 and b >= 240:
-        return _CLOCK_TICK_OFF_HEX
-    return hex_color
-
-
-def _darken_hex(hex_color: str, *, factor: float = 0.5) -> str:
-    h = (hex_color or "").strip().lstrip("#")
-    if len(h) == 3:
-        h = f"{h[0]}{h[0]}{h[1]}{h[1]}{h[2]}{h[2]}"
-    if len(h) != 6:
-        return "#800000"
-    try:
-        r = int(h[0:2], 16)
-        g = int(h[2:4], 16)
-        b = int(h[4:6], 16)
-    except ValueError:
-        return "#800000"
-    f = max(0.0, min(1.0, float(factor)))
-    return f"#{int(r * f):02x}{int(g * f):02x}{int(b * f):02x}"
-
-
-@dataclass(frozen=True)
-class _NpTheme:
-    """Settings color page → now-playing paint roles."""
-
-    ui_hex: str = "#4EA6F7"
-    accent_hex: str = "#FFFFFF"
-    button_hex: str = "#202020"
-
-    @property
-    def ui_bgr(self) -> tuple[int, int, int]:
-        return _hex_to_bgr(self.ui_hex)
-
-    @property
-    def accent_bgr(self) -> tuple[int, int, int]:
-        return _hex_to_bgr(self.accent_hex)
-
-    @property
-    def button_bgr(self) -> tuple[int, int, int]:
-        return _hex_to_bgr(self.button_hex)
-
-    @property
-    def tick_active(self) -> str:
-        return self.ui_hex
-
-    @property
-    def tick_dim(self) -> str:
-        return _darken_hex(self.ui_hex, factor=0.5)
-
-    @property
-    def cache_key(self) -> tuple[str, str, str, str]:
-        look = "bright" if _look_is_bright() else "std"
-        return (self.ui_hex.lower(), self.accent_hex.lower(), self.button_hex.lower(), look)
 
 
 # Now-playing clock / volume / bar use the most saturated TMDb-backdrop hue.
@@ -284,39 +338,11 @@ _NP_UI_FROM_TT = True
 _NP_NO_POSTER_UI_WASH = True
 
 
-def np_theme_from_settings() -> _NpTheme:
-    """Load accent / ui / button colors from the settings color page."""
-    try:
-        from pigeon.widgets.ui_color_settings import (
-            hex_for_color_key,
-            read_ui_color_keys,
-        )
-
-        keys = read_ui_color_keys()
-        return _NpTheme(
-            ui_hex=hex_for_color_key("ui", keys.get("ui", "blue")),
-            accent_hex=hex_for_color_key("accent", keys.get("accent", "white")),
-            button_hex=hex_for_color_key("button", keys.get("button", "black")),
-        )
-    except Exception:
-        return _NpTheme()
-
-def _zone_spec(zone: int):
-    z = int(zone)
-    return NOW_PLAYING_ZONES.get(z, NOW_PLAYING_ZONES[1])
-
-
-def _zone_clock_center_const(zone: int) -> tuple[float, float]:
-    return design_xy_from_local(_zone_spec(zone), CLOCK_LOCAL_CX, CLOCK_LOCAL_CY)
-
-
 # Zone centers (design coords) — clock/volume disc in each portrait slot.
 _ZONE1_CX, _ZONE1_CY = _zone_clock_center_const(1)
 _ZONE2_CX, _ZONE2_CY = _zone_clock_center_const(2)
 _ZONE3_CX, _ZONE3_CY = _zone_clock_center_const(3)
 
-_RING_OUTER_R = VOLUME_OUTER_R
-_RING_INNER_R = VOLUME_INNER_R
 
 # Zone2 poster 2×3 / album 1×1.
 # SVG ``poster_accent-2`` path bbox ≈ 200×300 @ (300.7, 14.5); placed demo image is
@@ -329,16 +355,9 @@ _POSTER_VIDEO_X, _POSTER_VIDEO_Y, _POSTER_VIDEO_W, _POSTER_VIDEO_H, _POSTER_VIDE
     int(round(POSTER_2X3_LOCAL[3])),
     int(round(POSTER_2X3_LOCAL[4])),
 )
-_CLOCK_EXTERIOR_ACCENT_R = 199.0
-_CLOCK_MIDDLE_ACCENT_R = 164.45
-_CLOCK_INTERIOR_ACCENT_R = 105.54
 # Dimmed minute/second ticks: red mixed with 50% black → dark red; current stays full red.
 _TICK_DIM_FILL = "#800000"
 _TICK_ACTIVE_FILL = "red"
-_CLOCK_MINUTE_TICK_OPACITY = 0.7  # 30% transparent
-# Analog "off" seconds ticks: dark gray (the volume ring track), not white (page-white punch uses 252;
-# this must stay below that).
-_CLOCK_TICK_OFF_HEX = "#4D4D4D"
 
 _POSTER_MUSIC_X, _POSTER_MUSIC_Y, _POSTER_MUSIC_W, _POSTER_MUSIC_H, _POSTER_MUSIC_RX = (
     int(round(POSTER_1X1_LOCAL[0])),
@@ -363,9 +382,6 @@ _CLOCK_SPIN_MIN_RATE = 16.0  # minute-ticks per real second
 _CLOCK_SPIN_HOUR_RATE = 6.0  # hour faces per real second
 _CLOCK_SPIN_VOL_RATE = 1.8  # volume-ring revolutions per real second
 
-_ACCENT_OPACITY = 0.70
-_ACCENT_STROKE_PX = 2
-_ACCENT_STROKE_OPACITY = 0.12
 _CHROME_FILL_OPACITY = 0.12
 _BUTTON_FILL_OPACITY = 0.35
 _POSTER_PAUSED_DIM = 0.30
@@ -376,8 +392,6 @@ _POSTER_W = _POSTER_VIDEO_W
 _POSTER_H = _POSTER_VIDEO_H
 _POSTER_RX = _POSTER_VIDEO_RX
 
-_CONTENT_MODE_VIDEO = "video"
-_CONTENT_MODE_MUSIC = "music"
 
 # Zone5 status bar (SVG paths ≈ 76–724, y≈391, h≈40).
 _BAR_L = 76
@@ -400,11 +414,7 @@ _VOLUME_CX = _ZONE3_CX
 _AUDIO_CFG_CX = _ZONE3_CX
 _AUDIO_CFG_SIZE_PX = VOLUME_FORMAT_SIZE_PX
 _CLOCK_DIGITAL_SIZE = CLOCK_DIGITAL_SIZE_PX
-# Date / audio-config baselines sit this many px above the widget exterior top.
-_WIDGET_LABEL_BASELINE_GAP_PX = 20.0
 _CLOCK_DATE_SIZE_PX = 32
-# Usable radius as a fraction of the inner disc — leaves padding around the number.
-_VOLUME_TEXT_INNER_FIT = 0.88
 # Gap between the disc volume number and the HH:MM sitting under it.
 _VOLUME_INPUT_GAP_PX = 6.0
 # Zone-3 volume disc carrying the digital clock above the number: the number is
@@ -436,21 +446,6 @@ _SERVICE_TEXT_Y = 460
 _PAUSED_TEXT_CX = 400.0
 _PAUSED_TEXT_CY = 411.0
 
-# Hour face layers: wall-clock hour → SVG data-name.
-_HOUR_FACE_NAMES: dict[int, str] = {
-    1: "hours_05_01",
-    2: "hours_10_02",
-    3: "hours_15_03",
-    4: "hours_20_04",
-    5: "hours_25_05",
-    6: "hours_30_06",
-    7: "hours_35_07",
-    8: "hours_40_08",
-    9: "hours_45_09",
-    10: "hours_50_10",
-    11: "hours_55_11",
-    12: "hours_60_12",
-}
 
 # Canonical names (or id prefixes) stripped / hidden before rasterize (demo text / images).
 _STRIP_OR_HIDE_NAMES: tuple[str, ...] = (
@@ -506,52 +501,6 @@ _ZONE0_DATE_CENTER_X: dict[str, float] = {
 # Zone 3 shows the volume widget this long after each adjustment, then
 # returns to the saved assignment. Each new tweak restarts the hold.
 ZONE3_VOLUME_TAKEOVER_S = 7.0
-
-
-@dataclass
-class ViewCirclesState:
-    progress: float = 0.0
-    elapsed_text: str = ""
-    remaining_text: str = ""
-    volume: str = ""
-    volume_fraction: float = 0.0
-    volume_muted: bool = False
-    incoming: str = ""
-    config: str = ""
-    chrome_visible: bool = False
-    cast: list[tuple[str, str]] = field(default_factory=list)
-    content_mode: str = _CONTENT_MODE_VIDEO  # "video" | "music"
-    song_title: str = ""
-    album_title: str = ""
-    artist_title: str = ""
-    searching: bool = False
-    search_angle_deg: float = 0.0
-    missing_art: bool = False
-    paused: bool = False
-    service_name: str = ""
-    has_position: bool = False
-    # False → clock-only layout until playback / receiver broadcast / title.
-    content_active: bool = False
-    # Host sets this when the foreground app is YouTube (not inferred from art).
-    is_youtube: bool = False
-    # Sharp Sans fallback title when no TMDb title treatment is cached.
-    tt_title: str = ""
-    # Paired AVR name — used for pairing chrome, not the volume caption.
-    receiver_name: str = ""
-    # Current AVR input (SI / InputFuncSelect), shown above the volume disc
-    # when the audio format is unknown.
-    receiver_input: str = ""
-    # False only when the host knows the AVR is gone; empty volume is not enough.
-    has_receiver: bool = True
-    # Auto-layout overlay for zone 4 (room or receiver name) when info is empty.
-    zone4_overlay_text: str = ""
-
-
-def _normalize_content_mode(mode: str | None) -> str:
-    m = str(mode or "").strip().lower()
-    if m == _CONTENT_MODE_MUSIC:
-        return _CONTENT_MODE_MUSIC
-    return _CONTENT_MODE_VIDEO
 
 
 def default_view_circles_svg_path(
@@ -646,240 +595,15 @@ def _build_artwork_blur_bgra(src: np.ndarray) -> np.ndarray:
     return out
 
 
-def _layer_key(el: ET.Element) -> str:
-    """Prefer data-name; strip Illustrator ``-N`` id suffixes; normalize spaces."""
-    dn = (el.get("data-name") or "").strip()
-    raw = dn if dn else (el.get("id") or "").strip()
-    if not dn and raw:
-        raw = re.sub(r"-\d+$", "", raw)
-    return re.sub(r"\s+", "_", raw)
-
-
-def _find_by_id(root: ET.Element, layer_id: str) -> ET.Element | None:
-    for el in root.iter():
-        if el.get("id") == layer_id:
-            return el
-    return None
-
-
-def _find_by_key(scope: ET.Element, name: str) -> ET.Element | None:
-    want = re.sub(r"\s+", "_", str(name or "").strip())
-    if not want:
-        return None
-    for el in scope.iter():
-        if _layer_key(el) == want or el.get("id") == want:
-            return el
-    return None
-
-
-def _find_direct_child_by_key(parent: ET.Element, name: str) -> ET.Element | None:
-    want = re.sub(r"\s+", "_", str(name or "").strip())
-    for el in list(parent):
-        if _layer_key(el) == want or el.get("id") == want:
-            return el
-    return None
-
-
-def _detach_element(root: ET.Element, el: ET.Element | None) -> bool:
-    """Remove ``el`` from its parent. PyMuPDF ignores ``display:none`` on SVG groups."""
-    if el is None:
-        return False
-    for parent in root.iter():
-        for child in list(parent):
-            if child is el:
-                parent.remove(child)
-                return True
-    return False
-
-
-def _remove_element_by_id(root: ET.Element, element_id: str) -> None:
-    for parent in root.iter():
-        for child in list(parent):
-            if child.get("id") == element_id:
-                parent.remove(child)
-                return
-
-
-def _remove_by_key(root: ET.Element, name: str) -> bool:
-    """Remove every element whose canonical key or id matches ``name``."""
-    want = re.sub(r"\s+", "_", str(name or "").strip())
-    if not want:
-        return False
-    removed = False
-    # Restart scan after each removal — tree mutates under iter().
-    while True:
-        hit = None
-        for el in root.iter():
-            if _layer_key(el) == want or el.get("id") == want:
-                hit = el
-                break
-        if hit is None:
-            break
-        if not _detach_element(root, hit):
-            break
-        removed = True
-    return removed
-
-
-# (path, mtime_ns) → parsed template. Chrome rasters miss every second, so
-# without this the SVG is re-read and re-parsed from disk once per tick.
-_SVG_TEMPLATE_CACHE: dict[tuple[str, int], ET.Element] = {}
-
-
-def _svg_tree_from_path(path: Path) -> ET.Element:
-    try:
-        mtime = path.stat().st_mtime_ns
-    except OSError:
-        mtime = -1
-    key = (str(path), mtime)
-    template = _SVG_TEMPLATE_CACHE.get(key)
-    if template is None:
-        tree = ET.parse(path)
-        template = tree.getroot()
-        while len(_SVG_TEMPLATE_CACHE) >= 12:  # one slot per now-playing widget SVG
-            _SVG_TEMPLATE_CACHE.pop(next(iter(_SVG_TEMPLATE_CACHE)))
-        _SVG_TEMPLATE_CACHE[key] = template
-    # Callers mutate the tree (strip layers, set text), so hand out a copy.
-    return copy.deepcopy(template)
-
-
-def _scale_raster_to_design(bgra: np.ndarray, src_w: int, src_h: int) -> np.ndarray:
-    if bgra.shape[0] != src_h or bgra.shape[1] != src_w:
-        bgra = cv2.resize(bgra, (src_w, src_h), interpolation=cv2.INTER_AREA)
-    return cv2.resize(bgra, (int(DESIGN_W), int(DESIGN_H)), interpolation=cv2.INTER_AREA)
-
-
-def _svg_viewbox_wh(root: ET.Element) -> tuple[int, int]:
-    raw = (root.get("viewBox") or "").replace(",", " ").split()
-    if len(raw) == 4:
-        try:
-            return max(1, int(round(float(raw[2])))), max(1, int(round(float(raw[3]))))
-        except (TypeError, ValueError):
-            pass
-    return int(_SVG_W), int(_SVG_H)
-
-
-def _rasterize_svg_tree(
-    root: ET.Element, *, dest_w: int | None = None, dest_h: int | None = None
-) -> np.ndarray:
-    svg_bytes = ET.tostring(root, encoding="utf-8")
-    vw, vh = _svg_viewbox_wh(root)
-    src_w = int(dest_w) if dest_w is not None else vw
-    src_h = int(dest_h) if dest_h is not None else vh
-    last_err: Exception | None = None
-
-    try:
-        import fitz  # PyMuPDF
-
-        doc = fitz.open(stream=svg_bytes, filetype="svg")
-        page = doc[0]
-        pix = page.get_pixmap(
-            matrix=fitz.Matrix(src_w / max(1e-6, page.rect.width), src_h / max(1e-6, page.rect.height)),
-            alpha=True,
-        )
-        rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-        if pix.n == 4:
-            bgra = cv2.cvtColor(rgb, cv2.COLOR_RGBA2BGRA)
-        else:
-            bgra = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGRA)
-        if bgra.shape[1] != src_w or bgra.shape[0] != src_h:
-            bgra = cv2.resize(bgra, (src_w, src_h), interpolation=cv2.INTER_AREA)
-        return bgra
-    except ImportError as exc:
-        last_err = exc
-    except Exception as exc:
-        last_err = exc
-
-    try:
-        import cairosvg
-
-        out = io.BytesIO()
-        cairosvg.svg2png(
-            bytestring=svg_bytes,
-            write_to=out,
-            output_width=src_w,
-            output_height=src_h,
-        )
-        data = np.frombuffer(out.getvalue(), dtype=np.uint8)
-        raw = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
-        if raw is None:
-            raise RuntimeError("SVG raster decode failed")
-        if raw.ndim == 2:
-            bgra = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGRA)
-        elif raw.shape[2] == 3:
-            bgra = cv2.cvtColor(raw, cv2.COLOR_BGR2BGRA)
-        else:
-            bgra = raw
-        if bgra.shape[1] != src_w or bgra.shape[0] != src_h:
-            bgra = cv2.resize(bgra, (src_w, src_h), interpolation=cv2.INTER_AREA)
-        return bgra
-    except ImportError as exc:
-        last_err = exc
-    except OSError as exc:
-        last_err = exc
-    except Exception as exc:
-        last_err = exc
-
-    msg = "view_circles needs PyMuPDF (pip install pymupdf) or cairosvg with system cairo."
-    if last_err is not None:
-        raise RuntimeError(msg) from last_err
-    raise RuntimeError(msg)
-
-
-def _decanvas_white_bgra(src: np.ndarray, *, threshold: int = 252) -> np.ndarray:
-    """Punch out Illustrator page white, keeping intentional interior white fills.
-
-    Only near-white pixels connected to the image border become transparent so
-    solid white discs (e.g. ``zone*_clock_exterior_accent``) stay opaque.
-    """
-    if src is None or src.size == 0 or src.ndim != 3 or src.shape[2] < 4:
-        return src
-    out = src.copy()
-    rgb = out[:, :, :3]
-    white = (
-        (rgb[:, :, 0] >= threshold)
-        & (rgb[:, :, 1] >= threshold)
-        & (rgb[:, :, 2] >= threshold)
-    )
-    if not bool(np.any(white)):
-        return out
-    h, w = white.shape
-    # cv2.floodFill needs a 2-pixel border mask.
-    flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
-    seed = (white.astype(np.uint8) * 255)
-    for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
-        if not white[y, x]:
-            continue
-        cv2.floodFill(
-            seed,
-            flood_mask,
-            (int(x), int(y)),
-            128,
-            loDiff=0,
-            upDiff=0,
-            flags=cv2.FLOODFILL_FIXED_RANGE,
-        )
-    edge_white = seed == 128
-    # Also treat any border white that flood missed (non-corner border seeds).
-    if not bool(np.any(edge_white)):
-        edge_white = white & False
-        edge_white[0, :] = white[0, :]
-        edge_white[-1, :] = white[-1, :]
-        edge_white[:, 0] = white[:, 0]
-        edge_white[:, -1] = white[:, -1]
-    out[edge_white, 3] = 0
-    return out
-
-
 def _default_zone_widget_assignments(
     content_mode: str | None = None,
 ) -> tuple[str, str, str, str, str]:
     try:
-        from pigeon.widgets.preferences_settings import read_now_playing_zone_widgets
+        from pigeon.np_zone_config import read_now_playing_zone_widgets
 
         return read_now_playing_zone_widgets(content_mode=content_mode)
     except TypeError:
-        from pigeon.widgets.preferences_settings import read_now_playing_zone_widgets
+        from pigeon.np_zone_config import read_now_playing_zone_widgets
 
         return read_now_playing_zone_widgets()
     except Exception:
@@ -891,19 +615,11 @@ def _default_zone_widget_assignments(
 
 def _header_clock_enabled() -> bool:
     try:
-        from pigeon.widgets.preferences_settings import read_np_header_clock
+        from pigeon.np_zone_config import read_np_header_clock
 
         return bool(read_np_header_clock())
     except Exception:
         return True
-
-
-def _zone_clock_hides_header(assignments: object | None) -> bool:
-    """Zone clock / wide clock already shows the time — skip the header chip."""
-    for key in assignments or ():
-        if str(key or "").strip() in ("clock", "clock_16x9"):
-            return True
-    return False
 
 
 def _saved_zone_widgets(
@@ -920,156 +636,18 @@ def _saved_zone_widgets(
 _CAST_NAMES_PER_ZONE = CAST_NAMES_PER_ZONE
 
 
-def _layout_is_fullscreen_clock(
-    assignments: tuple[str, ...] | list[str],
-) -> bool:
-    """True when no populated NP boxes remain — clock should fill the frame."""
-    keys = [str(z or "").strip() for z in assignments]
-    filled = [k for k in keys if k]
-    return not filled or all(k == "clock" for k in filled)
+_zone_clock_hides_header = zone_clock_hides_header
+_layout_is_fullscreen_clock = layout_is_fullscreen_clock
+_apply_connection_fallbacks = apply_connection_fallbacks
 
 
-def _effective_zone_widgets(
-    *,
-    has_position: bool,
-    cast_count: int = 0,
-    content_active: bool = True,
-    zone_widgets: tuple[str, str, str, str, str] | None = None,
-    poster_16x9: bool = False,
-    poster_16x9_zone: int = DEFAULT_16X9_POSTER_ZONE,
-    has_poster: bool = True,
-    has_volume: bool = False,
-    loading_cast: bool = False,
-    content_mode: str = "",
-    has_title: bool | None = None,
-    has_audio: bool = True,
-    has_receiver: bool = True,
-    has_info: bool | None = None,
-) -> tuple[str, str, str, str, str]:
-    """Show only widgets we have content for; never two copies of the same one.
+def _effective_zone_widgets(**kwargs):
+    """See :func:`pigeon.np_zone_layout.effective_zone_widgets`.
 
-    When ``content_active`` is False (no title / playback / receiver broadcast),
-    keep the clock only so empty poster/volume/cast/bar shells do not look broken.
-    The renderer then expands that clock-only layout to fill the screen.
-
-    Saved zone widgets stay on screen. Zone 3 still falls back
-    levels → volume → clock when audio or the receiver is missing. Empty
-    artwork / info / status wells stay those widgets instead of swapping in
-    seconds or pigeonclock. A second cast strip is kept only when more names
-    remain. While cast is still loading, keep one empty ``cast_info`` slot
-    for shimmer. Any other repeated widget is dropped so the layout does not
-    duplicate.
-
-    Music ``cast_info`` is track titles, so it stays even with no TMDb names.
-
-    When ``poster_16x9`` is True, YouTube layout wins over prefs: zones 1/2
-    off, volume in zone 3, status bar in zone 5, 16×9 thumbnail in zone 6.
-    Zone 4 is reserved for the video title (drawn in Pillow, not a widget).
-    The thumbnail does not need to have arrived yet — the slot stays reserved.
+    Binds the saved-layout lookup to this module's ``_saved_zone_widgets`` so
+    patching ``_default_zone_widget_assignments`` here still takes effect.
     """
-    mode = str(content_mode or "").strip().lower()
-    music = mode == "music"
-    zones = list(zone_widgets or _saved_zone_widgets(content_mode))
-    if len(zones) < 5:
-        return _saved_zone_widgets(content_mode)
-    zones = [canonical_zone_widget(i + 1, w) for i, w in enumerate(zones[:5])]
-    saver_layout = any(
-        str(z or "") in {"pausesaver", "clock_saver", "clock_saver_seconds"}
-        for z in zones
-    )
-    if not content_active:
-        keep_vol = {"volume", "clock_saver_volume"}
-        keep_clock = {"clock", "clock_16x9"}
-        return tuple(
-            z if z in keep_clock or (z in keep_vol and has_volume) else ""
-            for z in zones
-        )
-    if poster_16x9 and not saver_layout:
-        youtube = list(YOUTUBE_ZONE_WIDGETS)
-        if not has_position:
-            youtube[4] = ""
-        return (youtube[0], youtube[1], youtube[2], youtube[3], youtube[4])
-    # Wide TT countdown spans zone 6 (slots 1+2) or zone 7 (slots 2+3):
-    # blank the covered sibling portrait slot before dedupe.
-    zones = list(apply_tt_countdown_16x9_override(tuple(zones)))
-    named = max(0, int(cast_count))
-    title_ok = bool(content_active) if has_title is None else bool(has_title)
-    info_ok = (
-        bool(named > 0 or loading_cast or music)
-        if has_info is None
-        else bool(has_info)
-    )
-    audio_ok = bool(has_audio)
-    recv_ok = bool(has_receiver)
-    zones = list(
-        _apply_connection_fallbacks(
-            tuple(zones),
-            has_title=title_ok,
-            has_audio=audio_ok,
-            has_receiver=recv_ok,
-            has_position=bool(has_position),
-            has_info=info_ok,
-            loading_cast=bool(loading_cast),
-        )
-    )
-    seen: set[str] = set()
-    cast_used = 0
-    cast_skeleton = False
-    for i, widget in enumerate(zones):
-        key = str(widget or "").strip()
-        if not key:
-            zones[i] = ""
-            continue
-        if key == "poster" and not has_poster:
-            zones[i] = ""
-            continue
-        if key == "cast_info":
-            if key in seen:
-                zones[i] = ""
-                continue
-            if music:
-                seen.add(key)
-                continue
-            remaining = named - cast_used
-            if remaining <= 0:
-                # Keep the selected info well even with no names yet.
-                seen.add(key)
-                if loading_cast and not cast_skeleton:
-                    cast_skeleton = True
-                continue
-            cast_used += cast_names_for_zone(i + 1)
-            seen.add(key)
-            continue
-        if key in seen:
-            zones[i] = ""
-            continue
-        seen.add(key)
-    return (zones[0], zones[1], zones[2], zones[3], zones[4])
-
-
-def _apply_connection_fallbacks(
-    zones: tuple[str, str, str, str, str],
-    *,
-    has_title: bool,
-    has_audio: bool,
-    has_receiver: bool,
-    has_position: bool,
-    has_info: bool,
-    loading_cast: bool,
-) -> tuple[str, str, str, str, str]:
-    """Zone 3 only: keep volume usable when the AVR is gone."""
-    z = list(zones)
-    _ = has_title
-    _ = has_position
-    _ = loading_cast
-    _ = has_audio
-
-    z3 = str(z[2] or "")
-    if z3 == "volume" and not has_receiver:
-        z[2] = "clock"
-    elif z3 == "cast_info" and not has_info:
-        z[2] = "volume" if has_receiver else "clock"
-    return (z[0], z[1], z[2], z[3], z[4])
+    return effective_zone_widgets(saved_zone_widgets=_saved_zone_widgets, **kwargs)
 
 
 def configured_status_bar_zone(
@@ -1165,824 +743,10 @@ def _zone_widget_visibility(
     return vis
 
 
-def _zone0_date_align(
-    assignments: tuple[str, str, str, str, str] | None = None,
-) -> str | None:
-    """``left`` / ``center`` / ``right``, or ``None`` when the header is off."""
-    try:
-        from pigeon.widgets.preferences_settings import zone0_date_align
-
-        return zone0_date_align(assignments)
-    except Exception:
-        return "left"
-
-
-def _ordinal_day(day: int) -> str:
-    d = int(day)
-    if 11 <= (d % 100) <= 13:
-        suf = "th"
-    else:
-        suf = {1: "st", 2: "nd", 3: "rd"}.get(d % 10, "th")
-    return f"{d}{suf}"
-
-
-def _format_zone0_date(now: datetime) -> str:
-    """``SAT, AUG 15`` — abbreviated weekday and month, all caps."""
-    return f"{now.strftime('%a')}, {now.strftime('%b')} {int(now.day)}".upper()
-
-
-def _zone3_clock_day_baseline_y() -> float:
-    """Design-Y baseline of the zone-3 clock's day / date line (``Monday Sep 7``)."""
-    _x, y = design_xy_from_local(
-        NOW_PLAYING_ZONES[3],
-        CLOCK_DAY_LOCAL[0],
-        CLOCK_DAY_LOCAL[1],
-        view_w=CLOCK_VIEW_W,
-        view_h=CLOCK_VIEW_H,
-    )
-    return float(y)
-
-
-# Zone-6 receiver volume: margin above its ink and at the zone sides.
-_ZONE6_VOLUME_MARGIN_PX = 14.0
-
-
-@lru_cache(maxsize=1)
-def _zone6_volume_font_px() -> int:
-    """Largest Sharp Sans size whose widest readout fits over zone 6: from the
-    screen-top margin down to the zone-3 date baseline, zone 6 wide."""
-    z6 = NOW_PLAYING_ZONES[6]
-    margin = float(_ZONE6_VOLUME_MARGIN_PX)
-    max_w = float(z6.w) - 2.0 * margin
-    max_h = _zone3_clock_day_baseline_y() - margin
-    template = "-88.8 dB"
-    size = int(NP_HEADER_CLOCK_SIZE_PX)
-    for trial in range(size, 400):
-        patch, pw, _ph = _text_patch_font(template, font=_load_sharp_extrabold(trial), fill_rgb=(255, 255, 255))
-        rows = np.where(patch[:, :, 3].max(axis=1) > 8)[0]
-        ink_h = float(rows.max() - rows.min() + 1) if rows.size else 0.0
-        if pw > max_w or ink_h > max_h:
-            break
-        size = trial
-    return size
-
-
-def _clock_date_baseline_y(cy: float) -> float:
-    """Baseline for the date line: 20px above the clock exterior top."""
-    return float(cy) - float(_CLOCK_EXTERIOR_ACCENT_R) - float(_WIDGET_LABEL_BASELINE_GAP_PX)
-
-
-def _volume_audio_cfg_baseline_y(cy: float) -> float:
-    """Baseline for audio-config: 20px above the volume ring exterior top."""
-    return float(cy) - float(_RING_OUTER_R) - float(_WIDGET_LABEL_BASELINE_GAP_PX)
-
-
-# Widest readout the disc has to hold; every level is drawn at the size that fits it.
-_VOLUME_SIZE_REFERENCE_TEXT = "-88.8"
-
-
-@lru_cache(maxsize=16)
-def _volume_readout_size_px(usable_r: float, hi: int) -> int:
-    """Largest Digital-7 size whose widest readout fits the disc (same for every level)."""
-    pad = 2  # matches ``_text_patch_digital7``
-    lo = 16
-    best = 16
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        _patch, w, h = _text_patch_digital7(_VOLUME_SIZE_REFERENCE_TEXT, size_px=mid, fill_rgb=None)
-        ink_w = max(0.0, float(w) - 2.0 * pad)
-        ink_h = max(0.0, float(h) - 2.0 * pad)
-        if (ink_w * 0.5) ** 2 + (ink_h * 0.5) ** 2 <= usable_r ** 2:
-            best = mid
-            lo = mid + 1
-        else:
-            hi = mid - 1
-    return best
-
-
-def _volume_readout_patch(
-    text: str,
-    *,
-    inner_r: float = _RING_INNER_R,
-    max_size_px: int | None = None,
-    fill_rgb: tuple[int, int, int] | None = None,
-) -> tuple[np.ndarray, int, int]:
-    """Digital-7 volume number inside the inner disc.
-
-    The size is fitted once to the widest readout, not to each string, so a step
-    from ``-22`` to ``-21.5`` does not change the font size or move the labels
-    placed from its height.
-    """
-    label = str(text or "").strip()
-    if not label:
-        return np.zeros((1, 1, 4), dtype=np.uint8), 0, 0
-    usable_r = max(12.0, float(inner_r) * float(_VOLUME_TEXT_INNER_FIT))
-    hi = int(max_size_px) if max_size_px is not None else int(round(usable_r * 2.0))
-    size = _volume_readout_size_px(round(usable_r, 3), max(18, hi))
-    return _text_patch_digital7(label, size_px=size, fill_rgb=fill_rgb)
-
-
-def _disc_clock_patch(label: str, fill_rgb: tuple[int, int, int]) -> np.ndarray:
-    """Disc clock text in the volume input label's font and size, ink-cropped."""
-    patch, _w, _h = _text_patch_font(
-        label,
-        font=_load_sharp_extrabold(int(VOLUME_FORMAT_SIZE_PX)),
-        fill_rgb=fill_rgb,
-    )
-    rows = np.where(patch[:, :, 3] > 8)[0]
-    if rows.size == 0:
-        return patch[:0]
-    return patch[int(rows.min()) : int(rows.max()) + 1]
-
-
-@lru_cache(maxsize=1)
-def _disc_clock_ink_h() -> int:
-    """Ink height of the disc clock (same font and size as the input label)."""
-    return int(_disc_clock_patch("0:00PM", (255, 255, 255)).shape[0])
-
-
-def _volume_input_patch(
-    label: str,
-    *,
-    top_dy: float,
-    inner_r: float,
-    max_h: int,
-    fill_rgb: tuple[int, int, int] | None = None,
-) -> tuple[np.ndarray, int, int]:
-    """AVR input label fitted under the volume number, inside the disc.
-
-    ``top_dy`` is the label's top edge below the disc center; the width is
-    clipped to the disc chord at the label's bottom edge.
-    """
-    text = str(label or "").strip().upper()
-    empty = (np.zeros((1, 1, 4), dtype=np.uint8), 0, 0)
-    if not text or int(max_h) < 10:
-        return empty
-    r = float(inner_r)
-    size = int(VOLUME_FORMAT_SIZE_PX)
-    while size >= 12:
-        patch, w, h = _text_patch_font(
-            text, font=_load_sharp_extrabold(size), fill_rgb=fill_rgb
-        )
-        dy = float(top_dy) + float(h)
-        chord = 2.0 * math.sqrt(max(0.0, r * r - dy * dy))
-        if h <= int(max_h) and w <= chord:
-            return patch, w, h
-        size -= 2
-    return empty
-
-
 def _apply_zone_visibility(root: ET.Element, vis: dict[str, bool]) -> None:
     for name, on in vis.items():
         if not on:
             _remove_by_key(root, name)
-
-
-def _clock_group_for_zone(root: ET.Element, zone: int) -> ET.Element | None:
-    return _find_by_key(root, f"zone{zone}_clock_group")
-
-
-def _seconds_group(clock_group: ET.Element) -> ET.Element | None:
-    for el in list(clock_group):
-        key = _layer_key(el)
-        if "seconds" in key and "group" in key:
-            return el
-    return _find_by_key(clock_group, "zone1_clock_seconds_group")
-
-
-def _minutes_group(clock_group: ET.Element) -> ET.Element | None:
-    for el in list(clock_group):
-        key = _layer_key(el)
-        if "minutes" in key and "group" in key:
-            return el
-    return None
-
-
-def _hours_group(clock_group: ET.Element) -> ET.Element | None:
-    for el in list(clock_group):
-        key = _layer_key(el)
-        if "hours" in key and "group" in key:
-            return el
-    return None
-
-
-def _iter_named_children(group: ET.Element | None):
-    if group is None:
-        return
-    for el in list(group):
-        yield el, _layer_key(el)
-
-
-def _fix_seconds_08_label(seconds_group: ET.Element | None) -> None:
-    """SVG ships a mislabeled duplicate ``seconds_60`` where ``seconds_08`` should be."""
-    if seconds_group is None:
-        return
-    if _find_direct_child_by_key(seconds_group, "seconds_08") is not None:
-        return
-    kids = list(seconds_group)
-    idx09 = idx07 = None
-    for i, child in enumerate(kids):
-        key = _layer_key(child)
-        if key == "seconds_09":
-            idx09 = i
-        elif key == "seconds_07":
-            idx07 = i
-    if idx09 is None or idx07 is None:
-        return
-    lo, hi = (idx09, idx07) if idx09 < idx07 else (idx07, idx09)
-    for child in kids[lo + 1 : hi]:
-        if _layer_key(child) == "seconds_60":
-            child.set("data-name", "seconds_08")
-            return
-
-
-def _resolve_seconds_el(seconds_group: ET.Element | None, second_index: int) -> ET.Element | None:
-    """``second_index`` in 1..60."""
-    if seconds_group is None:
-        return None
-    _fix_seconds_08_label(seconds_group)
-    name = f"seconds_{second_index:02d}"
-    el = _find_direct_child_by_key(seconds_group, name)
-    if el is not None:
-        return el
-    return _find_by_key(seconds_group, name)
-
-
-def _resolve_hour_face_el(hours_group: ET.Element | None, hour_1_12: int) -> ET.Element | None:
-    if hours_group is None:
-        return None
-    name = _HOUR_FACE_NAMES.get(int(hour_1_12))
-    if not name:
-        return None
-    el = _find_direct_child_by_key(hours_group, name)
-    if el is not None:
-        return el
-    return _find_by_key(hours_group, name)
-
-
-def _zone_clock_center(zone: int) -> tuple[float, float]:
-    return design_xy_from_local(_zone_spec(zone), CLOCK_LOCAL_CX, CLOCK_LOCAL_CY)
-
-
-def _zone_volume_center(zone: int) -> tuple[float, float]:
-    return design_xy_from_local(_zone_spec(zone), VOLUME_LOCAL_CX, VOLUME_LOCAL_CY)
-
-
-def _local_tag(tag: str) -> str:
-    return tag.split("}")[-1] if "}" in tag else tag
-
-
-def _set_tick_paint(
-    el: ET.Element, *, color: str, opacity: float | None = None
-) -> None:
-    """Recolor path fills/strokes under ``el``."""
-    op: str | None = None
-    if opacity is not None:
-        op = f"{max(0.0, min(1.0, float(opacity))):.3g}"
-        el.set("opacity", op)
-    elif "opacity" in el.attrib:
-        del el.attrib["opacity"]
-    for node in el.iter():
-        tag = _local_tag(node.tag)
-        if tag not in ("path", "polygon", "polyline", "circle", "ellipse", "rect"):
-            continue
-        if op is not None:
-            node.set("opacity", op)
-        elif "opacity" in node.attrib:
-            del node.attrib["opacity"]
-        fill = (node.get("fill") or "").strip().lower()
-        stroke = (node.get("stroke") or "").strip().lower()
-        if fill and fill != "none":
-            node.set("fill", color)
-        if stroke and stroke != "none":
-            node.set("stroke", color)
-        # Bare paths sometimes omit fill (Illustrator default = black); force paint.
-        if not fill and not stroke:
-            node.set("fill", color)
-
-
-def _raise_in_group(group: ET.Element | None, el: ET.Element | None) -> None:
-    """Move ``el`` to the end of ``group`` so it paints above siblings."""
-    if group is None or el is None:
-        return
-    kids = list(group)
-    if el not in kids:
-        return
-    group.remove(el)
-    group.append(el)
-
-
-def _accent_circle_r(clock: ET.Element, zone: int, kind: str, default: float) -> float:
-    el = _find_by_key(clock, f"zone{zone}_clock_{kind}_accent")
-    if el is None:
-        return default
-    try:
-        return float(el.get("r") or default)
-    except (TypeError, ValueError):
-        return default
-
-
-def _place_in_group(group: ET.Element | None, el: ET.Element | None, index: int) -> None:
-    """Move ``el`` to ``index`` within ``group`` (paint order)."""
-    if group is None or el is None:
-        return
-    kids = list(group)
-    if el not in kids:
-        return
-    group.remove(el)
-    group.insert(max(0, min(int(index), len(list(group)))), el)
-
-
-def _seconds_wedge_path_d(cx: float, cy: float, r: float, fraction: float) -> str | None:
-    """SVG pie path from 12 o'clock, clockwise, covering ``fraction`` of the disc.
-
-    Returns None when ``fraction`` is full (caller should use a solid circle fill).
-    """
-    frac = max(0.0, min(1.0, float(fraction)))
-    if frac <= 1e-6:
-        return ""
-    if frac >= 0.999:
-        return None
-    sweep = 2.0 * math.pi * frac
-    x1 = cx
-    y1 = cy - r
-    x2 = cx + r * math.sin(sweep)
-    y2 = cy - r * math.cos(sweep)
-    large = 1 if frac > 0.5 else 0
-    return (
-        f"M {cx:.4f},{cy:.4f} L {x1:.4f},{y1:.4f} "
-        f"A {r:.4f},{r:.4f} 0 {large},1 {x2:.4f},{y2:.4f} Z"
-    )
-
-
-def _svg_parent(root: ET.Element, el: ET.Element) -> ET.Element | None:
-    for parent in root.iter():
-        if el in list(parent):
-            return parent
-    return None
-
-
-def _circle_cx_cy_r(
-    el: ET.Element | None,
-    *,
-    default_cx: float,
-    default_cy: float,
-    default_r: float,
-) -> tuple[float, float, float]:
-    if el is None:
-        return float(default_cx), float(default_cy), float(default_r)
-    try:
-        cx = float(el.get("cx") or default_cx)
-        cy = float(el.get("cy") or default_cy)
-        r = float(el.get("r") or default_r)
-    except (TypeError, ValueError):
-        return float(default_cx), float(default_cy), float(default_r)
-    return cx, cy, r
-
-
-def _evenodd_ring_d(cx: float, cy: float, r_outer: float, r_inner: float) -> str:
-    """Closed outer circle minus inner circle (evenodd)."""
-    ro = max(0.5, float(r_outer))
-    ri = max(0.0, min(float(r_inner), ro - 0.5))
-    return (
-        f"M {cx:.4f},{cy - ro:.4f} "
-        f"A {ro:.4f},{ro:.4f} 0 1,1 {cx:.4f},{cy + ro:.4f} "
-        f"A {ro:.4f},{ro:.4f} 0 1,1 {cx:.4f},{cy - ro:.4f} Z "
-        f"M {cx:.4f},{cy - ri:.4f} "
-        f"A {ri:.4f},{ri:.4f} 0 1,0 {cx:.4f},{cy + ri:.4f} "
-        f"A {ri:.4f},{ri:.4f} 0 1,0 {cx:.4f},{cy - ri:.4f} Z"
-    )
-
-
-def _annulus_wedge_path_d(
-    cx: float, cy: float, r_outer: float, r_inner: float, fraction: float
-) -> str | None:
-    """Outer-ring sector from 12 o'clock clockwise. None = full ring."""
-    frac = max(0.0, min(1.0, float(fraction)))
-    if frac <= 1e-6:
-        return ""
-    if frac >= 0.999:
-        return None
-    ro = max(0.5, float(r_outer))
-    ri = max(0.0, min(float(r_inner), ro - 0.5))
-    sweep = 2.0 * math.pi * frac
-    large = 1 if frac > 0.5 else 0
-    x1 = cx
-    y1 = cy - ro
-    x2 = cx + ro * math.sin(sweep)
-    y2 = cy - ro * math.cos(sweep)
-    x3 = cx + ri * math.sin(sweep)
-    y3 = cy - ri * math.cos(sweep)
-    x4 = cx
-    y4 = cy - ri
-    return (
-        f"M {x1:.4f},{y1:.4f} "
-        f"A {ro:.4f},{ro:.4f} 0 {large},1 {x2:.4f},{y2:.4f} "
-        f"L {x3:.4f},{y3:.4f} "
-        f"A {ri:.4f},{ri:.4f} 0 {large},0 {x4:.4f},{y4:.4f} Z"
-    )
-
-
-def _clock_accent_key(zone: int | None, kind: str) -> str:
-    if zone is None:
-        return f"clock_{kind}_accent"
-    return f"zone{int(zone)}_clock_{kind}_accent"
-
-
-def _apply_clock_black_rings(clock: ET.Element, *, zone: int | None = None) -> None:
-    """Black outer ring (exterior minus middle hole) + black interior disc.
-
-    Middle stays unfilled so the backdrop shows through that band.
-    """
-    exterior = _find_by_key(clock, _clock_accent_key(zone, "exterior"))
-    middle = _find_by_key(clock, _clock_accent_key(zone, "middle"))
-    interior = _find_by_key(clock, _clock_accent_key(zone, "interior"))
-    ring_id = (
-        "clock_outer_ring_fill"
-        if zone is None
-        else f"zone{int(zone)}_clock_outer_band_fill"
-    )
-    disc_id = (
-        "clock_interior_disc_fill"
-        if zone is None
-        else f"zone{int(zone)}_clock_disc_fill"
-    )
-    _remove_by_key(clock, ring_id)
-    _remove_by_key(clock, disc_id)
-    if exterior is not None:
-        exterior.set("fill", "none")
-    if middle is not None:
-        middle.set("fill", "none")
-    if interior is not None:
-        interior.set("fill", "none")
-    host = _svg_parent(clock, exterior) if exterior is not None else clock
-    if host is None:
-        host = clock
-    cx, cy, r_out = _circle_cx_cy_r(
-        exterior,
-        default_cx=CLOCK_LOCAL_CX,
-        default_cy=CLOCK_LOCAL_CY,
-        default_r=_CLOCK_EXTERIOR_ACCENT_R,
-    )
-    _mx, _my, r_mid = _circle_cx_cy_r(
-        middle,
-        default_cx=cx,
-        default_cy=cy,
-        default_r=_CLOCK_MIDDLE_ACCENT_R,
-    )
-    icx, icy, r_in = _circle_cx_cy_r(
-        interior,
-        default_cx=cx,
-        default_cy=cy,
-        default_r=_CLOCK_INTERIOR_ACCENT_R,
-    )
-    ring = ET.Element(f"{{{SVG_NS}}}path")
-    ring.set("id", ring_id)
-    ring.set("data-name", ring_id)
-    ring.set("d", _evenodd_ring_d(cx, cy, r_out, r_mid))
-    ring.set("fill", _COLOR_CENTER_BLACK_HEX)
-    ring.set("fill-rule", "evenodd")
-    host.insert(0, ring)
-    disc = ET.Element(f"{{{SVG_NS}}}circle")
-    disc.set("id", disc_id)
-    disc.set("data-name", disc_id)
-    disc.set("cx", f"{icx:.4f}")
-    disc.set("cy", f"{icy:.4f}")
-    disc.set("r", f"{r_in:.4f}")
-    disc.set("fill", _COLOR_CENTER_BLACK_HEX)
-    host.insert(1, disc)
-
-
-def _punch_clock_open_ring_white(
-    bgra: np.ndarray, *, view_h: float = CLOCK_VIEW_H
-) -> np.ndarray:
-    """Knock out trapped page-white in the middle (open) clock band."""
-    if bgra is None or bgra.size == 0 or bgra.ndim < 3 or bgra.shape[2] < 4:
-        return bgra
-    h, w = int(bgra.shape[0]), int(bgra.shape[1])
-    sx = float(w) / CLOCK_VIEW_W
-    sy = float(h) / float(view_h)
-    cx = CLOCK_LOCAL_CX * sx
-    cy = CLOCK_LOCAL_CY * sy
-    yy, xx = np.ogrid[:h, :w]
-    dx = (xx - cx) / max(sx, 1e-6)
-    dy = (yy - cy) / max(sy, 1e-6)
-    d = np.sqrt(dx * dx + dy * dy)
-    band = (d > (_CLOCK_INTERIOR_ACCENT_R + 3.0)) & (
-        d < (_CLOCK_MIDDLE_ACCENT_R - 3.0)
-    )
-    rgb = bgra[:, :, :3]
-    white = (
-        (rgb[:, :, 0] >= 252)
-        & (rgb[:, :, 1] >= 252)
-        & (rgb[:, :, 2] >= 252)
-    )
-    bgra[band & white, 3] = 0
-    return bgra
-
-
-def _apply_exterior_seconds_fill(
-    clock: ET.Element,
-    zone: int | None,
-    *,
-    sec_idx: int,
-    theme: _NpTheme | None = None,
-) -> None:
-    """Accent wedge on the outer black ring only (middle band stays open)."""
-    th = theme or np_theme_from_settings()
-    exterior = _find_by_key(clock, _clock_accent_key(zone, "exterior"))
-    middle = _find_by_key(clock, _clock_accent_key(zone, "middle"))
-    fill_name = (
-        "clock_exterior_seconds_fill"
-        if zone is None
-        else f"zone{int(zone)}_clock_exterior_seconds_fill"
-    )
-    _remove_by_key(clock, fill_name)
-    if exterior is None:
-        return
-    if zone is None:
-        default_cx, default_cy = CLOCK_LOCAL_CX, CLOCK_LOCAL_CY
-    else:
-        default_cx, default_cy = _zone_clock_center(int(zone))
-    cx, cy, r_out = _circle_cx_cy_r(
-        exterior,
-        default_cx=default_cx,
-        default_cy=default_cy,
-        default_r=_CLOCK_EXTERIOR_ACCENT_R,
-    )
-    _mx, _my, r_mid = _circle_cx_cy_r(
-        middle,
-        default_cx=cx,
-        default_cy=cy,
-        default_r=_CLOCK_MIDDLE_ACCENT_R,
-    )
-    idx = max(1, min(60, int(sec_idx)))
-    frac = idx / 60.0
-    d = _annulus_wedge_path_d(cx, cy, r_out, r_mid, frac)
-    if d is None:
-        d = _evenodd_ring_d(cx, cy, r_out, r_mid)
-    if not d:
-        return
-    wedge = ET.Element(f"{{{SVG_NS}}}path")
-    wedge.set("id", fill_name)
-    wedge.set("data-name", fill_name)
-    wedge.set("d", d)
-    # A white accent (the default) reads as dark gray on the clock, not bright white.
-    accent = str(th.accent_hex or "").strip().lower()
-    wedge.set("fill", _CLOCK_TICK_OFF_HEX if accent in ("#fff", "#ffffff", "white") else th.accent_hex)
-    wedge.set("fill-rule", "evenodd")
-    host = _svg_parent(clock, exterior)
-    if host is None:
-        host = clock
-    # Sit above the black outer ring, under tick groups.
-    host.insert(2, wedge)
-
-
-def _apply_clock_accent_fills(root: ET.Element, *, theme: _NpTheme | None = None) -> None:
-    """Black outer ring, open middle band, black interior disc."""
-    del theme
-    for zone in (1, 2, 3):
-        clock = _clock_group_for_zone(root, zone)
-        if clock is None:
-            continue
-        for child in list(clock):
-            key = _layer_key(child)
-            if key in (
-                f"zone{zone}_clock_disc_fill",
-                f"zone{zone}_clock_outer_band_fill",
-                f"zone{zone}_clock_exterior_seconds_fill",
-            ):
-                clock.remove(child)
-        _apply_clock_black_rings(clock, zone=zone)
-
-
-def _seconds_alternate_colors(
-    now: datetime, *, ui_hex: str, white_hex: str = "#FFFFFF"
-) -> tuple[str, str, int]:
-    """Incoming color, outgoing color, and how many ticks have flipped.
-
-    The seconds ring is never empty. Even minutes start fully white and paint
-    UI-color ticks one per second. Odd minutes start fully UI-color and paint
-    white ticks one per second. At ``:00`` all 60 ticks are the outgoing color
-    (the color that finished filling on the previous minute).
-    """
-    ui = str(ui_hex or "#FFFFFF")
-    white = str(white_hex or "#FFFFFF")
-    if int(now.minute) % 2 == 0:
-        incoming, outgoing = ui, white
-    else:
-        incoming, outgoing = white, ui
-    return incoming, outgoing, max(0, min(59, int(now.second)))
-
-
-def _paint_seconds_ticks_alternating(
-    seconds_g: ET.Element | None,
-    now: datetime,
-    *,
-    ui_hex: str,
-    white_hex: str = "#FFFFFF",
-) -> None:
-    """Keep every second tick box filled; flip white ↔ UI one tick per second."""
-    if seconds_g is None:
-        return
-    _fix_seconds_08_label(seconds_g)
-    incoming, outgoing, incoming_count = _seconds_alternate_colors(
-        now, ui_hex=ui_hex, white_hex=white_hex
-    )
-    current: ET.Element | None = None
-    for el, key in list(_iter_named_children(seconds_g)):
-        if not key.startswith("seconds_"):
-            continue
-        m = re.fullmatch(r"seconds_(\d{2})", key)
-        if not m:
-            continue
-        idx = int(m.group(1))
-        if not (1 <= idx <= 60):
-            continue
-        _set_tick_paint(el, color=incoming if idx <= incoming_count else outgoing)
-        if incoming_count > 0 and idx == incoming_count:
-            current = el
-        elif incoming_count == 0 and idx == 60:
-            current = el
-    _raise_in_group(seconds_g, current)
-
-
-def _apply_clock_ticks(
-    root: ET.Element,
-    zone: int,
-    now: datetime,
-    *,
-    theme: _NpTheme | None = None,
-) -> None:
-    """Drive clock tick layers for the active zone.
-
-    Hours: original geometry; only the current face layer is kept.
-    Minutes: keep layers 1..current (0 → 60); prior ticks dim UI,
-    current full UI and raised above siblings.
-    Seconds: every tick box stays filled and alternates white ↔ UI color.
-    """
-    th = theme or np_theme_from_settings()
-    clock = _clock_group_for_zone(root, zone)
-    if clock is None:
-        return
-    hours_g = _hours_group(clock)
-    minutes_g = _minutes_group(clock)
-    seconds_g = _seconds_group(clock)
-    _fix_seconds_08_label(seconds_g)
-
-    h12 = now.hour % 12
-    if h12 == 0:
-        h12 = 12
-    minute = int(now.minute)
-    second = int(now.second)
-    # Ring index: 0 → layer 60; 1..59 → matching index.
-    min_idx = 60 if minute == 0 else minute
-    sec_idx = 60 if second == 0 else second
-
-    # Exterior: button base + accent sector under seconds 1..current.
-    _apply_exterior_seconds_fill(clock, zone, sec_idx=sec_idx, theme=th)
-
-    # Hours: only the matching face layer (original SVG shape), painted UI.
-    face_name = _HOUR_FACE_NAMES.get(h12, "")
-    for el, key in list(_iter_named_children(hours_g)):
-        if not key.startswith("hours_"):
-            continue
-        # hours_61 maps to missing hours_51 — never a face hour for display.
-        if key != face_name:
-            _detach_element(root, el)
-            continue
-        _set_tick_paint(el, color=th.tick_active)
-
-    # Minutes: layers 1..current; dim priors, highlight current.
-    current_min: ET.Element | None = None
-    for el, key in list(_iter_named_children(minutes_g)):
-        m = re.fullmatch(r"minutes_(\d{2})", key)
-        if not m:
-            continue
-        idx = int(m.group(1))
-        if not (1 <= idx <= min_idx):
-            _detach_element(root, el)
-            continue
-        if idx == min_idx:
-            current_min = el
-            _set_tick_paint(el, color=th.tick_active, opacity=_CLOCK_MINUTE_TICK_OPACITY)
-        else:
-            _set_tick_paint(el, color=th.tick_dim, opacity=_CLOCK_MINUTE_TICK_OPACITY)
-    _raise_in_group(minutes_g, current_min)
-
-    _paint_seconds_ticks_alternating(
-        seconds_g,
-        now,
-        ui_hex=_visible_on_dark_hex(th.tick_active),
-        white_hex=_CLOCK_TICK_OFF_HEX,
-    )
-
-
-_FORCE_ANALOG_CLOCK = False
-
-
-def _clock_widget_is_analog() -> bool:
-    if _FORCE_ANALOG_CLOCK:
-        return True
-    try:
-        from pigeon.widgets.options_settings import clock_widget_analog
-
-        return bool(clock_widget_analog())
-    except Exception:
-        return False
-
-
-def _clock_include_digital_time() -> bool:
-    """Analog uses the radial face; digital HH:MM only belongs on the disc hub."""
-    return not _clock_widget_is_analog()
-
-
-def _raise_clock_tick_groups(root: ET.Element) -> None:
-    """Hours / minutes / seconds must sit above the black rings."""
-    for key in (
-        "clock_hours_group",
-        "clock_minutes_group",
-        "clock_seconds_group",
-    ):
-        el = _find_by_key(root, key)
-        parent = _svg_parent(root, el) if el is not None else None
-        if el is None or parent is None:
-            continue
-        parent.remove(el)
-        parent.append(el)
-
-
-def _detach_clock_tick_groups(root: ET.Element, *, zone: int | None = None) -> None:
-    if zone is None:
-        keys = ("clock_hours_group", "clock_minutes_group", "clock_seconds_group")
-    else:
-        z = int(zone)
-        keys = (
-            f"zone{z}_clock_hours_group",
-            f"zone{z}_clock_minutes_group",
-            f"zone{z}_clock_seconds_group",
-        )
-    for key in keys:
-        el = _find_by_key(root, key)
-        if el is not None:
-            _detach_element(root, el)
-
-
-def _apply_standalone_clock_ticks(
-    root: ET.Element, now: datetime, *, theme: _NpTheme
-) -> None:
-    """Drive the 1280×800 clock widget (no zone prefix)."""
-    _apply_clock_black_rings(root, zone=None)
-    second = int(now.second)
-    sec_idx = 60 if second == 0 else second
-    _apply_exterior_seconds_fill(root, None, sec_idx=sec_idx, theme=theme)
-    hours_g = _find_by_key(root, "clock_hours_group")
-    minutes_g = _find_by_key(root, "clock_minutes_group")
-    seconds_g = _find_by_key(root, "clock_seconds_group")
-    _fix_seconds_08_label(seconds_g)
-
-    h12 = now.hour % 12
-    if h12 == 0:
-        h12 = 12
-    minute = int(now.minute)
-    min_idx = 60 if minute == 0 else minute
-    ui = _visible_on_dark_hex(theme.tick_active)
-    minute_ui = _darken_hex(ui, factor=_CLOCK_MINUTE_TICK_OPACITY)
-
-    face_name = _HOUR_FACE_NAMES.get(h12, "")
-    for el, key in list(_iter_named_children(hours_g)):
-        if not key.startswith("hours_"):
-            continue
-        if key != face_name:
-            _detach_element(root, el)
-            continue
-        _set_tick_paint(el, color=ui)
-
-    current_min: ET.Element | None = None
-    for el, key in list(_iter_named_children(minutes_g)):
-        m = re.fullmatch(r"minutes_(\d{2})", key)
-        if not m:
-            continue
-        idx = int(m.group(1))
-        if not (1 <= idx <= min_idx):
-            _detach_element(root, el)
-            continue
-        # Solid fill in the shade the 70%-opacity ticks used to read as on black.
-        _set_tick_paint(el, color=minute_ui)
-        if idx == min_idx:
-            current_min = el
-    _raise_in_group(minutes_g, current_min)
-
-    _paint_seconds_ticks_alternating(
-        seconds_g, now, ui_hex=ui, white_hex=_CLOCK_TICK_OFF_HEX
-    )
-    _raise_clock_tick_groups(root)
-
-    for name in ("clock_digital_text", "day_text", "month_date_text"):
-        _clear_text_content(_find_by_key(root, name))
-        el = _find_by_key(root, name)
-        if el is not None:
-            _detach_element(root, el)
 
 
 def _now_playing_widget_path(
@@ -2168,7 +932,6 @@ def _blend_clock_seconds(
     out = face.copy()
     out[ys, xs] = (unflipped + (flipped - unflipped) * t + 0.5).astype(np.uint8)
     return out
-
 
 
 def _rasterize_named_widget(
@@ -2425,15 +1188,6 @@ def render_centered_clock_widget_bgra(
     return out
 
 
-def _clear_text_content(el: ET.Element | None) -> None:
-    if el is None:
-        return
-    el.text = None
-    for node in el.iter():
-        node.text = None
-        node.tail = None
-
-
 def apply_view_circles_svg_state(
     root: ET.Element,
     *,
@@ -2592,1430 +1346,6 @@ def render_view_circles_svg_base_bgra(
             continue
         _paste_patch_bgra(out, patch, zx, zy)
     return out
-
-
-@lru_cache(maxsize=32)
-def _load_digital7(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_digital7_font()
-    candidates: list[str] = []
-    if path:
-        candidates.append(str(path))
-    for fallback in (
-        "/usr/share/fonts/truetype/digital-7/digital-7.ttf",
-        "/Library/Fonts/Digital-7.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
-        if fallback not in candidates:
-            candidates.append(fallback)
-    for candidate in candidates:
-        try:
-            return ImageFont.truetype(candidate, px)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-@lru_cache(maxsize=32)
-def _load_sharp_extrabold(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_ui_font_extrabold()
-    if path:
-        try:
-            return ImageFont.truetype(path, px)
-        except OSError:
-            pass
-    return _load_sharp_italic(px)
-
-
-# Zone 6/7 TT slot when TMDb found no TT and no poster (instead of the typed title).
-NP_PIGEON_LOGO_FILENAME = "pigeon_logo_np.png"
-
-
-@lru_cache(maxsize=2)
-def _load_np_pigeon_logo_bgra(path: str) -> np.ndarray | None:
-    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    if img is None or img.ndim != 3 or img.shape[2] != 4:
-        return None
-    return img
-
-
-@lru_cache(maxsize=8)
-def _load_sharp_semibold(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_ui_font_semibold()
-    if path:
-        try:
-            return ImageFont.truetype(path, px)
-        except OSError:
-            pass
-    return _load_sharp_extrabold(px)
-
-
-@lru_cache(maxsize=8)
-def _load_sharp_italic(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_ui_font_extrabold_italic()
-    if path:
-        try:
-            return ImageFont.truetype(path, px)
-        except OSError:
-            pass
-    return _load_digital7(px)
-
-
-@lru_cache(maxsize=8)
-def _load_sharp_medium_italic(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_ui_font_medium_italic()
-    if path:
-        try:
-            return ImageFont.truetype(path, px)
-        except OSError:
-            pass
-    return _load_sharp_italic(px)
-
-
-@lru_cache(maxsize=8)
-def _load_sharp_light_italic(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    px = max(6, int(size))
-    path = resolve_ui_font_light_italic()
-    if path:
-        try:
-            return ImageFont.truetype(path, px)
-        except OSError:
-            pass
-    return _load_sharp_italic(px)
-
-
-# Synthetic oblique slant (tan 12°) when no Semibold Italic cut is installed.
-_TT_ITALIC_SHEAR = 0.2126
-
-
-@lru_cache(maxsize=8)
-def _load_sharp_semibold_italic(
-    size: int,
-) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, bool]:
-    """(font, needs_synthetic_shear) for the countdown's Semibold Italic."""
-    px = max(6, int(size))
-    path = resolve_ui_font_semibold_italic()
-    if path:
-        try:
-            return ImageFont.truetype(path, px), False
-        except OSError:
-            pass
-    return _load_sharp_semibold(px), True
-
-
-def _shear_italic_bgra(patch: np.ndarray, shear: float = _TT_ITALIC_SHEAR) -> np.ndarray:
-    """Lean a rendered text patch to the right (synthetic oblique)."""
-    if patch is None or patch.size == 0:
-        return patch
-    h, w = patch.shape[:2]
-    extra = int(math.ceil(float(shear) * h))
-    if extra <= 0:
-        return patch
-    # x' = x + shear * (h - y): baseline stays put, the top leans right.
-    m = np.array([[1.0, -float(shear), float(shear) * h], [0.0, 1.0, 0.0]], dtype=np.float32)
-    return cv2.warpAffine(
-        patch,
-        m,
-        (w + extra, h),
-        flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=(0, 0, 0, 0),
-    )
-
-
-def _tt_countdown_time_patch(
-    text: str,
-    *,
-    size_px: int = TT_COUNTDOWN_TEXT_SIZE_PX,
-    fill_rgb: tuple[int, int, int] = (255, 255, 255),
-) -> np.ndarray:
-    """Countdown readout in Sharp Sans Semibold Italic with tabular digits.
-
-    Every digit is drawn centered inside an equal-width cell (the widest
-    digit's advance) so the readout stays perfectly column-aligned while it
-    counts down. When no true italic cut exists, the roman Semibold is
-    sheared into a synthetic oblique.
-    """
-    label = str(text or "")
-    if not label:
-        return np.zeros((1, 1, 4), dtype=np.uint8)
-    font, synthetic = _load_sharp_semibold_italic(int(size_px))
-    probe = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-    digit_cell = max(float(draw.textlength(d, font=font)) for d in "0123456789")
-    char_widths = {ch: float(draw.textlength(ch, font=font)) for ch in set(label)}
-    cells, total_w = tabular_time_layout(
-        label, digit_cell_w=digit_cell, char_widths=char_widths
-    )
-    try:
-        ascent, descent = font.getmetrics()
-    except AttributeError:
-        ascent, descent = int(size_px), max(2, int(size_px) // 4)
-    pad = 2
-    img = Image.new(
-        "RGBA",
-        (int(math.ceil(total_w)) + pad * 2, int(ascent + descent) + pad * 2),
-        (0, 0, 0, 0),
-    )
-    draw = ImageDraw.Draw(img)
-    for ch, cell_x, cell_w in cells:
-        natural = char_widths.get(ch, cell_w)
-        gx = pad + cell_x + (cell_w - natural) / 2.0
-        draw.text((gx, pad), ch, font=font, fill=(*fill_rgb, 255))
-    arr = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGBA2BGRA)
-    if synthetic:
-        arr = _shear_italic_bgra(arr)
-    return arr
-
-
-def _text_patch_digital7(
-    text: str,
-    *,
-    size_px: int,
-    fill_rgb: tuple[int, int, int] | None = None,
-    max_width_px: int | None = None,
-) -> tuple[np.ndarray, int, int]:
-    if fill_rgb is None:
-        fill_rgb = _look_chrome_rgb()
-    draw_text = str(text or "")
-    if not draw_text:
-        return np.zeros((1, 1, 4), dtype=np.uint8), 0, 0
-    font = _load_digital7(size_px)
-    pad = 2
-    probe = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-
-    def _measure(s: str) -> tuple[int, int, int, int]:
-        return draw.textbbox((0, 0), s, font=font)
-
-    if max_width_px is not None and max_width_px > 0:
-        l, t, r, b = _measure(draw_text)
-        if (r - l) > max_width_px:
-            ell = "..."
-            for n in range(len(draw_text), 0, -1):
-                candidate = draw_text[:n].rstrip() + ell
-                l2, t2, r2, b2 = _measure(candidate)
-                if (r2 - l2) <= max_width_px:
-                    draw_text = candidate
-                    break
-
-    l, t, r, b = _measure(draw_text)
-    tw, th = max(1, r - l), max(1, b - t)
-    img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.text((pad - l, pad - t), draw_text, font=font, fill=(*fill_rgb, 255))
-    arr = np.asarray(img)
-    return cv2.cvtColor(arr, cv2.COLOR_RGBA2BGRA), tw + pad * 2, th + pad * 2
-
-
-def _text_patch_font(
-    text: str,
-    *,
-    font: ImageFont.ImageFont,
-    fill_rgb: tuple[int, int, int] | None = None,
-) -> tuple[np.ndarray, int, int]:
-    if fill_rgb is None:
-        fill_rgb = _look_chrome_rgb()
-    draw_text = str(text or "")
-    if not draw_text:
-        return np.zeros((1, 1, 4), dtype=np.uint8), 0, 0
-    pad = 2
-    probe = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-    l, t, r, b = draw.textbbox((0, 0), draw_text, font=font)
-    tw, th = max(1, r - l), max(1, b - t)
-    img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.text((pad - l, pad - t), draw_text, font=font, fill=(*fill_rgb, 255))
-    arr = np.asarray(img)
-    return cv2.cvtColor(arr, cv2.COLOR_RGBA2BGRA), tw + pad * 2, th + pad * 2
-
-
-def _fade_bgra(patch: np.ndarray, opacity: float) -> np.ndarray:
-    """Return a copy with alpha multiplied by ``opacity`` (clamped to 0..1)."""
-    if patch is None or patch.size == 0 or patch.ndim < 3 or patch.shape[2] < 4:
-        return patch
-    o = max(0.0, min(1.0, float(opacity)))
-    if o >= 0.999:
-        return patch
-    out = patch.copy()
-    out[:, :, 3] = np.clip(
-        out[:, :, 3].astype(np.float32) * o, 0.0, 255.0
-    ).astype(np.uint8)
-    return out
-
-
-def _black_rounded_plate(w: int, h: int) -> np.ndarray:
-    """Opaque black rounded rectangle (BGRA), anti-aliased by 4x supersampling."""
-    import cv2
-
-    w, h = max(2, int(w)), max(2, int(h))
-    k = 4
-    big = np.zeros((h * k, w * k), np.uint8)
-    r = int(min(w, h) * 0.5 * 0.7) * k
-    cv2.rectangle(big, (r, 0), (w * k - 1 - r, h * k - 1), 255, -1)
-    cv2.rectangle(big, (0, r), (w * k - 1, h * k - 1 - r), 255, -1)
-    for cx, cy in ((r, r), (w * k - 1 - r, r), (r, h * k - 1 - r), (w * k - 1 - r, h * k - 1 - r)):
-        cv2.circle(big, (cx, cy), r, 255, -1)
-    alpha = cv2.resize(big, (w, h), interpolation=cv2.INTER_AREA)
-    out = np.zeros((h, w, 4), np.uint8)
-    out[:, :, 3] = alpha
-    return out
-
-
-def _paste_patch_bgra(canvas: np.ndarray, patch: np.ndarray, x: int, y: int) -> None:
-    if patch is None or patch.size == 0 or canvas is None or canvas.size == 0:
-        return
-    ph, pw = patch.shape[:2]
-    if pw < 1 or ph < 1:
-        return
-    x0 = int(x)
-    y0 = int(y)
-    x1 = x0 + pw
-    y1 = y0 + ph
-    cx0, cy0 = max(0, x0), max(0, y0)
-    cx1 = min(int(canvas.shape[1]), x1)
-    cy1 = min(int(canvas.shape[0]), y1)
-    if cx0 >= cx1 or cy0 >= cy1:
-        return
-    sx0 = cx0 - x0
-    sy0 = cy0 - y0
-    src = patch[sy0 : sy0 + (cy1 - cy0), sx0 : sx0 + (cx1 - cx0)]
-    roi = canvas[cy0:cy1, cx0:cx1]
-    if roi.ndim == 3 and roi.shape[2] == 3:
-        if src.shape[2] < 4:
-            roi[:] = src[:, :, :3]
-            return
-        alpha_u8 = src[:, :, 3]
-        if int(alpha_u8.max()) <= 0:
-            return
-        if int(alpha_u8.min()) >= 255:
-            roi[:] = src[:, :, :3]
-            return
-        roi[:] = blend_bgra_over_bgr_u8(roi, src)
-    elif roi.ndim == 3 and roi.shape[2] >= 4:
-        blended = alpha_blend_bgra_over_bgr(roi[:, :, :3], src)
-        roi[:, :, :3] = blended
-        roi[:, :, 3] = np.maximum(roi[:, :, 3], src[:, :, 3])
-
-
-def _restore_masked_region(
-    canvas: np.ndarray,
-    under: np.ndarray,
-    mask: np.ndarray,
-    *,
-    x: int,
-    y: int,
-) -> None:
-    if (
-        canvas is None
-        or canvas.size == 0
-        or under is None
-        or under.size == 0
-        or mask is None
-        or mask.size == 0
-    ):
-        return
-    mh, mw = mask.shape[:2]
-    if under.shape[0] != mh or under.shape[1] != mw:
-        return
-    x0 = int(x)
-    y0 = int(y)
-    cx0, cy0 = max(0, x0), max(0, y0)
-    cx1 = min(int(canvas.shape[1]), x0 + mw)
-    cy1 = min(int(canvas.shape[0]), y0 + mh)
-    if cx0 >= cx1 or cy0 >= cy1:
-        return
-    sx0, sy0 = cx0 - x0, cy0 - y0
-    m = mask[sy0 : sy0 + (cy1 - cy0), sx0 : sx0 + (cx1 - cx0)] > 0
-    if not np.any(m):
-        return
-    src = under[sy0 : sy0 + (cy1 - cy0), sx0 : sx0 + (cx1 - cx0)]
-    roi = canvas[cy0:cy1, cx0:cx1]
-    roi[m] = src[m]
-
-
-def _restore_from_backdrop_abs(
-    canvas: np.ndarray,
-    mask: np.ndarray,
-    *,
-    x: int,
-    y: int,
-    backdrop: np.ndarray,
-    backdrop_x: int,
-    backdrop_y: int,
-) -> None:
-    if (
-        canvas is None
-        or canvas.size == 0
-        or backdrop is None
-        or backdrop.size == 0
-        or mask is None
-        or mask.size == 0
-    ):
-        return
-    mh, mw = mask.shape[:2]
-    bh, bw = int(backdrop.shape[0]), int(backdrop.shape[1])
-    x0, y0 = int(x), int(y)
-    cx0, cy0 = max(0, x0), max(0, y0)
-    cx1 = min(int(canvas.shape[1]), x0 + mw)
-    cy1 = min(int(canvas.shape[0]), y0 + mh)
-    if cx0 >= cx1 or cy0 >= cy1:
-        return
-    sx0, sy0 = cx0 - x0, cy0 - y0
-    roi_h, roi_w = cy1 - cy0, cx1 - cx0
-    m = mask[sy0 : sy0 + roi_h, sx0 : sx0 + roi_w] > 0
-    if not np.any(m):
-        return
-    yy, xx = np.nonzero(m)
-    by = (cy0 - int(backdrop_y)) + yy
-    bx = (cx0 - int(backdrop_x)) + xx
-    valid = (by >= 0) & (by < bh) & (bx >= 0) & (bx < bw)
-    if not np.any(valid):
-        return
-    yy, xx, by, bx = yy[valid], xx[valid], by[valid], bx[valid]
-    canvas[cy0 + yy, cx0 + xx] = backdrop[by, bx]
-
-
-def _paste_stroke_over_blur(
-    canvas: np.ndarray,
-    stroke_patch: np.ndarray,
-    x: int,
-    y: int,
-    *,
-    backdrop: np.ndarray | None,
-    backdrop_x: int,
-    backdrop_y: int,
-    opacity: float,
-) -> None:
-    if stroke_patch is None or stroke_patch.size == 0:
-        return
-    coverage = stroke_patch[:, :, 3]
-    if not np.any(coverage):
-        return
-    if backdrop is not None:
-        _restore_from_backdrop_abs(
-            canvas,
-            coverage,
-            x=x,
-            y=y,
-            backdrop=backdrop,
-            backdrop_x=backdrop_x,
-            backdrop_y=backdrop_y,
-        )
-    sop = max(0.0, min(1.0, float(opacity)))
-    if sop >= 1.0 - 1e-6:
-        _paste_patch_bgra(canvas, stroke_patch, x, y)
-        return
-    patch = stroke_patch.copy()
-    patch[:, :, 3] = np.clip(patch[:, :, 3].astype(np.float32) * sop, 0, 255).astype(
-        np.uint8
-    )
-    _paste_patch_bgra(canvas, patch, x, y)
-
-
-def _ink_crop_bgra(patch: np.ndarray, *, pad: int = 1) -> np.ndarray:
-    """Trim transparent padding so centering uses the visible ink box."""
-    if patch is None or patch.size == 0 or patch.ndim < 3 or patch.shape[2] < 4:
-        return patch
-    ys, xs = np.where(patch[:, :, 3] > 8)
-    if ys.size == 0:
-        return patch
-    y0 = max(0, int(ys.min()) - pad)
-    x0 = max(0, int(xs.min()) - pad)
-    y1 = min(int(patch.shape[0]), int(ys.max()) + 1 + pad)
-    x1 = min(int(patch.shape[1]), int(xs.max()) + 1 + pad)
-    return patch[y0:y1, x0:x1]
-
-
-def _paste_ink_centered(
-    canvas: np.ndarray, patch: np.ndarray, cx: float, top_y: float
-) -> None:
-    """Paste ``patch`` horizontally centered on ``cx`` with its top at ``top_y``."""
-    if patch is None or patch.size == 0:
-        return
-    ph, pw = patch.shape[:2]
-    _paste_patch_bgra(
-        canvas, patch, int(round(float(cx) - pw / 2.0)), int(round(float(top_y)))
-    )
-
-
-def _cast_line_patch(text: str, *, size_px: int, max_width_px: int) -> np.ndarray | None:
-    label = str(text or "").strip()
-    if not label:
-        return None
-    patch, tw, _th = _text_patch_digital7(
-        label.upper(), size_px=size_px, max_width_px=max_width_px
-    )
-    if tw < 1:
-        return None
-    return _ink_crop_bgra(patch)
-
-
-ZONE4_VISUALIZER_WIDGET = "visualizer"
-# Wide zone-6 visualizer (pigeon.fullscreen_viz presets scaled into zone 6).
-ZONE6_VISUALIZER_WIDGET = "visualizer_zone6"
-
-
-def _weak_or_none(arr: object) -> weakref.ref | None:
-    try:
-        return weakref.ref(arr)
-    except TypeError:
-        return None
-
-
-def _same_source_art(src_ref: weakref.ref | None, arr: object, kept: np.ndarray | None) -> bool:
-    """True when *arr* is the array last copied into *kept*, pixels unchanged.
-
-    Callers pass the same cached poster / TT array every frame; a full
-    ``array_equal`` against the private copy cost ~10% of the Pi 5 render
-    thread. A sparse sample guards against an in-place repaint.
-    """
-    if src_ref is None or kept is None or src_ref() is not arr:
-        return False
-    a = arr  # type: ignore[assignment]
-    if getattr(a, "dtype", None) != np.uint8 or getattr(a, "shape", None) != kept.shape:
-        return False
-    return bool(np.array_equal(a[::23, ::19], kept[::23, ::19]))  # type: ignore[index]
-
-
-def zone4_visualizer_rect() -> tuple[int, int, int, int, int]:
-    """``(x, y, w, h, r)`` for the zone-4 EQ: the status-bar track's columns
-    and corner radius, from the track's inset below zone 4's top down to the
-    same gap above the zone-5 track (zone 4's box overlaps zone 5)."""
-    tx, ty, tw, _th, tr = design_rect_from_local(
-        _zone_spec(5),
-        STATUS_BAR_TRACK,
-        view_w=STATUS_BAR_VIEW_W,
-        view_h=STATUS_BAR_VIEW_H,
-    )
-    zone = _zone_spec(4)
-    inset = float(STATUS_BAR_TRACK[1]) * float(zone.h) / float(STATUS_BAR_VIEW_H)
-    top = int(round(float(zone.y) + inset))
-    bottom = int(round(float(ty) - inset))
-    return (int(tx), top, int(tw), max(2, bottom - top), int(tr))
-
-
-def _zone4_title_xywh() -> tuple[int, int, int, int]:
-    """Zone 4 box clipped so titles stay above zone 5 (the strips overlap in spec)."""
-    z4 = _zone_spec(4)
-    z5 = _zone_spec(5)
-    x = int(round(z4.x))
-    y = int(round(z4.y))
-    w = max(1, int(round(z4.w)))
-    gap = 12.0
-    h = min(float(z4.h), float(z5.y) - float(z4.y) - gap)
-    return x, y, w, max(8, int(round(h)))
-
-
-# Line 2 starts here so artist/album sit under the title and use the rest of
-# the strip (down to the status bar gap).
-_ZONE4_SUBTITLE_TOP_FRAC = 0.40
-
-
-def _draw_stacked_cast_pair(
-    canvas: np.ndarray,
-    *,
-    actor: str,
-    character: str,
-    cx: float,
-    max_width_px: int,
-    actor_px: int,
-    char_px: int,
-    gap_px: int,
-    mid_y: float | None = None,
-    actor_top: float | None = None,
-    char_top: float | None = None,
-) -> None:
-    """Actor over character, both horizontally centered on ``cx``.
-
-    Either ``mid_y`` (v-center the stack) or explicit ``actor_top`` / ``char_top``.
-    """
-    ap = _cast_line_patch(actor, size_px=actor_px, max_width_px=max_width_px)
-    cp = _cast_line_patch(character, size_px=char_px, max_width_px=max_width_px)
-    ah = int(ap.shape[0]) if ap is not None else 0
-    ch = int(cp.shape[0]) if cp is not None else 0
-    gap = int(gap_px) if ap is not None and cp is not None else 0
-    if mid_y is not None:
-        total = ah + gap + ch
-        top = float(mid_y) - total * 0.5
-        if ap is not None:
-            _paste_ink_centered(canvas, ap, cx, top)
-        if cp is not None:
-            _paste_ink_centered(canvas, cp, cx, top + ah + gap)
-        return
-    if ap is not None and actor_top is not None:
-        _paste_ink_centered(canvas, ap, cx, float(actor_top))
-    if cp is not None and char_top is not None:
-        _paste_ink_centered(canvas, cp, cx, float(char_top))
-
-
-def _paste_left_vcenter(canvas: np.ndarray, patch: np.ndarray, x: float, cy: float) -> None:
-    """Paste left-aligned with the patch's vertical center on ``cy``."""
-    if patch is None or patch.size == 0:
-        return
-    ph, _pw = patch.shape[:2]
-    _paste_patch_bgra(canvas, patch, int(round(float(x))), int(round(float(cy) - ph / 2.0)))
-
-
-def _paste_centered(canvas: np.ndarray, patch: np.ndarray, cx: float, cy: float) -> None:
-    if patch is None or patch.size == 0:
-        return
-    ph, pw = patch.shape[:2]
-    _paste_patch_bgra(canvas, patch, int(round(cx - pw / 2.0)), int(round(cy - ph / 2.0)))
-
-
-def _paste_baseline_centered(
-    canvas: np.ndarray,
-    patch: np.ndarray,
-    cx: float,
-    baseline_y: float,
-    *,
-    bbox_top: float,
-    pad: int = 2,
-) -> None:
-    """Paste a text patch so its typographic baseline sits on ``baseline_y``.
-
-    Patches from :func:`_text_patch_font` / :func:`_text_patch_digital7` are built
-    with Pillow's default (non-``ls``) metrics. For those, the ink bottom is the
-    practical baseline for caps-only strings — place the patch so its bottom edge
-    lands on ``baseline_y`` (keeps labels clear of circular widgets).
-    """
-    if patch is None or patch.size == 0:
-        return
-    ph, pw = patch.shape[:2]
-    paste_x = int(round(cx - pw / 2.0))
-    # Default Pillow metrics (SharpSans/Digital-7): positive bbox top means the
-    # old ``pad - t`` baseline formula pushed ink into the widget. Prefer ink
-    # bottom == baseline for label clearance above rings.
-    if float(bbox_top) >= 0:
-        paste_y = int(round(float(baseline_y) - float(ph)))
-    else:
-        paste_y = int(round(float(baseline_y) - (float(pad) - float(bbox_top))))
-    _paste_patch_bgra(canvas, patch, paste_x, paste_y)
-
-
-def _paste_baseline_left(
-    canvas: np.ndarray,
-    patch: np.ndarray,
-    x: float,
-    baseline_y: float,
-    *,
-    bbox_top: float,
-    pad: int = 2,
-) -> None:
-    """Paste a text patch left-aligned with its ink bottom on ``baseline_y``."""
-    if patch is None or patch.size == 0:
-        return
-    ph, _pw = patch.shape[:2]
-    paste_x = int(round(float(x)))
-    if float(bbox_top) >= 0:
-        paste_y = int(round(float(baseline_y) - float(ph)))
-    else:
-        paste_y = int(round(float(baseline_y) - (float(pad) - float(bbox_top))))
-    _paste_patch_bgra(canvas, patch, paste_x, paste_y)
-
-
-def _paste_label_above_widget(
-    canvas: np.ndarray,
-    patch: np.ndarray,
-    cx: float,
-    *,
-    widget_top_y: float,
-    gap_px: float = _WIDGET_LABEL_BASELINE_GAP_PX,
-) -> None:
-    """Paste so the patch bottom (≈ baseline) is ``gap_px`` above the widget top."""
-    if patch is None or patch.size == 0:
-        return
-    ph, pw = patch.shape[:2]
-    paste_x = int(round(cx - pw / 2.0))
-    paste_y = int(round(float(widget_top_y) - float(gap_px) - float(ph)))
-    _paste_patch_bgra(canvas, patch, paste_x, paste_y)
-
-
-def _paste_label_above_circle_curved(
-    canvas: np.ndarray,
-    patch: np.ndarray,
-    cx: float,
-    *,
-    widget_cy: float,
-    widget_r: float,
-    gap_px: float = _WIDGET_LABEL_BASELINE_GAP_PX,
-) -> None:
-    """Paste label in a flat-top / curved-bottom envelope above a circular widget.
-
-    Same width and topline as the flat paste. Each column is scaled uniformly so
-    the bottom edge rides the concentric arc ``widget_r + gap`` (Illustrator-style
-    envelope distort — not a bottom-only stretch, which causes spike artifacts).
-    """
-    if patch is None or patch.size == 0 or canvas is None or canvas.size == 0:
-        return
-    src_full = np.asarray(patch)
-    if src_full.ndim != 3 or src_full.shape[2] < 4:
-        return
-
-    # Tight-crop to opaque ink so the glyph body fills the cap (pad would
-    # leave the curved baseline sitting in empty space).
-    alpha = src_full[:, :, 3]
-    rows = np.where(alpha.max(axis=1) > 8)[0]
-    cols = np.where(alpha.max(axis=0) > 8)[0]
-    if rows.size < 1 or cols.size < 1:
-        return
-    r0, r1 = int(rows[0]), int(rows[-1]) + 1
-    c0, c1 = int(cols[0]), int(cols[-1]) + 1
-    src = np.ascontiguousarray(src_full[r0:r1, c0:c1])
-    ph, pw = int(src.shape[0]), int(src.shape[1])
-    if ph < 1 or pw < 1:
-        return
-
-    full_h, full_w = int(src_full.shape[0]), int(src_full.shape[1])
-    r_arc = float(widget_r) + float(gap_px)
-    if r_arc <= 1.0:
-        _paste_label_above_widget(
-            canvas,
-            src_full,
-            cx,
-            widget_top_y=float(widget_cy) - float(widget_r),
-            gap_px=gap_px,
-        )
-        return
-
-    widget_top = float(widget_cy) - float(widget_r)
-    # Match the previous flat paste's ink topline (skip transparent pad above glyphs).
-    top_y = widget_top - float(gap_px) - float(full_h) + float(r0)
-    x0_full = float(cx) - float(full_w) / 2.0
-    x0 = x0_full + float(c0)
-
-    xs = (x0 + 0.5) + np.arange(pw, dtype=np.float64)
-    dx = xs - float(cx)
-    inside = np.abs(dx) < (r_arc - 1e-3)
-    # Default to a rectangular bottom; replace with the circle arc where valid.
-    bottoms = np.full(pw, top_y + float(ph), dtype=np.float64)
-    bottoms[inside] = float(widget_cy) - np.sqrt(
-        np.maximum(0.0, r_arc * r_arc - dx[inside] * dx[inside])
-    )
-    # Never crush below the natural glyph height (keeps center from squashing).
-    heights = np.maximum(bottoms - top_y, float(ph))
-    dest_h = int(math.ceil(float(np.max(heights)))) + 1
-    if dest_h < 1:
-        return
-
-    yy = np.arange(dest_h, dtype=np.float64)[:, None]
-    xx = np.arange(pw, dtype=np.float64)[None, :]
-    valid = yy < heights[None, :]
-
-    # Uniform vertical envelope: each column maps [0, h) → full source [0, ph).
-    h = np.maximum(heights[None, :], 1e-3)
-    if ph <= 1:
-        v_src = np.zeros((dest_h, pw), dtype=np.float64)
-    else:
-        v_src = (yy + 0.5) / h * float(ph) - 0.5
-        v_src = np.clip(v_src, 0.0, float(ph - 1))
-
-    map_x = np.broadcast_to(xx.astype(np.float32), (dest_h, pw)).copy()
-    map_y = v_src.astype(np.float32)
-    map_x = np.where(valid, map_x, np.float32(-1.0))
-    map_y = np.where(valid, map_y, np.float32(-1.0))
-
-    warped = cv2.remap(
-        src,
-        map_x,
-        map_y,
-        interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=(0, 0, 0, 0),
-    )
-    if warped.dtype != np.uint8:
-        warped = np.clip(warped, 0, 255).astype(np.uint8)
-    warped = np.ascontiguousarray(warped)
-    if warped.shape[2] >= 4:
-        warped[~valid, :] = 0
-
-    _paste_patch_bgra(
-        canvas,
-        warped,
-        int(round(x0)),
-        int(round(top_y)),
-    )
-
-
-def _font_bbox_top(text: str, font: ImageFont.ImageFont) -> float:
-    probe = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-    _l, t, _r, _b = draw.textbbox((0, 0), str(text or ""), font=font)
-    return float(t)
-
-
-def _rounded_rect_mask(w: int, h: int, radius: int) -> np.ndarray:
-    if w < 1 or h < 1:
-        return np.zeros((max(0, h), max(0, w)), dtype=np.uint8)
-    r = max(0, min(radius, min(w, h) // 2))
-    mask = np.zeros((h, w), dtype=np.uint8)
-    if r <= 0:
-        mask[:, :] = 255
-        return mask
-    cv2.rectangle(mask, (r, 0), (w - r - 1, h - 1), 255, -1)
-    cv2.rectangle(mask, (0, r), (w - 1, h - r - 1), 255, -1)
-    cv2.circle(mask, (r, r), r, 255, -1, lineType=cv2.LINE_AA)
-    cv2.circle(mask, (w - r - 1, r), r, 255, -1, lineType=cv2.LINE_AA)
-    cv2.circle(mask, (r, h - r - 1), r, 255, -1, lineType=cv2.LINE_AA)
-    cv2.circle(mask, (w - r - 1, h - r - 1), r, 255, -1, lineType=cv2.LINE_AA)
-    return mask
-
-
-def _shimmer_colors_bgr() -> tuple[tuple[int, int, int], tuple[int, int, int]]:
-    if _look_is_bright():
-        return (214, 214, 214), (246, 246, 246)
-    return (38, 38, 38), (86, 86, 86)
-
-
-def _shimmer_base_patch_bgra(w: int, h: int, *, radius: int) -> np.ndarray:
-    """Static skeleton plate (no highlight) for the cached NP frame."""
-    w = max(1, int(w))
-    h = max(1, int(h))
-    mask = _rounded_rect_mask(w, h, max(1, int(radius)))
-    base, _hi = _shimmer_colors_bgr()
-    patch = np.zeros((h, w, 4), dtype=np.uint8)
-    patch[:, :, 0] = base[0]
-    patch[:, :, 1] = base[1]
-    patch[:, :, 2] = base[2]
-    patch[:, :, 3] = np.minimum(
-        mask,
-        np.uint8(int(round(255.0 * float(WIDGET_SHIMMER_OPACITY)))),
-    )
-    return patch
-
-
-def _shimmer_patch_bgra(
-    w: int,
-    h: int,
-    *,
-    radius: int,
-    phase: float,
-    colors_bgr: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
-) -> np.ndarray:
-    """Rounded skeleton plate with a left-to-right highlight sweep."""
-    w = max(1, int(w))
-    h = max(1, int(h))
-    mask = _rounded_rect_mask(w, h, max(1, int(radius)))
-    base, hi = colors_bgr or _shimmer_colors_bgr()
-    xs = np.arange(w, dtype=np.float32)
-    band = max(12.0, float(w) * float(WIDGET_SHIMMER_BAND_FRAC))
-    center = float(phase) * (float(w) + band) - band * 0.5
-    t = np.clip(1.0 - np.abs(xs - center) / (band * 0.5), 0.0, 1.0)
-    t = t * t * (3.0 - 2.0 * t)
-    mix = np.broadcast_to(t, (h, w))
-    patch = np.zeros((h, w, 4), dtype=np.uint8)
-    for i, (b, hlt) in enumerate(zip(base, hi)):
-        patch[:, :, i] = np.clip(
-            np.rint(b + (hlt - b) * mix), 0, 255
-        ).astype(np.uint8)
-    alpha = np.minimum(
-        mask,
-        np.uint8(int(round(255.0 * float(WIDGET_SHIMMER_OPACITY)))),
-    )
-    patch[:, :, 3] = alpha
-    return patch
-
-
-_CANDY_U_CACHE: dict[tuple[int, int], np.ndarray] = {}
-
-
-_CANDY_STEPS = 48
-
-
-@lru_cache(maxsize=_CANDY_STEPS * 2)
-def _candy_stripe_step_bgra(
-    w: int, h: int, radius: int, step: int, color_bgr: tuple[int, int, int]
-) -> np.ndarray:
-    return _candy_stripe_patch_bgra(
-        w, h, radius=radius, phase=step / float(_CANDY_STEPS), color_bgr=color_bgr
-    )
-
-
-def _candy_stripe_patch_bgra(
-    w: int,
-    h: int,
-    *,
-    radius: int,
-    phase: float,
-    color_bgr: tuple[int, int, int],
-) -> np.ndarray:
-    """Rounded bar of diagonal hard-edged stripes (UI color / a darker shade) scrolling right."""
-    w = max(1, int(w))
-    h = max(1, int(h))
-    u = _CANDY_U_CACHE.get((w, h))
-    if u is None:
-        u = (np.arange(w, dtype=np.float32)[None, :] + np.arange(h, dtype=np.float32)[:, None])
-        if len(_CANDY_U_CACHE) >= 4:
-            _CANDY_U_CACHE.clear()
-        _CANDY_U_CACHE[(w, h)] = u
-    period = max(8.0, float(h) * 1.1)
-    d = np.mod(u - float(phase) * period, period)
-    half = period * 0.5
-    # Signed distance to the nearest stripe edge (+ inside the light stripe), antialiased.
-    e = np.where(d < half, np.minimum(d, half - d), -np.minimum(d - half, period - d))
-    mix = np.clip(e * 0.7 + 0.5, 0.0, 1.0)[:, :, None]
-    light = np.array(color_bgr, dtype=np.float32)
-    dark = light * 0.55
-    rgb = dark + (light - dark) * mix
-    patch = np.empty((h, w, 4), dtype=np.uint8)
-    patch[:, :, :3] = np.clip(rgb + 0.5, 0, 255).astype(np.uint8)
-    patch[:, :, 3] = _rounded_rect_mask(w, h, max(1, int(radius)))
-    return patch
-
-
-def _draw_shimmer_rounded_rect(
-    out: np.ndarray,
-    *,
-    x: int,
-    y: int,
-    w: int,
-    h: int,
-    radius: int,
-    phase: float | None = None,
-    recorder: object | None = None,
-    colors_bgr: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
-) -> None:
-    if w < 2 or h < 2:
-        return
-    if recorder is not None:
-        recorder(int(x), int(y), int(w), int(h), int(max(1, radius)))
-    patch = (
-        _shimmer_patch_bgra(w, h, radius=radius, phase=float(phase), colors_bgr=colors_bgr)
-        if phase is not None
-        else _shimmer_base_patch_bgra(w, h, radius=radius)
-    )
-    _paste_patch_bgra(out, patch, int(x), int(y))
-
-
-def _draw_rounded_bar_bgra(
-    bgra: np.ndarray,
-    *,
-    x: int,
-    y: int,
-    w: int,
-    h: int,
-    fill_bgr: tuple[int, int, int],
-    radius: int,
-    stroke_bgr: tuple[int, int, int] | None = None,
-    stroke: int = 2,
-    fill_opacity: float = 1.0,
-    stroke_opacity: float = 1.0,
-    stroke_backdrop: np.ndarray | None = None,
-    stroke_backdrop_x: int = 0,
-    stroke_backdrop_y: int = 0,
-) -> None:
-    if w < 1 or h < 1:
-        return
-    x0, y0 = max(0, x), max(0, y)
-    x1, y1 = min(int(DESIGN_W), x + w), min(int(DESIGN_H), y + h)
-    if x0 >= x1 or y0 >= y1:
-        return
-    lw, lh = x1 - x0, y1 - y0
-    pad = max(0, int(stroke) + 1) if stroke_bgr is not None and stroke > 0 else 0
-    mw, mh = lw + pad * 2, lh + pad * 2
-    mask = np.zeros((mh, mw), dtype=np.uint8)
-    inner = _rounded_rect_mask(lw, lh, min(radius, lw // 2, lh // 2))
-    mask[pad : pad + lh, pad : pad + lw] = inner
-    fill_a = int(round(255.0 * max(0.0, min(1.0, float(fill_opacity)))))
-    fill = np.zeros((mh, mw, 4), dtype=np.uint8)
-    fill[mask > 0, :3] = fill_bgr
-    fill[mask > 0, 3] = fill_a
-    _paste_patch_bgra(bgra, fill, x0 - pad, y0 - pad)
-    if stroke_bgr is not None and stroke > 0:
-        stroke_patch = np.zeros((mh, mw, 4), dtype=np.uint8)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            cv2.drawContours(
-                stroke_patch,
-                contours,
-                -1,
-                (*stroke_bgr, 255),
-                thickness=max(1, int(stroke)),
-                lineType=cv2.LINE_AA,
-            )
-            _paste_stroke_over_blur(
-                bgra,
-                stroke_patch,
-                x0 - pad,
-                y0 - pad,
-                backdrop=stroke_backdrop,
-                backdrop_x=stroke_backdrop_x,
-                backdrop_y=stroke_backdrop_y,
-                opacity=stroke_opacity,
-            )
-
-
-def annular_sector_mask(
-    size: int,
-    *,
-    outer_r: float,
-    inner_r: float,
-    fraction: float,
-    start_deg: float = -90.0,
-    round_end: bool = False,
-) -> np.ndarray:
-    """Filled annulus from ``start_deg`` clockwise by ``fraction`` of a turn.
-
-    ``round_end`` caps the leading edge with a near-semicircle (the origin edge
-    stays straight).
-    """
-    s = max(1, int(size))
-    mask = np.zeros((s, s), dtype=np.uint8)
-    frac = max(0.0, min(1.0, float(fraction)))
-    if frac <= 1e-6:
-        return mask
-    cx_i = (s - 1) // 2
-    cy_i = (s - 1) // 2
-    outer = max(1, int(round(outer_r)))
-    inner = max(0, min(int(round(inner_r)), outer - 1))
-    cv2.circle(mask, (cx_i, cy_i), outer, 255, -1, lineType=cv2.LINE_AA)
-    if inner > 0:
-        cv2.circle(mask, (cx_i, cy_i), inner, 0, -1, lineType=cv2.LINE_AA)
-    if frac >= 0.999:
-        return mask
-    sweep = 360.0 * frac
-    start = float(start_deg)
-    end = start + sweep
-    arc = cv2.ellipse2Poly(
-        (cx_i, cy_i),
-        (outer + 2, outer + 2),
-        0,
-        int(round(start)),
-        int(round(end)),
-        1,
-    )
-    wedge = np.zeros((s, s), dtype=np.uint8)
-    poly = np.vstack([[[cx_i, cy_i]], arc])
-    cv2.fillPoly(wedge, [poly], 255)
-    sector = cv2.bitwise_and(mask, wedge)
-    if round_end and outer - inner >= 2:
-        _add_round_sector_end(sector, cx=cx_i, cy=cy_i, outer=outer, inner=inner, start=start, sweep=sweep)
-    return sector
-
-
-# Cap radius vs. half the band width: just under 1 so the cap reads as "almost"
-# a semicircle and stays inside the track rims.
-_ROUND_END_CAP_SCALE = 0.96
-
-
-def _add_round_sector_end(
-    sector: np.ndarray,
-    *,
-    cx: int,
-    cy: int,
-    outer: int,
-    inner: int,
-    start: float,
-    sweep: float,
-) -> None:
-    """Union a disc at the sector's leading edge into ``sector`` (in place).
-
-    Only the half ahead of the end line is new ink; the trailing half is
-    clipped so it can't poke behind the straight origin at tiny fractions.
-    """
-    mid_r = (outer + inner) / 2.0
-    cap_r = (outer - inner) / 2.0 * _ROUND_END_CAP_SCALE
-    end_rad = math.radians(start + sweep)
-    shift = 4
-    one = 1 << shift
-    centre = (
-        int(round((cx + mid_r * math.cos(end_rad)) * one)),
-        int(round((cy + mid_r * math.sin(end_rad)) * one)),
-    )
-    cap = np.zeros_like(sector)
-    cv2.circle(cap, centre, int(round(cap_r * one)), 255, -1, lineType=cv2.LINE_AA, shift=shift)
-    ys, xs = np.nonzero(cap)
-    if xs.size == 0:
-        return
-    rel = (np.degrees(np.arctan2(ys - cy, xs - cx)) - start) % 360.0
-    cap_deg = math.degrees(math.asin(min(1.0, cap_r / max(mid_r, 1e-6))))
-    keep = rel <= sweep + cap_deg + 1.0
-    ys, xs = ys[keep], xs[keep]
-    sector[ys, xs] = np.maximum(sector[ys, xs], cap[ys, xs])
-
-
-def _draw_filled_circle_bgra(
-    bgra: np.ndarray,
-    *,
-    cx: float,
-    cy: float,
-    r: float,
-    fill_bgr: tuple[int, int, int],
-    stroke_bgr: tuple[int, int, int] = _COLOR_CHROME_BGR,
-    stroke: int = 2,
-    fill_opacity: float = 1.0,
-) -> None:
-    radius = max(1, int(round(r)))
-    pad = stroke + 2
-    size = radius * 2 + pad * 2
-    center = (size // 2, size // 2)
-    mask = np.zeros((size, size), dtype=np.uint8)
-    cv2.circle(mask, center, radius, 255, -1, lineType=cv2.LINE_AA)
-    op = max(0.0, min(1.0, float(fill_opacity)))
-    patch = np.zeros((size, size, 4), dtype=np.uint8)
-    patch[:, :, 0] = fill_bgr[0]
-    patch[:, :, 1] = fill_bgr[1]
-    patch[:, :, 2] = fill_bgr[2]
-    patch[:, :, 3] = np.clip(mask.astype(np.float32) * op, 0, 255).astype(np.uint8)
-    x = int(round(cx - size / 2.0))
-    y = int(round(cy - size / 2.0))
-    _paste_patch_bgra(bgra, patch, x, y)
-    if stroke > 0:
-        stroke_patch = np.zeros((size, size, 4), dtype=np.uint8)
-        cv2.circle(
-            stroke_patch, center, radius, (*stroke_bgr, 255), stroke, lineType=cv2.LINE_AA
-        )
-        _paste_patch_bgra(bgra, stroke_patch, x, y)
-
-
-def _draw_progress_ring(
-    bgra: np.ndarray,
-    *,
-    cx: float,
-    cy: float,
-    outer_r: float,
-    inner_r: float,
-    fraction: float,
-    fill_bgr: tuple[int, int, int] = _COLOR_ACCENT_BGR,
-    stroke_bgr: tuple[int, int, int] = _COLOR_CHROME_BGR,
-    stroke: int = _ACCENT_STROKE_PX,
-    fill_opacity: float = _ACCENT_OPACITY,
-    stroke_opacity: float = _ACCENT_STROKE_OPACITY,
-    stroke_backdrop: np.ndarray | None = None,
-    stroke_backdrop_x: int = 0,
-    stroke_backdrop_y: int = 0,
-    round_end: bool = False,
-) -> None:
-    frac = max(0.0, min(1.0, float(fraction)))
-    if frac <= 1e-6:
-        return
-    pad = max(4, stroke + 2)
-    size = int(math.ceil(outer_r * 2)) + pad * 2
-    mask = annular_sector_mask(
-        size,
-        outer_r=outer_r,
-        inner_r=inner_r,
-        fraction=frac,
-        round_end=round_end,
-    )
-    fill_a = int(round(255.0 * max(0.0, min(1.0, float(fill_opacity)))))
-    fill = np.zeros((size, size, 4), dtype=np.uint8)
-    fill[mask > 0, :3] = fill_bgr
-    fill[mask > 0, 3] = fill_a
-    x = int(round(cx - size / 2.0))
-    y = int(round(cy - size / 2.0))
-    _paste_patch_bgra(bgra, fill, x, y)
-    if stroke > 0:
-        stroke_patch = np.zeros((size, size, 4), dtype=np.uint8)
-        cx_i = cy_i = size // 2
-        outer = max(1, int(round(outer_r)))
-        inner = max(0, min(int(round(inner_r)), outer - 1))
-        start = -90.0
-        end = start + 360.0 * frac
-        thick = max(1, int(stroke))
-        color = (*stroke_bgr, 255)
-        if frac >= 0.999:
-            cv2.circle(stroke_patch, (cx_i, cy_i), outer, color, thick, lineType=cv2.LINE_AA)
-            if inner > 0:
-                cv2.circle(stroke_patch, (cx_i, cy_i), inner, color, thick, lineType=cv2.LINE_AA)
-        else:
-            cv2.ellipse(
-                stroke_patch,
-                (cx_i, cy_i),
-                (outer, outer),
-                0,
-                start,
-                end,
-                color,
-                thick,
-                lineType=cv2.LINE_AA,
-            )
-            if inner > 0:
-                cv2.ellipse(
-                    stroke_patch,
-                    (cx_i, cy_i),
-                    (inner, inner),
-                    0,
-                    start,
-                    end,
-                    color,
-                    thick,
-                    lineType=cv2.LINE_AA,
-                )
-            for ang in (start, end):
-                rad = math.radians(ang)
-                x_o = int(round(cx_i + outer * math.cos(rad)))
-                y_o = int(round(cy_i + outer * math.sin(rad)))
-                x_i = int(round(cx_i + inner * math.cos(rad)))
-                y_i = int(round(cy_i + inner * math.sin(rad)))
-                cv2.line(
-                    stroke_patch, (x_i, y_i), (x_o, y_o), color, thick, lineType=cv2.LINE_AA
-                )
-        _paste_stroke_over_blur(
-            bgra,
-            stroke_patch,
-            x,
-            y,
-            backdrop=stroke_backdrop,
-            backdrop_x=stroke_backdrop_x,
-            backdrop_y=stroke_backdrop_y,
-            opacity=stroke_opacity,
-        )
-
-
-def _draw_circle_pair(
-    bgra: np.ndarray,
-    *,
-    cx: float,
-    cy: float,
-    fraction: float,
-    show_accent: bool,
-    theme: _NpTheme | None = None,
-) -> None:
-    """Volume / circular-NP ring: grey track, UI-color level, black center.
-
-    Pure-black track on the black stage reads as a "blacked out" zone once the
-    TMDb intro spin stops (especially at low / zero volume). Chrome-grey empty
-    track + edge strokes keep the widget present; theme.ui shows level. Center
-    disc stays pure black (not the settings button swatch).
-    """
-    del show_accent  # track always drawn; UI overlay follows fraction
-    th = theme or np_theme_from_settings()
-    frac = max(0.0, min(1.0, float(fraction)))
-    # Empty headroom — opaque enough to read on black / blurred artwork.
-    _draw_progress_ring(
-        bgra,
-        cx=cx,
-        cy=cy,
-        outer_r=_RING_OUTER_R,
-        inner_r=_RING_INNER_R,
-        fraction=1.0,
-        fill_bgr=_COLOR_UNFILLED_BGR,
-        fill_opacity=1.0,
-        stroke=0,
-    )
-    if frac > 1e-6:
-        _draw_progress_ring(
-            bgra,
-            cx=cx,
-            cy=cy,
-            outer_r=_RING_OUTER_R,
-            inner_r=_RING_INNER_R,
-            fraction=frac,
-            fill_bgr=th.ui_bgr,
-            fill_opacity=1.0,
-            stroke=0,
-        )
-    # Outer / inner rim so the annulus stays defined even at 0% volume.
-    _draw_progress_ring(
-        bgra,
-        cx=cx,
-        cy=cy,
-        outer_r=_RING_OUTER_R,
-        inner_r=_RING_INNER_R,
-        fraction=1.0,
-        fill_bgr=_COLOR_UNFILLED_BGR,
-        fill_opacity=0.0,
-        stroke=2,
-        stroke_bgr=_COLOR_UNFILLED_BGR,
-        stroke_opacity=0.85,
-    )
-    _draw_filled_circle_bgra(
-        bgra,
-        cx=cx,
-        cy=cy,
-        r=_RING_INNER_R,
-        fill_bgr=_COLOR_CENTER_BLACK_BGR,
-        fill_opacity=1.0,
-    )
-
-
-@lru_cache(maxsize=1)
-def _header_digital7_size_px() -> int:
-    """Digital-7 size for the header clock / TRT: digit ink as tall as the
-    Sharp Sans header chrome (music album title) it shares the band with."""
-    draw = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
-    _l, t, _r, b = draw.textbbox((0, 0), "0", font=_load_sharp_extrabold(int(NP_HEADER_CLOCK_SIZE_PX)))
-    _l, t7, _r, b7 = draw.textbbox((0, 0), "0", font=_load_digital7(100))
-    return max(12, int(round(100.0 * (b - t) / max(1, b7 - t7))))
-
-
-@lru_cache(maxsize=8)
-def _header_trt_size_px(template: str, max_w: int, max_h: int) -> int:
-    """Largest Digital-7 size whose ``template`` ink fits ``max_w``×``max_h``.
-
-    Callers pass the label with every digit as ``8`` so the size only changes
-    when the readout drops a field (e.g. under an hour), not every second.
-    """
-
-    def ink(size: int) -> tuple[int, int]:
-        a = _matching_hhmm_patch(template, size_px=size, pad_y=size // 2)[:, :, 3] > 8
-        rows, cols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
-        if rows.size == 0:
-            return (0, 0)
-        return (int(cols.max() - cols.min() + 1), int(rows.max() - rows.min() + 1))
-
-    probe = 200
-    w, h = ink(probe)
-    if w <= 0 or h <= 0:
-        return 12
-    size = int(probe * min(max_w / w, max_h / h))
-    while size > 12:
-        w, h = ink(size)
-        if w <= max_w and h <= max_h:
-            break
-        size -= 1
-    return max(12, size)
-
-
-def _matching_hhmm_patch(
-    text: str,
-    *,
-    size_px: int,
-    fill_rgb: tuple[int, int, int] = (255, 255, 255),
-    pad_y: int = 10,
-) -> np.ndarray:
-    """Digital-7 time using clock-saver matching-cell spacing (skinny ``1`` / ``:`` / ``-``).
-
-    Large sizes need a bigger ``pad_y``: Digital-7 ink overhangs its cell."""
-    from pigeon.widgets.clock_saver import (
-        _HHMMSS_CHAR_SET,
-        _cell_metrics,
-        _hhmmss_advance,
-    )
-
-    label = str(text or "").strip()
-    if not label:
-        return np.zeros((1, 1, 4), dtype=np.uint8)
-    font = _load_digital7(size_px)
-    probe = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-    charset = _HHMMSS_CHAR_SET + "-"
-    matching_w, cell_h = _cell_metrics(draw, font, charset)
-    total_w = 0
-    advances: list[int] = []
-    for ch in label:
-        if ch == "-":
-            adv = max(1, int(round(0.5 * matching_w)))
-        else:
-            adv = _hhmmss_advance(matching_w, ch)
-        advances.append(adv)
-        total_w += adv
-    pad_x = 4
-    img = Image.new(
-        "RGBA",
-        (max(1, total_w + pad_x * 2), max(1, cell_h + pad_y * 2)),
-        (0, 0, 0, 0),
-    )
-    draw = ImageDraw.Draw(img)
-    x = pad_x
-    cy = pad_y + cell_h // 2
-    color = (*fill_rgb, 255)
-    for ch, adv in zip(label, advances):
-        draw.text((x + adv // 2, cy), ch, font=font, fill=color, anchor="mm")
-        x += adv
-    return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGBA2BGRA)
-
-
-def format_status_bar_timecode(raw: str, *, remaining: bool = False) -> str:
-    """Clock-saver duration: drop hours when they are 00; remaining is ``-MM:SS``."""
-    s = str(raw or "").strip()
-    if not s:
-        return ""
-    if s.upper() == "LIVE":
-        return "LIVE"
-    sign = s.startswith("-")
-    body = s[1:] if sign else s
-    parts = [p for p in re.split(r"[:.]", body) if p != ""]
-    try:
-        nums = [max(0, int(p)) for p in parts]
-    except ValueError:
-        return s
-    hours = minutes = seconds = 0
-    if len(nums) >= 3:
-        hours, minutes, seconds = nums[0], nums[1], nums[2]
-    elif len(nums) == 2:
-        minutes, seconds = nums[0], nums[1]
-    elif len(nums) == 1:
-        seconds = nums[0]
-        minutes, seconds = divmod(seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        out = f"{hours}:{minutes:02d}:{seconds:02d}"
-    else:
-        out = f"{minutes:02d}:{seconds:02d}"
-    if remaining or sign:
-        out = "-" + out.lstrip("-")
-    return out
-
-
-def format_countdown_timecode(raw: str) -> str:
-    """TT-countdown remaining clock: never a leading-zero field, always ``-``.
-
-    Hours drop off the left when they hit 0 (``-1:00:00`` → ``-59:59``). The
-    new leftmost number is not zero-padded, so the string shortens by one
-    digit at each decade (``-10:00`` → ``-9:59``, ``-1:00`` → ``-59``).
-    """
-    s = str(raw or "").strip()
-    if not s:
-        return ""
-    if s.upper() == "LIVE":
-        return "LIVE"
-    body = s[1:] if s.startswith("-") else s
-    parts = [p for p in re.split(r"[:.]", body) if p != ""]
-    try:
-        nums = [max(0, int(p)) for p in parts]
-    except ValueError:
-        return "-" + body if not s.startswith("-") else s
-    hours = minutes = seconds = 0
-    if len(nums) >= 3:
-        hours, minutes, seconds = nums[0], nums[1], nums[2]
-    elif len(nums) == 2:
-        minutes, seconds = nums[0], nums[1]
-    elif len(nums) == 1:
-        seconds = nums[0]
-        minutes, seconds = divmod(seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        out = f"{hours}:{minutes:02d}:{seconds:02d}"
-    elif minutes > 0:
-        out = f"{minutes}:{seconds:02d}"
-    else:
-        out = f"{seconds}"
-    return "-" + out
-
-
-def _draw_volume_selected_pie(
-    bgra: np.ndarray,
-    *,
-    cx: float,
-    cy: float,
-    fraction: float,
-    theme: _NpTheme | None = None,
-) -> None:
-    """UI-color volume pie from 12 o'clock clockwise; SVG already paints the grey track."""
-    th = theme or np_theme_from_settings()
-    frac = max(0.0, min(1.0, float(fraction)))
-    if frac <= 1e-6:
-        return
-    _draw_progress_ring(
-        bgra,
-        cx=cx,
-        cy=cy,
-        outer_r=VOLUME_OUTER_R,
-        inner_r=VOLUME_INNER_R,
-        fraction=frac,
-        fill_bgr=th.ui_bgr,
-        fill_opacity=1.0,
-        stroke=0,
-        round_end=True,
-    )
 
 
 def _clock_hhmm(now: datetime | None = None) -> str:

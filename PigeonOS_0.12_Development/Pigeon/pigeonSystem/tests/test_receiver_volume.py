@@ -768,6 +768,11 @@ class TelnetHubTests(unittest.TestCase):
     def test_stale_snapshot_withheld_when_disconnected(self) -> None:
         from pigeon.receiver_denon_telnet import _VOLUME_HUB, query_denon_volume_telnet
 
+        # The hub is connected (setUp), but the first MV line arrives on its reader thread
+        # a moment later: wait for it instead of asserting on the very first poll.
+        end = time.monotonic() + 3.0
+        while time.monotonic() < end and not query_denon_volume_telnet("127.0.0.1").get("MV"):
+            time.sleep(0.02)
         self.assertTrue(query_denon_volume_telnet("127.0.0.1").get("MV"))
         _VOLUME_HUB._connected = ""
         with _VOLUME_HUB._state:

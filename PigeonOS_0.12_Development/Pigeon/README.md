@@ -51,7 +51,7 @@ Pigeon is a full-screen media display and control surface. It can show playback 
 - **Image UI protocol:** layout/compositing rules for overlays, logos, and background content are handled in `pigeonSystem/pigeon/image_ui_protocol.py`.
 - **Widget protocol:** widget behavior contracts and shell integration live in `pigeonSystem/pigeon/widget_protocol.py` and `pigeonSystem/pigeon/widget_shell.py`.
 - **Device delegation protocol:** feature capability fallback/ordering and advanced matrix behavior are driven by `pigeonSystem/device_capability_matrix.py`, `pigeonSystem/settings_advanced_matrix.py`, and app-state delegation logs.
-- **TMDB fetch protocol:** query generation, retries, and artwork preparation flow through `pigeonSystem/pigeon/tmdb_poster.py` plus retry logging.
+- **TMDB fetch protocol:** query rules live in `pigeonSystem/pigeon/tmdb_query.py` (match mode in `tmdb_match_mode.py`); search, retries, and artwork preparation flow through `pigeonSystem/pigeon/tmdb_poster.py` plus retry logging.
 - **Startup protocol:** splash animation starts first, then visualizer startup choreography runs (float on -> flap -> ascend -> soar -> float off).
 
 ## UI views
