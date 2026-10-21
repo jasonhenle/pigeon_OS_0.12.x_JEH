@@ -622,8 +622,14 @@ def _rerank_scored_by_trt(
     *,
     media_kind: MediaKind | None,
     title_pick: dict | None,
+    watch_provider_ids: frozenset[int] | None = None,
 ) -> dict | None:
-    """Prefer title hits whose TMDb runtime matches Apple TV TRT."""
+    """
+    Prefer title hits whose TMDb runtime matches Apple TV TRT.
+
+    A hit listed on the foreground service outranks one that merely has a closer runtime:
+    streaming runtimes include credits, so a different film of the same name can look closer.
+    """
     from pigeon.display_confidence import TRT_AGREE
 
     if _PLAYER_DURATION_S is None or not scored:
@@ -636,9 +642,12 @@ def _rerank_scored_by_trt(
     for raw, rk in eligible[:_TRT_ENRICH_CAP]:
         item = enrich_item_runtime(raw, media_kind) if media_kind is not None else raw
         ranked.append((item, rk, _trt_score_for_item(item)))
+    def on_service(row: tuple[dict, tuple[int, int], float | None]) -> int:
+        return _service_availability_score(row[0], media_kind, watch_provider_ids)
+
     agree = [row for row in ranked if row[2] is not None and row[2] >= TRT_AGREE]
     if agree:
-        return max(agree, key=lambda row: (row[2], row[1]))[0]
+        return max(agree, key=lambda row: (on_service(row), row[2], row[1]))[0]
     weak = [
         row
         for row in ranked
@@ -646,7 +655,7 @@ def _rerank_scored_by_trt(
         and not _trt_rejects(_PLAYER_DURATION_S, row[0], media_kind)
     ]
     if weak:
-        return max(weak, key=lambda row: (row[2], row[1]))[0]
+        return max(weak, key=lambda row: (on_service(row), row[2], row[1]))[0]
     if any(row[2] is None for row in ranked):
         return title_pick
     return None
@@ -729,7 +738,12 @@ def _pick_scored_best(
     )
     if _PLAYER_DURATION_S is None:
         return title_pick
-    return _rerank_scored_by_trt(ranked, media_kind=media_kind, title_pick=title_pick)
+    return _rerank_scored_by_trt(
+        ranked,
+        media_kind=media_kind,
+        title_pick=title_pick,
+        watch_provider_ids=watch_provider_ids,
+    )
 
 
 def _best_with_poster_from_results(

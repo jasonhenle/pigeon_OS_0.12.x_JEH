@@ -33,3 +33,23 @@ class ListedOnlyElsewhereTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RerankPrefersServiceTests(unittest.TestCase):
+    def test_listed_title_beats_closer_runtime(self):
+        disney_frozen = {"id": 1, "title": "Frozen"}
+        horror_frozen = {"id": 2, "title": "Frozen"}
+        scored = [(disney_frozen, (5, -6)), (horror_frozen, (5, -6))]
+        trt = {1: 0.8, 2: 0.95}
+        listed = {1: DISNEY, 2: None}
+        with (
+            mock.patch.object(tmdb_poster, "_PLAYER_DURATION_S", 6406.0),
+            mock.patch.object(tmdb_poster, "enrich_item_runtime", side_effect=lambda it, k: it),
+            mock.patch.object(tmdb_poster, "_trt_score_for_item", side_effect=lambda it: trt[it["id"]]),
+            mock.patch.object(tmdb_poster, "_trt_rejects", return_value=False),
+            mock.patch.object(tmdb_poster, "_tmdb_watch_provider_ids", side_effect=lambda k, i: listed[i]),
+        ):
+            pick = tmdb_poster._rerank_scored_by_trt(
+                scored, media_kind="movie", title_pick=horror_frozen, watch_provider_ids=DISNEY
+            )
+        self.assertEqual(pick["id"], 1)
