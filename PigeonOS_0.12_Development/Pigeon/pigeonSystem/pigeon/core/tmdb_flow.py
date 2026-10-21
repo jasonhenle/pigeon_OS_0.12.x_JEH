@@ -1554,6 +1554,12 @@ def spawn_tmdb_poster_fetch(
                 candidates = [q] + [c for c in candidates if c != q]
             if not candidates:
                 candidates = [q]
+            if isinstance(md_raw, dict):
+                from pigeon.raw_title import full_title_query_from_metadata
+
+                full_title = full_title_query_from_metadata(md_raw)
+                if full_title:
+                    candidates = [full_title] + [c for c in candidates if c != full_title]
             # "Title (Taylor's Version)" / "(Extended Cut)": TMDb lists the bare title.
             from pigeon.tmdb_poster import strip_trailing_parenthetical
 
@@ -1603,6 +1609,11 @@ def spawn_tmdb_poster_fetch(
                         break
                     if ok_try:
                         loose.append((cand, msg_try, int(tier_try)))
+            if not ok_w and not loose:
+                # Every hit was listed only on other services: show the text, not that title's art.
+                mism = [a for a in attempts if a.get("outcome") == "service_mismatch"]
+                if mism:
+                    msg_w = str(mism[-1].get("failure") or msg_w)
             if not ok_w and loose:
                 # A hit whose title does not match the query (It Sounds
                 # Incredible for "IT: Welcome to Derry") is not a match: show

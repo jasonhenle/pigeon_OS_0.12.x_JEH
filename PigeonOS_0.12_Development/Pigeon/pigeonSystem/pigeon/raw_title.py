@@ -638,3 +638,24 @@ def tmdb_query_candidates_from_metadata(metadata: Mapping[str, Any] | None) -> l
     for cand in list(out):
         add(_strip_singalong(cand))
     return out
+
+
+def full_title_query_from_metadata(metadata: Mapping[str, Any] | None) -> str | None:
+    """
+    The player's title verbatim when shortening it would change the search (``Show: Subtitle``).
+
+    Searched before the shortened show name: a real work named ``Into the Unknown: Making
+    Frozen 2`` must not be reduced to the unrelated ``Into the Unknown``. When TMDb has no
+    title containing the whole string, the caller falls back to the shortened candidates.
+    """
+    if not metadata:
+        return None
+    full = " ".join(str(raw_title_from_metadata_dict(metadata).raw_title or "").split())
+    if not full:
+        return None
+    try:
+        from pigeon.tmdb_poster import refine_tmdb_search_query
+    except ImportError:
+        return None
+    short = refine_tmdb_search_query(full) or full
+    return full if short.casefold() != full.casefold() else None
