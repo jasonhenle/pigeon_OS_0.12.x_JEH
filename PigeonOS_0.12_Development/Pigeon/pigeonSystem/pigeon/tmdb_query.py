@@ -846,6 +846,21 @@ def equivalent_tmdb_search_queries(a: str, b: str) -> bool:
     return False
 
 
+_SINGALONG_RE = re.compile(
+    r"[\(\[]?\s*[-:–—]?\s*\bsing[\s-]*a[\s-]*long\b(?:\s+(?:edition|version|cut))?\s*[\)\]]?",
+    re.I,
+)
+
+
+def _strip_singalong(s: str) -> str | None:
+    """``Frozen Sing-Along`` -> ``Frozen``; None when there is no sing-along marker."""
+    if not _SINGALONG_RE.search(s):
+        return None
+    out = _SINGALONG_RE.sub(" ", s)
+    out = re.sub(r"\s+", " ", out).strip(" -:–—|,")
+    return out or None
+
+
 def _tmdb_query_variants(raw: str) -> list[str]:
     """
     Extra query strings to try when now-playing metadata appends app names or episode titles
@@ -951,4 +966,9 @@ def _tmdb_query_variants(raw: str) -> list[str]:
                 and not _pair_is_official_subtitle_title(left, right)
             ):
                 add(left)
+    # Sing-along screenings are listed on TMDb under the plain film title.
+    for base in (q0, raw0):
+        plain = _strip_singalong(base)
+        if plain and not is_degenerate_tmdb_query(plain):
+            add(plain)
     return out
