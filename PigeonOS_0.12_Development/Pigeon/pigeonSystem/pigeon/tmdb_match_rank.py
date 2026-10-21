@@ -135,32 +135,52 @@ def _match_rank_literal(query: str, item: dict) -> tuple[int, int]:
     nq = _norm_query(query)
     if not nq:
         return (0, 0)
-    q_tokens = [t for t in nq.split() if t]
-    if not q_tokens:
+    if not [t for t in nq.split() if t]:
         return (0, 0)
+    nq_folded = _fold_sequel_numeral(nq)
 
     best: tuple[int, int] = (0, -(10**9))
     for title in _result_titles(item):
         nt = _norm_query(title)
         if not nt:
             continue
-        t_tokens = [t for t in nt.split() if t]
-        t_set = set(t_tokens)
         neg_len = -len(nt)
-
-        tier = 0
-        if nt == nq:
-            tier = 5
-        elif len(q_tokens) >= 2 and _tokens_subsequence(q_tokens, t_tokens):
-            tier = 4
-        elif all(qt in t_set for qt in q_tokens):
-            tier = 3
-        elif nq in nt:
-            tier = 2
-        elif all(any(qt in tw for tw in t_tokens) for qt in q_tokens):
-            tier = 1
+        tier = _norm_tier(nq, nt)
+        # ``Frozen 2`` vs TMDb's ``Frozen II``: compare with the trailing numeral folded too.
+        if nq_folded != nq or _fold_sequel_numeral(nt) != nt:
+            tier = max(tier, _norm_tier(nq_folded, _fold_sequel_numeral(nt)))
 
         cand = (tier, neg_len)
         if cand > best:
             best = cand
     return best
+
+
+_ROMAN_SEQUEL = {"ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "viii": "8", "ix": "9"}
+
+
+def _fold_sequel_numeral(norm: str) -> str:
+    """``frozen ii`` -> ``frozen 2``: a trailing roman numeral after at least one other word."""
+    tokens = norm.split()
+    if len(tokens) >= 2 and tokens[-1] in _ROMAN_SEQUEL:
+        tokens[-1] = _ROMAN_SEQUEL[tokens[-1]]
+        return " ".join(tokens)
+    return norm
+
+
+def _norm_tier(nq: str, nt: str) -> int:
+    """Match tier (see :func:`_match_rank_literal`) for already-normalized query and title."""
+    q_tokens = nq.split()
+    t_tokens = nt.split()
+    t_set = set(t_tokens)
+    if nt == nq:
+        return 5
+    if len(q_tokens) >= 2 and _tokens_subsequence(q_tokens, t_tokens):
+        return 4
+    if all(qt in t_set for qt in q_tokens):
+        return 3
+    if nq in nt:
+        return 2
+    if all(any(qt in tw for tw in t_tokens) for qt in q_tokens):
+        return 1
+    return 0
