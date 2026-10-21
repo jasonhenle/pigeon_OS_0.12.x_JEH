@@ -130,9 +130,12 @@ from pigeon.tmdb_match_mode import (  # noqa: F401  (re-exported for existing im
 from pigeon.runtime_paths import pigeon_state_dir as _pigeon_state_dir
 from pigeon.tmdb_match_rank import (  # noqa: F401  (re-exported for existing importers)
     _CREATOR_POSSESSIVE_RE,
+    _ROMAN_SEQUEL,
     _creator_possessive_title,
+    _fold_sequel_numeral,
     _match_rank,
     _match_rank_literal,
+    _norm_tier,
     _result_titles,
     _short_acronym_compact_norm,
     _tokens_subsequence,
