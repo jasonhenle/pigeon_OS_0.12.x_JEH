@@ -631,4 +631,10 @@ def tmdb_query_candidates_from_metadata(metadata: Mapping[str, Any] | None) -> l
         add(str(metadata.get(key) or ""))
     if not out:
         add(resolve_metadata_tmdb_query(metadata))
+    # Sing-along screenings are listed on TMDb under the plain title; try that last
+    # so it is matched and ranked as its own query, not against the sing-along text.
+    from pigeon.tmdb_query import _strip_singalong
+
+    for cand in list(out):
+        add(_strip_singalong(cand))
     return out
