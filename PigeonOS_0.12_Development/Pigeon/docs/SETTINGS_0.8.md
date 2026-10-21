@@ -16,7 +16,7 @@ Preferences zone nav: zone1 → zone5 → **color** → BACK. The color control 
 
 | Name | Module / surface | Asset |
 |------|------------------|-------|
-| **settings_main** | `pigeon/widgets/main_settings.py` + OpenCV composite | `pigeonAssets/settings_0.8/settings_main.svg` |
+| **settings_main** | `pigeon/widgets/main_settings.py` (widget + render; state in `settings_state.py`, SVG state application in `settings_scene.py`) + OpenCV composite | `pigeonAssets/settings_0.8/settings_main.svg` |
 | **pigeon settings** | `pigeon/widgets/pigeon_settings.py` (0.12 three-section page, see below) | `pigeonAssets/settings/pigeon/settings_pigeon.svg` |
 | **preferences** | `pigeon/widgets/preferences_settings.py` | `pigeon_settings_preferences.svg` |
 | **update popup** | `pigeon/widgets/update_popup.py` | update SVG layers |
@@ -105,7 +105,7 @@ Override main SVG path with env `PIGEON_MAIN_SETTINGS_SVG`.
 - `_group` — parent grouping / position
 - `_container` — static chrome; bottommost in a group when present
 
-Illustrator ids encode `_` as `_x5F_` and leading `0` as `_x30_`. Use `decode_svg_id` / `encode_svg_id` in `main_settings.py`.
+Illustrator ids encode `_` as `_x5F_` and leading `0` as `_x30_`. Use `decode_svg_id` / `encode_svg_id` (defined in `settings_svg_tree.py`, still importable from `main_settings.py`).
 
 ## Colors
 
