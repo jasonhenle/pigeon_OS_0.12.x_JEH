@@ -16,7 +16,6 @@ from typing import Callable
 
 from pigeon.np_layout import (
     DEFAULT_16X9_POSTER_ZONE,
-    YOUTUBE_ZONE_WIDGETS,
     apply_tt_countdown_16x9_override,
     canonical_zone_widget,
     cast_names_for_zone,
@@ -74,10 +73,9 @@ def effective_zone_widgets(
 
     Music ``cast_info`` is track titles, so it stays even with no TMDb names.
 
-    When ``poster_16x9`` is True, YouTube layout wins over prefs: zones 1/2
-    off, volume in zone 3, status bar in zone 5, 16×9 thumbnail in zone 6.
-    Zone 4 is reserved for the video title (drawn in Pillow, not a widget).
-    The thumbnail does not need to have arrived yet — the slot stays reserved.
+    YouTube (``poster_16x9``) uses the same saved layout as regular now
+    playing; its thumbnail is drawn as the wide art and the video title fills
+    the zone-4 strip.
 
     ``saved_zone_widgets(content_mode)`` supplies the prefs layout when ``zone_widgets``
     is not given; callers pass their own lookup so it stays patchable.
@@ -99,11 +97,6 @@ def effective_zone_widgets(
             z if z in keep_clock or (z in keep_vol and has_volume) else ""
             for z in zones
         )
-    if poster_16x9 and not saver_layout:
-        youtube = list(YOUTUBE_ZONE_WIDGETS)
-        if not has_position:
-            youtube[4] = ""
-        return (youtube[0], youtube[1], youtube[2], youtube[3], youtube[4])
     # Wide TT countdown spans zone 6 (slots 1+2) or zone 7 (slots 2+3):
     # blank the covered sibling portrait slot before dedupe.
     zones = list(apply_tt_countdown_16x9_override(tuple(zones)))

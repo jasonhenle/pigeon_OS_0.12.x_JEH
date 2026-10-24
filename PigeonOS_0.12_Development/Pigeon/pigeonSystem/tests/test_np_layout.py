@@ -227,6 +227,15 @@ def tearDownModule() -> None:
         _NO_WASH.stop()
 
 
+REGULAR_NP_ZONES = ("tt_countdown_16x9", "", "volume", "cast_info", "status_bar")
+
+
+def _force_regular_np_zones() -> None:
+    from pigeon.widgets import view_circles as vc
+
+    vc._default_zone_widget_assignments = lambda: REGULAR_NP_ZONES  # type: ignore[method-assign]
+
+
 def _force_default_np_zones() -> None:
     from pigeon.widgets import view_circles as vc
 
@@ -848,10 +857,10 @@ class NowPlayingFrameTests(unittest.TestCase):
         self.assertGreater(int(green.sum()), 80)
 
     def test_16x9_poster_overrides_prefs_into_zone6(self) -> None:
-        from pigeon.np_layout import DEFAULT_16X9_POSTER_ZONE, YOUTUBE_ZONE_WIDGETS
+        from pigeon.np_layout import DEFAULT_16X9_POSTER_ZONE
         from pigeon.widgets.view_circles import ViewCirclesWidget, _poster_geometry
 
-        _force_default_np_zones()
+        _force_regular_np_zones()
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
         widget = ViewCirclesWidget(assets_dir=assets)
         landscape = np.full((90, 160, 3), (0, 255, 0), dtype=np.uint8)
@@ -868,8 +877,7 @@ class NowPlayingFrameTests(unittest.TestCase):
             poster_bgra=landscape,
         )
         self.assertEqual(DEFAULT_16X9_POSTER_ZONE, 6)
-        self.assertEqual(widget._poster_zone(), 6)
-        self.assertEqual(widget._assignments(), YOUTUBE_ZONE_WIDGETS)
+        self.assertEqual(widget._assignments(), REGULAR_NP_ZONES)
         frame = widget.bgra_frame()
         self.assertIsNotNone(frame)
         assert frame is not None
@@ -1991,10 +1999,10 @@ class SixteenByNinePosterTests(unittest.TestCase):
         self.assertEqual(widget._assignments()[2], "volume")
 
     def test_youtube_forces_zone6_even_with_portrait_art(self) -> None:
-        from pigeon.np_layout import YOUTUBE_ZONE_WIDGETS
+
         from pigeon.widgets.view_circles import ViewCirclesWidget
 
-        _force_default_np_zones()
+        _force_regular_np_zones()
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
         widget = ViewCirclesWidget(assets_dir=assets)
         portrait = np.full((80, 54, 3), (0, 255, 0), dtype=np.uint8)
@@ -2010,14 +2018,13 @@ class SixteenByNinePosterTests(unittest.TestCase):
             service_name="YouTube",
             poster_bgra=portrait,
         )
-        self.assertEqual(widget._poster_zone(), 6)
-        self.assertEqual(widget._assignments(), YOUTUBE_ZONE_WIDGETS)
-
+        self.assertEqual(widget._assignments(), REGULAR_NP_ZONES)
+        
     def test_is_youtube_flag_uses_zone6_without_service_label(self) -> None:
-        from pigeon.np_layout import YOUTUBE_ZONE_WIDGETS
+
         from pigeon.widgets.view_circles import ViewCirclesWidget
 
-        _force_default_np_zones()
+        _force_regular_np_zones()
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
         widget = ViewCirclesWidget(assets_dir=assets)
         landscape = np.full((90, 160, 3), (0, 255, 0), dtype=np.uint8)
@@ -2035,10 +2042,7 @@ class SixteenByNinePosterTests(unittest.TestCase):
             poster_bgra=landscape,
         )
         self.assertTrue(widget._wants_16x9_poster())
-        self.assertEqual(widget._poster_zone(), 6)
-        self.assertEqual(widget._assignments(), YOUTUBE_ZONE_WIDGETS)
-        self.assertEqual(widget._assignments()[0], "")
-        self.assertEqual(widget._assignments()[2], "volume")
+        self.assertEqual(widget._assignments(), REGULAR_NP_ZONES)
 
     def test_16x9_slot_is_sixteen_by_nine(self) -> None:
         from pigeon.np_layout import POSTER_16X9_LOCAL
@@ -2311,7 +2315,7 @@ class EmptyWidgetTests(unittest.TestCase):
             _layout_is_fullscreen_clock,
         )
 
-        _force_default_np_zones()
+        _force_regular_np_zones()
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
         widget = ViewCirclesWidget(assets_dir=assets)
         widget.update_state(
@@ -2326,11 +2330,8 @@ class EmptyWidgetTests(unittest.TestCase):
             missing_art=True,
             service_name="YouTube",
         )
-        self.assertEqual(widget._poster_zone(), 6)
-        self.assertNotIn("poster", widget._assignments())
-        self.assertEqual(widget._assignments()[0], "")
-        self.assertEqual(widget._assignments()[2], "volume")
-        self.assertEqual(widget._assignments()[3], "")
+        self.assertIsNone(widget._poster_zone())
+        self.assertEqual(widget._assignments(), REGULAR_NP_ZONES)
         self.assertFalse(_layout_is_fullscreen_clock(widget._assignments()))
 
     def test_populated_poster_keeps_zoned_clock(self) -> None:
@@ -3251,19 +3252,13 @@ class WidgetShimmerTests(unittest.TestCase):
         assert b is not None
         self.assertFalse(np.array_equal(a, b))
 
-    def test_searching_youtube_shimmers_poster(self) -> None:
+    def test_searching_youtube_uses_regular_layout(self) -> None:
         from pigeon.widgets import view_circles as vc
-        from pigeon.widgets.view_circles import ViewCirclesWidget, _poster_geometry
+        from pigeon.widgets.view_circles import ViewCirclesWidget
 
         assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
         widget = ViewCirclesWidget(assets_dir=assets)
-        vc._default_zone_widget_assignments = lambda: (  # type: ignore[method-assign]
-            "clock",
-            "poster",
-            "volume",
-            "cast_info",
-            "status_bar",
-        )
+        vc._default_zone_widget_assignments = lambda: REGULAR_NP_ZONES  # type: ignore[method-assign]
         widget.update_state(
             progress=0.1,
             elapsed_text="0:10",
@@ -3277,13 +3272,8 @@ class WidgetShimmerTests(unittest.TestCase):
             is_youtube=True,
             service_name="YouTube",
         )
-        self.assertEqual(widget._poster_zone(), 6)
-        frame = widget.bgra_frame()
-        self.assertIsNotNone(frame)
-        assert frame is not None
-        px, py, pw, ph, _prx = _poster_geometry("video", zone=6)
-        plate = frame[py : py + ph, px : px + pw, 3]
-        self.assertGreater(int(plate.max()), 40)
+        self.assertEqual(widget._assignments(), REGULAR_NP_ZONES)
+        self.assertIsNotNone(widget.bgra_frame())
 
 
 class MusicTtAlbumArtTests(unittest.TestCase):
