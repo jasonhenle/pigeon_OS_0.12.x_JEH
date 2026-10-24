@@ -67,7 +67,7 @@ class FocusRingTests(unittest.TestCase):
     def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
             ps.pigeon_focus_ring("general"),
-            ("exit", "update", "reset", "restart", "option:2", "section2", "section3"),
+            ("exit", "update", "reset", "restart", "option:2", "option:5", "section2", "section3"),
         )
         self.assertEqual(
             ps.pigeon_focus_ring("theme"),

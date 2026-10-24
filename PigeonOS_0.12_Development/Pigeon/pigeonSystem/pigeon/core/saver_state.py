@@ -989,7 +989,7 @@ def _zone11_selected() -> bool:
 
         return bool(zone11_selected())
     except Exception:
-        return False
+        return True
 
 
 def _visualizer_mode_active() -> bool:

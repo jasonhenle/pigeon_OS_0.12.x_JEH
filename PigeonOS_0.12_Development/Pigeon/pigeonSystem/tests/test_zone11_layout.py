@@ -318,5 +318,21 @@ class ArtworkBackdropTests(unittest.TestCase):
         self.assertGreaterEqual(vc._ARTWORK_BG_OPACITY, 0.35)
 
 
+class LayoutOptionTests(unittest.TestCase):
+    def test_option5_toggles_zone11_and_zone63(self) -> None:
+        from pigeon.widgets import options_settings as opts
+
+        vals = opts.write_options({}, persist=False)
+        self.assertEqual(vals["np_layout"], "zone11")
+        self.assertTrue(opts.zone11_selected({}))
+        self.assertTrue(opts.zone11_selected(type("S", (), {"options_values": vals})()))
+        flipped = opts.toggle_option(5, vals, persist=False)
+        self.assertEqual(flipped["np_layout"], "zone63")
+        state = type("S", (), {"options_values": flipped})()
+        self.assertFalse(opts.zone11_selected(state))
+        self.assertTrue(opts.option_is_b(5, flipped))
+        self.assertEqual(opts.toggle_option(5, flipped, persist=False)["np_layout"], "zone11")
+
+
 if __name__ == "__main__":
     unittest.main()

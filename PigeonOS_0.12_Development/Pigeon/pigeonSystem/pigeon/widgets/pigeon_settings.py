@@ -80,6 +80,7 @@ DEFAULT_VIEW = "general"
 # Option numbers (see :mod:`pigeon.widgets.options_settings`).
 OPT_TIME = 1
 OPT_TEMP = 2
+OPT_NP_LAYOUT = 5
 OPT_CLOCK_FORMAT = 6
 
 
@@ -98,7 +99,7 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
     Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
-    Slot("tbd_toggle", choices=("TBD", "TBD")),
+    Slot("toggle", f"option:{OPT_NP_LAYOUT}", choices=("ZONE 11", "ZONE 6,3")),
     Slot("tbd_toggle", choices=("TBD", "TBD")),
 )
 _THEME_SLOTS: tuple[Slot, ...] = tuple(
@@ -1167,6 +1168,7 @@ def factory_reset_pigeon_persisted_state() -> None:
 
 __all__ = [
     "OPT_CLOCK_FORMAT",
+    "OPT_NP_LAYOUT",
     "OPT_TEMP",
     "OPT_TIME",
     "Slot",

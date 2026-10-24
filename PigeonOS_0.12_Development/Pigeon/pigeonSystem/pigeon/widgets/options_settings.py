@@ -4,10 +4,11 @@
 (dark = red-tinted monochrome UI; the "dark" tile in the theme menu), ``option4``
 info / visualizer (what the now-playing zone 4 shows; no tile any more),
 ``option6`` digital / analog clock. Updates are always automatic (the OS
-installs the latest release only while nothing is playing); the old
-auto / manual ``option5`` is gone and any saved "manual" reads as auto.
-The zone 11 now-playing layout (TT across zones 1–3, input / volume / TRT strip
-in zone 4) is the permanent default. A long
+installs the latest release only while nothing is playing; the old
+auto / manual update switch is gone and any saved "manual" reads as auto).
+``option5`` picks the now-playing layout: zone 11 (TT across zones 1–3,
+input / volume / TRT strip in zone 4, the default) or the zone 6 + 3 look (wide
+TT in zone 6, volume in zone 3). A long
 encoder press still flips into the visualizer, see :mod:`pigeon.visualizer_mode`.
 Values persist under ``settings_options``.
 
@@ -34,6 +35,7 @@ _DEFAULTS: dict[str, Any] = {
     "idle_standby": 60,
     "clock_saver": "on",
     "zone4_mode": "info",
+    "np_layout": "zone11",
     "auto_update": "auto",
 }
 
@@ -43,6 +45,7 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (2, "temp_format", "f", "c"),
     (3, "color_format", "color", "dark"),
     (4, "zone4_mode", "info", "visualizer"),
+    (5, "np_layout", "zone11", "zone63"),
     (6, "clock_format", "digital", "analog"),
 )
 
@@ -69,6 +72,8 @@ def _normalize(raw: object) -> dict[str, Any]:
     )
     z4 = str(raw.get("zone4_mode") or out["zone4_mode"]).strip().lower()
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
+    nl = str(raw.get("np_layout") or out["np_layout"]).strip().lower()
+    out["np_layout"] = "zone63" if nl in ("zone63", "zone6", "zone 6,3", "6,3") else "zone11"
     cf = str(raw.get("clock_format") or out["clock_format"]).strip().lower()
     out["clock_format"] = "analog" if cf in ("analog", "analogue") else "digital"
     return out
@@ -194,9 +199,8 @@ def zone6_visualizer_default(state: MainSettingsState | None = None) -> bool:
 
 
 def zone11_selected(state: MainSettingsState | None = None) -> bool:
-    """Zone 11 is the permanent layout: TT across zones 1–3, input / volume / TRT in zone 4."""
-    _ = state
-    return True
+    """option5 = zone11 (default): TT across zones 1–3, input / volume / TRT in zone 4."""
+    return _vals(state)["np_layout"] == "zone11"
 
 
 def auto_update_enabled(state: MainSettingsState | None = None) -> bool:
