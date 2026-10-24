@@ -2132,8 +2132,6 @@ class ViewCirclesWidget:
         return zones
 
     def _poster_zone(self) -> int | None:
-        if self._wants_16x9_poster() and self._state.content_active:
-            return int(DEFAULT_16X9_POSTER_ZONE)
         if not self._has_drawable_poster():
             return None
         return _zone_for_widget(self._assignments(), "poster")
@@ -3652,7 +3650,7 @@ class ViewCirclesWidget:
 
     def _tt_source_bgra(self) -> np.ndarray | None:
         """Image for the TT slot: album art, TMDb logo, or the poster fallback."""
-        if self.content_mode == _CONTENT_MODE_MUSIC:
+        if self.content_mode == _CONTENT_MODE_MUSIC or self._state.is_youtube:
             src = self._poster_bgra
             if src is not None and getattr(src, "size", 0) > 0:
                 return src
@@ -4194,7 +4192,7 @@ class ViewCirclesWidget:
             view_w, view_h = TT_COUNTDOWN_VIEW_W, TT_COUNTDOWN_VIEW_H
         z = _zone_spec(int(zone))
         st = self._state
-        music = self.content_mode == _CONTENT_MODE_MUSIC
+        music = self.content_mode == _CONTENT_MODE_MUSIC or bool(st.is_youtube)
         tpatch = None
         if not music:
             label = format_countdown_timecode(st.remaining_text)

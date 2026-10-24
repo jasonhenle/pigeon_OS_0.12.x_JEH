@@ -417,7 +417,7 @@ class ZoneAdaptTests(unittest.TestCase):
             poster_16x9=True,
             zone_widgets=("clock", "poster", "volume", "cast_info", "status_bar"),
         )
-        self.assertEqual(zones, ("", "", "volume", "", "status_bar"))
+        self.assertEqual(zones, ("clock", "", "volume", "cast_info", "status_bar"))
         self.assertFalse(_layout_is_fullscreen_clock(zones))
 
     def test_populated_layout_is_not_fullscreen_clock(self) -> None:
@@ -428,14 +428,14 @@ class ZoneAdaptTests(unittest.TestCase):
         )
         self.assertFalse(_layout_is_fullscreen_clock(zones))
 
-    def test_16x9_override_clears_zones_1_2_and_4(self) -> None:
+    def test_16x9_keeps_the_regular_layout(self) -> None:
         zones = _effective_zone_widgets(
             has_position=True,
             cast_count=3,
             zone_widgets=("clock", "poster", "volume", "cast_info", "status_bar"),
             poster_16x9=True,
         )
-        self.assertEqual(zones, ("", "", "volume", "", "status_bar"))
+        self.assertEqual(zones, ("clock", "poster", "volume", "cast_info", "status_bar"))
 
     def test_16x9_does_not_eat_pausesaver_or_clocksaver(self) -> None:
         paused = _effective_zone_widgets(

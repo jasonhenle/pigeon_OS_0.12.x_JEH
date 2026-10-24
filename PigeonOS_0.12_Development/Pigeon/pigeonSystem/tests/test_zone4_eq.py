@@ -346,15 +346,14 @@ class YouTubeZone4Tests(unittest.TestCase):
         return w
 
     def test_toggle_swaps_video_title_for_visualizer(self) -> None:
-        from pigeon.np_layout import YOUTUBE_ZONE_WIDGETS
         from pigeon.widgets.view_circles import ZONE4_VISUALIZER_WIDGET
 
-        self.assertEqual(self._widget(visualizer=False)._assignments(), YOUTUBE_ZONE_WIDGETS)
+        regular = ("tt_countdown_16x9", "", "volume", "cast_info", "status_bar")
+        self.assertEqual(self._widget(visualizer=False)._assignments(), regular)
         w = self._widget(visualizer=True)
         zones = w._assignments()
         self.assertEqual(zones[3], ZONE4_VISUALIZER_WIDGET)
-        self.assertEqual((zones[2], zones[4]), (YOUTUBE_ZONE_WIDGETS[2], YOUTUBE_ZONE_WIDGETS[4]))
-        self.assertEqual(w._poster_zone(), 6)  # thumbnail stays
+        self.assertEqual((zones[2], zones[4]), (regular[2], regular[4]))
         self.assertTrue(w.wants_live_audio())
 
     def test_visualizer_replaces_the_title_in_the_frame(self) -> None:
