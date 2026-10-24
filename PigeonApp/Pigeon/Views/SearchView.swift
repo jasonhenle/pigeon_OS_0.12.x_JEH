@@ -77,6 +77,22 @@ struct PlayingNowSection: View {
             if detected == nil && manual == nil {
                 Text("Nothing playing").font(Theme.ui(15)).foregroundStyle(Theme.secondaryText)
             }
+            if detected == nil {
+                NavigationLink {
+                    NowPlayingFixView(client: store.client(for: device), deviceName: device.name, manual: true)
+                } label: {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(Theme.accent)
+                        Text(manual == nil ? "Search for a title to show" : "Search for a different title")
+                            .font(Theme.uiBold(16)).foregroundStyle(.white)
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tile()
+                }
+                .buttonStyle(.plain)
+            }
         }
         .onAppear { reattach() }
         .onChange(of: device.host) { _, _ in reattach() }
@@ -192,14 +208,18 @@ final class NowPlayingFixModel: ObservableObject {
 
     private let client: PigeonClient
     private let search: Search
+    /// Pins a title directly (nothing detected) instead of overriding a detected one.
+    let manual: Bool
     private let debounceDelay: Duration
     /// The in-flight (debounced) search; tests await it.
     private(set) var searchTask: Task<Void, Never>?
     /// Bumped on every change, so a reply for an older query is dropped.
     private var searchGeneration = 0
 
-    init(client: PigeonClient, debounce: Duration = .milliseconds(300), search: Search? = nil) {
+    init(client: PigeonClient, manual: Bool = false,
+         debounce: Duration = .milliseconds(300), search: Search? = nil) {
         self.client = client
+        self.manual = manual
         self.debounceDelay = debounce
         self.search = search ?? { q, kind, year, logos in
             try await client.suggest(q, logos: logos, kind: kind, year: year)
@@ -207,6 +227,7 @@ final class NowPlayingFixModel: ObservableObject {
     }
 
     func load() async {
+        guard !manual else { return }
         do {
             detail = try await client.nowPlayingDetail()
             errorText = nil
@@ -215,7 +236,11 @@ final class NowPlayingFixModel: ObservableObject {
 
     func pick(_ s: Suggestion) async {
         await run {
-            self.detail = try await self.client.applyPick(s)
+            if self.manual {
+                _ = try await self.client.setCurrentSearch(s)
+            } else {
+                self.detail = try await self.client.applyPick(s)
+            }
             self.query = ""
             self.notice = "Now showing “\(s.title)”."
         }
@@ -281,8 +306,8 @@ struct NowPlayingFixView: View {
     @Environment(\.dismiss) private var dismiss
     let deviceName: String
 
-    init(client: PigeonClient, deviceName: String) {
-        _model = StateObject(wrappedValue: NowPlayingFixModel(client: client))
+    init(client: PigeonClient, deviceName: String, manual: Bool = false) {
+        _model = StateObject(wrappedValue: NowPlayingFixModel(client: client, manual: manual))
         self.deviceName = deviceName
     }
 
@@ -291,7 +316,9 @@ struct NowPlayingFixView: View {
             Theme.canvas.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    if let d = model.detail {
+                    if model.manual {
+                        pickCard(nil)
+                    } else if let d = model.detail {
                         heardCard(d)
                         pickCard(d)
                     } else if model.errorText == nil {
@@ -304,7 +331,7 @@ struct NowPlayingFixView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .navigationTitle("Playing now")
+        .navigationTitle(model.manual ? "Show a title" : "Playing now")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .task { await model.load() }
@@ -330,10 +357,10 @@ struct NowPlayingFixView: View {
         .tile()
     }
 
-    private func pickCard(_ d: NowPlayingDetail) -> some View {
+    private func pickCard(_ d: NowPlayingDetail?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            LCDLabel(text: "Or pick the title yourself", size: 18, color: Theme.accent)
-            if d.override.active {
+            LCDLabel(text: d == nil ? "Pick the title" : "Or pick the title yourself", size: 18, color: Theme.accent)
+            if let d, d.override.active {
                 HStack {
                     Text(d.override.pick != nil ? "Picked by you · remembered" : "Edited by you · remembered")
                         .font(Theme.ui(14)).foregroundStyle(Theme.ok)
