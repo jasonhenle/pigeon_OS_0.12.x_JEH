@@ -7,12 +7,14 @@ in the app state file. ``start()`` is safe to call more than once.
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from typing import Any, Callable
 
-from pigeon.control_api import profile
+from pigeon.control_api import profile, tls
 from pigeon.control_api.discovery import Advertiser
-from pigeon.control_api.server import ControlServer, ControlService
+from pigeon.control_api.server import DEFAULT_TLS_PORT, ControlServer, ControlService
+from pigeon.runtime_paths import pigeon_state_dir
 
 _lock = threading.Lock()
 _server: ControlServer | None = None
@@ -30,6 +32,18 @@ def enabled() -> bool:
         return bool(read_app_state().get("control_api"))
     except Exception:
         return False
+
+
+def _flag(name: str, default: bool) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    return default if not raw else raw in ("1", "true", "yes", "on")
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except ValueError:
+        return default
 
 
 def pairing_code() -> str:
@@ -77,6 +91,18 @@ def start(
         if not enabled():
             return None
         try:
+            identity = None
+            if _flag("PIGEON_CONTROL_TLS", True):
+                try:
+                    identity = tls.ensure_identity(pigeon_state_dir(), device_id=profile.device_id())
+                except Exception as exc:
+                    # Fail closed: never fall back to serving tokens in clear because the cert step failed.
+                    print(f"[control_api] not started: TLS unavailable ({exc}). Set PIGEON_CONTROL_TLS=0 to "
+                          "run plain HTTP (insecure).", file=sys.stderr)
+                    return None
+            else:
+                print("[control_api] WARNING: PIGEON_CONTROL_TLS=0, bearer tokens travel over plain HTTP.",
+                      file=sys.stderr)
             svc = ControlService(
                 status_provider=status_provider, run_on_ui=run_on_ui,
                 metadata_provider=metadata_provider, fetch_provider=fetch_provider, respawn=respawn,
@@ -84,7 +110,12 @@ def start(
                 restart=restart, apply_update=apply_update, update_state=update_state,
                 pair_scan=pair_scan,
             )
-            srv = ControlServer(svc, port=port or int(os.environ.get("PIGEON_CONTROL_PORT") or profile.DEFAULT_PORT))
+            srv = ControlServer(
+                svc, port=port or _int_env("PIGEON_CONTROL_PORT", profile.DEFAULT_PORT),
+                tls=identity, tls_port=_int_env("PIGEON_CONTROL_TLS_PORT", DEFAULT_TLS_PORT),
+                # Legacy escape hatch for companions that predate pinned HTTPS; off unless asked for.
+                allow_plain=identity is not None and _flag("PIGEON_CONTROL_ALLOW_PLAIN", False),
+            )
             srv.start()
         except Exception:
             return None  # never take the display down for the companion API

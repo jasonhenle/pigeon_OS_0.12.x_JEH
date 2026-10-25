@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum PigeonError: LocalizedError, Equatable {
@@ -16,12 +17,64 @@ enum PigeonError: LocalizedError, Equatable {
     }
 }
 
-/// Talks to one device over HTTP. Stateless and cheap to create.
+/// Where a device serves HTTPS and which certificate (SHA-256 of its DER bytes, lowercase hex) to trust there.
+struct TLSPin: Codable, Hashable {
+    var port: Int
+    var fingerprint: String
+}
+
+/// Accepts exactly one self-signed certificate. The pin replaces chain and hostname checks, so a device
+/// reached by IP or a changing mDNS name still works, and any other certificate is refused.
+final class PinnedSessionDelegate: NSObject, URLSessionDelegate {
+    let fingerprint: String
+    init(fingerprint: String) { self.fingerprint = fingerprint.lowercased() }
+
+    static func fingerprint(of cert: SecCertificate) -> String {
+        SHA256.hash(data: SecCertificateCopyData(cert) as Data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust,
+              let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first,
+              Self.fingerprint(of: leaf) == fingerprint else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+}
+
+private enum PinnedSessions {
+    private static let lock = NSLock()
+    private static var cache: [String: URLSession] = [:]
+
+    static func session(for fingerprint: String) -> URLSession {
+        lock.lock(); defer { lock.unlock() }
+        let key = fingerprint.lowercased()
+        if let s = cache[key] { return s }
+        let s = URLSession(configuration: .ephemeral, delegate: PinnedSessionDelegate(fingerprint: key),
+                           delegateQueue: nil)
+        cache[key] = s
+        return s
+    }
+}
+
+/// Talks to one device. With a `pin` it uses HTTPS on the pin's port and trusts only that certificate;
+/// without one (devices whose firmware predates TLS) it falls back to plain HTTP. Stateless and cheap to create.
 struct PigeonClient {
     var host: String
     var port: Int = 8780
     var token: String?
     var session: URLSession = .shared
+    var pin: TLSPin?
+
+    /// The session to use: the caller's, unless it is the shared default and a pin requires a pinned one.
+    private var activeSession: URLSession {
+        if let pin, session === URLSession.shared { return PinnedSessions.session(for: pin.fingerprint) }
+        return session
+    }
 
     private static let decoder: JSONDecoder = {
         let d = JSONDecoder(); d.keyDecodingStrategy = .convertFromSnakeCase; return d
@@ -32,9 +85,9 @@ struct PigeonClient {
 
     func url(_ path: String, query: [URLQueryItem] = []) -> URL {
         var c = URLComponents()
-        c.scheme = "http"
+        c.scheme = pin == nil ? "http" : "https"
         c.host = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host  // IPv6 literal
-        c.port = port
+        c.port = pin?.port ?? port
         c.path = "/api/v1" + path
         if !query.isEmpty { c.queryItems = query }
         return c.url!
@@ -55,7 +108,7 @@ struct PigeonClient {
     @discardableResult
     private func perform(_ req: URLRequest) async throws -> Data {
         let data: Data, resp: URLResponse
-        do { (data, resp) = try await session.data(for: req) }
+        do { (data, resp) = try await activeSession.data(for: req) }
         catch { throw PigeonError.transport(error.localizedDescription) }
         guard let http = resp as? HTTPURLResponse else { throw PigeonError.transport("No response") }
         if (200..<300).contains(http.statusCode) { return data }
@@ -213,7 +266,7 @@ struct PigeonClient {
                     var req = try makeRequest("GET", "/events")
                     req.timeoutInterval = 60  // the device sends a keepalive every 15 s
                     req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    let (bytes, resp) = try await session.bytes(for: req)
+                    let (bytes, resp) = try await activeSession.bytes(for: req)
                     guard let http = resp as? HTTPURLResponse else { throw PigeonError.transport("No response") }
                     if http.statusCode == 401 { throw PigeonError.unauthorized }
                     guard http.statusCode == 200 else {

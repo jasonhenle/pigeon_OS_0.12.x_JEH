@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import queue
 import re
+import socket
+import ssl
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,7 +20,7 @@ from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlparse
 
 from pigeon import manual_search as ms
-from pigeon.control_api import profile
+from pigeon.control_api import profile, tls as tls_mod
 from pigeon.control_api.auth import DISPLAY_TTL_S, AuthStore
 from pigeon.control_api.events import EventHub, format_event
 
@@ -27,6 +29,16 @@ MAX_BODY = 64 * 1024
 KEEPALIVE_S = 15.0
 POLL_S = 2.0
 SUGGEST_MAX = 12
+# Connection hygiene (Zero 2 W budget). Every connection costs a thread, so cap them, and make slow or silent
+# peers pay: ``REQUEST_TIMEOUT_S`` bounds each socket read/write (TLS handshake, headers, body, idle keep-alive,
+# a stalled SSE reader) and ``REQUEST_DEADLINE_S`` bounds the whole request-reading phase against slow-drip senders.
+MAX_CONNECTIONS = 24
+MAX_CONNECTIONS_PER_IP = 8
+REQUEST_TIMEOUT_S = 10.0
+REQUEST_DEADLINE_S = 15.0
+DEFAULT_TLS_PORT = 8781
+# The only routes served on the unencrypted listener once TLS is on: none carries a token, claim code or setting.
+_PLAIN_OK = frozenset({("GET", "/hello"), ("POST", "/pair/start"), ("POST", "/pair/cancel")})
 
 Response = tuple[int, "dict[str, Any] | None"]
 
@@ -88,10 +100,12 @@ class ControlService:
         self._pair_scan = pair_scan
         # Called with the new TXT record whenever it changes (claimed, renamed).
         self.txt_listeners: list[Callable[[dict[str, str]], object]] = []
+        # ``{"port": int, "fingerprint_sha256": str}`` once a TLS listener is up (set by ControlServer).
+        self.tls_info: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------ status
     def _hello_body(self) -> dict[str, Any]:
-        return {
+        body: dict[str, Any] = {
             "id": profile.device_id(),
             "name": profile.device_name(),
             "product": profile.product(),
@@ -100,6 +114,9 @@ class ControlService:
             "claimed": self.auth.claimed(),
             "setup_mode": False,
         }
+        if self.tls_info:
+            body["tls"] = dict(self.tls_info)
+        return body
 
     def _manual_body(self) -> dict[str, Any]:
         entry = ms.current()
@@ -130,10 +147,14 @@ class ControlService:
 
     def txt_record(self) -> dict[str, str]:
         h = self._hello_body()
-        return {
+        txt = {
             "id": h["id"], "name": h["name"], "product": h["product"],
             "api": str(h["api"]), "ver": h["version"], "claimed": "1" if h["claimed"] else "0",
         }
+        if self.tls_info:
+            txt["tlsport"] = str(self.tls_info["port"])
+            txt["fp"] = str(self.tls_info["fingerprint_sha256"])
+        return txt
 
     # ---------------------------------------------------------------- dispatch
     def handle(self, method: str, path: str, query: dict[str, list[str]],
@@ -558,10 +579,35 @@ class ControlService:
 
 class _Handler(BaseHTTPRequestHandler):
     service: ControlService  # set on the subclass by ControlServer
+    secure = False           # this listener speaks TLS
+    plain_restricted = False  # unencrypted listener that only serves ``_PLAIN_OK`` (TLS is on elsewhere)
     protocol_version = "HTTP/1.1"
+    timeout = REQUEST_TIMEOUT_S  # StreamRequestHandler applies this to the socket
 
     def log_message(self, *args: Any) -> None:  # quiet
         pass
+
+    def setup(self) -> None:
+        if self.secure:
+            # Handshake here, on the connection's own thread and under the socket timeout, never in accept().
+            self.request.settimeout(self.timeout)
+            self.request.do_handshake()
+        super().setup()
+
+    def handle_one_request(self) -> None:
+        self._deadline = threading.Timer(REQUEST_DEADLINE_S, self._abort)
+        self._deadline.daemon = True
+        self._deadline.start()
+        try:
+            super().handle_one_request()
+        finally:
+            self._deadline.cancel()
+
+    def _abort(self) -> None:
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
 
     def _token(self) -> str:
         h = self.headers.get("Authorization", "")
@@ -583,14 +629,22 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self, method: str) -> None:
         url = urlparse(self.path)
+        if self.plain_restricted and not self._plain_allowed(method, url.path):
+            # Refuse before reading the body or looking at the token: it already crossed the wire in clear.
+            self.close_connection = True
+            info = self.service.tls_info or {}
+            self._send(*_err(426, "tls_required", "Use HTTPS on the TLS port; pin the certificate fingerprint "
+                             "from GET /hello.", tls=info))
+            return
         body: Any = None
         if method in ("POST", "PUT", "PATCH"):
             try:
                 n = int(self.headers.get("Content-Length") or 0)
             except ValueError:
-                n = 0
-            if n > MAX_BODY:
-                self._send(*_err(400, "bad_request", "Body too large."))
+                n = -1
+            if n < 0 or n > MAX_BODY:
+                self.close_connection = True  # unread body would corrupt the next request
+                self._send(*_err(400, "bad_request", "Body too large." if n > 0 else "Bad Content-Length."))
                 return
             if n:
                 try:
@@ -598,6 +652,7 @@ class _Handler(BaseHTTPRequestHandler):
                 except (ValueError, UnicodeDecodeError):
                     self._send(*_err(400, "bad_request", "Malformed JSON."))
                     return
+        self._deadline.cancel()  # request fully read; handling (and SSE) may legitimately take longer
         if method == "GET" and url.path.rstrip("/") == PREFIX + "/events":
             self._events()
             return
@@ -605,6 +660,13 @@ class _Handler(BaseHTTPRequestHandler):
             method, url.path, parse_qs(url.query), self._token(), body
         )
         self._send(status, resp)
+
+    def _plain_allowed(self, method: str, path: str) -> bool:
+        if self.headers.get("Authorization"):
+            return False
+        if not path.startswith(PREFIX + "/"):
+            return False
+        return (method, path[len(PREFIX):].rstrip("/") or "/") in _PLAIN_OK
 
     def _events(self) -> None:
         svc = self.service
@@ -643,24 +705,122 @@ class _Handler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None: self._dispatch("DELETE")
 
 
+class _Limiter:
+    """Total and per-client connection budget; ``acquire`` never blocks."""
+
+    def __init__(self, total: int, per_ip: int) -> None:
+        self._total, self._per_ip = total, per_ip
+        self._lock = threading.Lock()
+        self._n = 0
+        self._by_ip: dict[str, int] = {}
+
+    def acquire(self, ip: str) -> bool:
+        with self._lock:
+            if self._n >= self._total or self._by_ip.get(ip, 0) >= self._per_ip:
+                return False
+            self._n += 1
+            self._by_ip[ip] = self._by_ip.get(ip, 0) + 1
+            return True
+
+    def release(self, ip: str) -> None:
+        with self._lock:
+            self._n = max(0, self._n - 1)
+            left = self._by_ip.get(ip, 0) - 1
+            if left > 0:
+                self._by_ip[ip] = left
+            else:
+                self._by_ip.pop(ip, None)
+
+
+_BUSY = (b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nRetry-After: 2\r\n"
+         b"Connection: close\r\n\r\n")
+
+
+class _BoundedHTTPServer(ThreadingHTTPServer):
+    """Thread-per-connection, but only while the shared ``_Limiter`` has room; over budget is refused up front."""
+
+    daemon_threads = True
+    request_queue_size = 32
+
+    def __init__(self, addr: tuple[str, int], handler: type, limiter: _Limiter,
+                 ssl_context: ssl.SSLContext | None = None) -> None:
+        self._limiter = limiter
+        self._ssl = ssl_context
+        super().__init__(addr, handler)
+
+    def get_request(self) -> tuple[Any, Any]:
+        sock, addr = self.socket.accept()
+        if self._ssl is not None:
+            # No handshake yet: a peer that never speaks must not stall the accept loop.
+            sock = self._ssl.wrap_socket(sock, server_side=True, do_handshake_on_connect=False)
+        return sock, addr
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        ip = client_address[0]
+        if not self._limiter.acquire(ip):
+            if self._ssl is None:
+                try:
+                    request.settimeout(1.0)
+                    request.sendall(_BUSY)
+                except OSError:
+                    pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._limiter.release(ip)
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._limiter.release(client_address[0])
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        pass  # handshake failures, resets and timeouts from LAN peers are routine
+
+
 class ControlServer:
+    """Plain HTTP listener on ``port`` and, when ``tls`` is given, an HTTPS listener on ``tls_port``.
+
+    With TLS on, the plain listener serves only ``_PLAIN_OK`` (``/hello`` to learn the pin) unless ``allow_plain``
+    keeps the legacy full-API-over-HTTP behaviour. Without ``tls`` everything is plain, as in v1.0.
+    """
+
     def __init__(self, service: ControlService, *, host: str = "0.0.0.0",
-                 port: int = profile.DEFAULT_PORT) -> None:
-        handler = type("BoundHandler", (_Handler,), {"service": service})
+                 port: int = profile.DEFAULT_PORT, tls: tls_mod.TlsIdentity | None = None,
+                 tls_port: int = DEFAULT_TLS_PORT, allow_plain: bool = False,
+                 max_connections: int = MAX_CONNECTIONS, max_per_ip: int = MAX_CONNECTIONS_PER_IP) -> None:
         self.service = service
-        self._httpd = ThreadingHTTPServer((host, port), handler)
-        self._httpd.daemon_threads = True
-        self._thread: threading.Thread | None = None
+        limiter = _Limiter(max_connections, max_per_ip)
+        restricted = tls is not None and not allow_plain
+        plain_h = type("PlainHandler", (_Handler,), {"service": service, "plain_restricted": restricted})
+        self._httpds: list[_BoundedHTTPServer] = [_BoundedHTTPServer((host, port), plain_h, limiter)]
+        self._tls_httpd: _BoundedHTTPServer | None = None
+        if tls is not None:
+            tls_h = type("TlsHandler", (_Handler,), {"service": service, "secure": True})
+            self._tls_httpd = _BoundedHTTPServer((host, tls_port), tls_h, limiter, tls_mod.server_context(tls))
+            self._httpds.append(self._tls_httpd)
+            service.tls_info = {"port": self.tls_port, "fingerprint_sha256": tls.fingerprint_sha256}
+        self._threads: list[threading.Thread] = []
         self._stop = threading.Event()
 
     @property
+    def tls_port(self) -> int | None:
+        return int(self._tls_httpd.server_address[1]) if self._tls_httpd is not None else None
+
+    @property
     def port(self) -> int:
-        return int(self._httpd.server_address[1])
+        return int(self._httpds[0].server_address[1])
 
     def start(self) -> None:
-        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True,
-                                        name="pigeon-control-api")
-        self._thread.start()
+        for httpd in self._httpds:
+            t = threading.Thread(target=httpd.serve_forever, daemon=True,
+                                 name="pigeon-control-api" + ("-tls" if httpd is self._tls_httpd else ""))
+            t.start()
+            self._threads.append(t)
         threading.Thread(target=self._poll_loop, daemon=True, name="pigeon-control-poll").start()
 
     def _poll_loop(self) -> None:
@@ -689,5 +849,6 @@ class ControlServer:
 
     def stop(self) -> None:
         self._stop.set()
-        self._httpd.shutdown()
-        self._httpd.server_close()
+        for httpd in self._httpds:
+            httpd.shutdown()
+            httpd.server_close()

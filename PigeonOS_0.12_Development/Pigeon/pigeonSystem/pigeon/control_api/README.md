@@ -10,6 +10,12 @@ Try it:
 
     curl localhost:8780/api/v1/hello
 
+Transport: the full API is served over HTTPS on `PIGEON_CONTROL_TLS_PORT` (default `8781`) with a self-signed
+certificate that clients pin by the SHA-256 fingerprint in `GET /hello` (`tls.fingerprint_sha256`). The plain port
+only serves `/hello` and `/pair/*`; other routes return `426`. `PIGEON_CONTROL_ALLOW_PLAIN=1` re-enables full plain
+HTTP for older clients (insecure); `PIGEON_CONTROL_TLS=0` turns TLS off. Connections are capped (24 total, 8 per IP)
+and have read/write timeouts. See spec section 2.3. Tests: `python3 -m unittest tests.test_control_api_transport`.
+
 The claim code is `pigeon.control_api.pairing_code()`; showing it on screen is not wired yet, so for now read it
 from a Python shell. Tests: `python3 -m unittest tests.test_control_api`.
 
