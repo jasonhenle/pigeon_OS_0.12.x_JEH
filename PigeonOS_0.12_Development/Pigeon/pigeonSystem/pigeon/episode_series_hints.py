@@ -31,9 +31,6 @@ from pigeon.runtime_paths import pigeon_state_dir
 # Keys are already :func:`pigeon.tmdb_poster._norm_query` form.
 _BUILTIN_EPISODE_SERIES_HINTS: dict[str, str] = {
     "lady tomato and mr f tomato head": "The Miniature Wife",
-    # Parks and Recreation S4 finale; Wikidata lists only Everybody Loves Raymond, and the
-    # same-named Disney Channel game show outranks it on a title search.
-    "win lose or draw": "Parks and Recreation",
 }
 
 _cache: dict[str, str] | None = None

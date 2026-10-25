@@ -1385,6 +1385,51 @@ def _episode_title_series_fallback(
     return None, None
 
 
+_SERIES_EPISODE_NORMS_CACHE: dict[int, frozenset[str]] = {}
+
+
+def _series_episode_title_norms(tv_id: int) -> frozenset[str]:
+    """Normalized episode names across a series' seasons (empty when the lookup fails)."""
+    if tv_id in _SERIES_EPISODE_NORMS_CACHE:
+        return _SERIES_EPISODE_NORMS_CACHE[tv_id]
+    detail = _tmdb_tv_detail(tv_id)
+    if detail is None:
+        return frozenset()
+    names: set[str] = set()
+    for s in detail.get("seasons") or []:
+        try:
+            sn = int(s.get("season_number"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if sn < 0:
+            continue
+        try:
+            season = _request_json(f"{TMDB_API_BASE}/tv/{int(tv_id)}/season/{sn}")
+        except (RuntimeError, urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError, ValueError):
+            return frozenset()  # partial list: don't cache
+        for ep in (season.get("episodes") if isinstance(season, dict) else None) or []:
+            n = _norm_query(str(ep.get("name") or "")) if isinstance(ep, dict) else ""
+            if n:
+                names.add(n)
+    out = frozenset(names)
+    _SERIES_EPISODE_NORMS_CACHE[tv_id] = out
+    return out
+
+
+def _recent_series_with_episode_titled(
+    service: str | None, raw: str, *, require_poster: bool
+) -> tuple[dict | None, MediaKind | None] | None:
+    """The series this service was just playing, when it has an episode named ``raw``."""
+    recent = _recent_episode_series_id(service)
+    norm = _norm_query(raw)
+    if recent is None or not norm or norm not in _series_episode_title_norms(recent):
+        return None
+    detail = _tmdb_tv_detail(recent)
+    if detail is None or (require_poster and not detail.get("poster_path")):
+        return None
+    return detail, "tv"
+
+
 def _episode_series_on_service_instead(
     raw: str,
     best: tuple[dict | None, MediaKind | None],
@@ -1403,7 +1448,12 @@ def _episode_series_on_service_instead(
     if not providers or best[0] is None:
         return None
     if _service_availability_score(best[0], best[1], providers):
+        # Listed on the service: this is the show being watched, remember it.
+        _remember_episode_series(service, best)
         return None
+    recent = _recent_series_with_episode_titled(service, raw, require_poster=require_poster)
+    if recent is not None:
+        return recent
     ep = _episode_title_series_fallback(
         raw, require_poster=require_poster, service=service, providers=providers
     )
