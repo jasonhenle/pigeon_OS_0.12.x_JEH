@@ -859,7 +859,7 @@ class _PlayingWithMediaType:
 
 
 def _metadata_for_playing(atv, playing) -> dict[str, object]:
-    """``_playing_metadata`` + app info, with a wrong ``Music`` label from a video-only app corrected.
+    """``_playing_metadata`` + app info, with a wrong media-type label from a single-purpose app corrected.
 
     HBO Max (and potentially other video services) sometimes report
     ``MediaType.Music`` for TV episodes, with the show in ``artist`` and the
@@ -870,26 +870,27 @@ def _metadata_for_playing(atv, playing) -> dict[str, object]:
     keep the reported value in ``media_type_reported`` for diagnostics.
     """
     metadata = _metadata_with_app(atv, _playing_metadata(playing))
-    if not _media_type_is_music(metadata.get("media_type")):
-        return metadata
-    try:
-        from pigeon.streaming_service_badges import is_video_only_streaming_service
-
-        video_only = is_video_only_streaming_service(
-            str(metadata.get("app_name") or ""), str(metadata.get("app_id") or "")
-        )
-    except Exception:
-        video_only = False
-    if not video_only:
-        return metadata
+    app_name = str(metadata.get("app_name") or "")
+    app_id = str(metadata.get("app_id") or "")
     try:
         from pyatv.const import MediaType
+        from pigeon.streaming_service_badges import (
+            is_music_only_streaming_service,
+            is_video_only_streaming_service,
+        )
 
-        unknown = MediaType.Unknown
+        if _media_type_is_music(metadata.get("media_type")):
+            # A video-only app calling a show ``Music``: the label is wrong.
+            corrected = MediaType.Unknown if is_video_only_streaming_service(app_name, app_id) else None
+        else:
+            # A music-only app calling a music video ``Video``: likewise (Apple Music).
+            corrected = MediaType.Music if is_music_only_streaming_service(app_name, app_id) else None
     except Exception:
         return metadata
+    if corrected is None:
+        return metadata
     reported = metadata.get("media_type")
-    fixed = _metadata_with_app(atv, _playing_metadata(_PlayingWithMediaType(playing, unknown)))
+    fixed = _metadata_with_app(atv, _playing_metadata(_PlayingWithMediaType(playing, corrected)))
     fixed["media_type_reported"] = reported
     return fixed
 

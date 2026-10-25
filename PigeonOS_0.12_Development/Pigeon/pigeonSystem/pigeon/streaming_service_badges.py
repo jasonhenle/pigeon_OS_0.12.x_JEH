@@ -50,6 +50,7 @@ _RULES: tuple[
     ("google.ios.youtube", None, ("YouTube",), "YouTube", ()),
     (None, "apple music", ("AppleMusic",), "Apple Music", ()),
     ("com.apple.music", None, ("AppleMusic",), "Apple Music", ()),
+    ("com.apple.tvmusic", None, ("AppleMusic",), "Apple Music", ()),
     ("shudder", None, ("Shudder",), "Shudder", ()),
     (None, "shudder", ("Shudder",), "Shudder", ()),
     ("discovery", None, ("DiscoveryPlus",), "Discovery+", ()),
@@ -151,6 +152,17 @@ def streaming_service_label(app_name: str | None = None, app_id: str | None = No
         if (bfrag and bfrag in bid) or (nfrag and nfrag in an):
             return display
     return None
+
+
+# Services that only ever play music (songs and music videos). When one of these reports
+# ``MediaType.Video`` for a music video, the label is wrong, not the content: treat it as
+# music so TMDb is never searched for the artist or song.
+MUSIC_ONLY_SERVICES: frozenset[str] = frozenset({"Apple Music", "Spotify"})
+
+
+def is_music_only_streaming_service(app_name: str | None = None, app_id: str | None = None) -> bool:
+    """True when the foreground app only plays music (see :data:`MUSIC_ONLY_SERVICES`)."""
+    return streaming_service_label(app_name, app_id) in MUSIC_ONLY_SERVICES
 
 
 def is_video_only_streaming_service(app_name: str | None = None, app_id: str | None = None) -> bool:

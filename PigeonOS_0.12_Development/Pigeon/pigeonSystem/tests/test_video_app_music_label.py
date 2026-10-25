@@ -13,7 +13,10 @@ try:
 except Exception:  # pragma: no cover - pyatv missing in this environment
     MediaType = None
 
-from pigeon.streaming_service_badges import is_video_only_streaming_service
+from pigeon.streaming_service_badges import (
+    is_music_only_streaming_service,
+    is_video_only_streaming_service,
+)
 
 
 def _playing(media_type, *, title="The Movement", artist="Nathan For You"):
@@ -53,6 +56,11 @@ class VideoOnlyServiceTests(unittest.TestCase):
         ]:
             self.assertTrue(is_video_only_streaming_service(name, bid), name)
 
+    def test_music_only_services(self) -> None:
+        self.assertTrue(is_music_only_streaming_service("Music", "com.apple.TVMusic"))
+        self.assertTrue(is_music_only_streaming_service("Spotify", "com.spotify.client"))
+        self.assertFalse(is_music_only_streaming_service("YouTube", "com.google.ios.youtube"))
+
     def test_music_capable_apps_are_not_video_only(self) -> None:
         for name, bid in [
             ("Music", "com.apple.TVMusic"),
@@ -71,6 +79,16 @@ class MetadataForPlayingTests(unittest.TestCase):
         from pigeon.apple_tv_now_playing import _metadata_for_playing
 
         return _metadata_for_playing(_atv(app_name, app_id), _playing(media_type))
+
+    def test_apple_music_video_label_is_corrected_to_music(self) -> None:
+        for app_name, app_id in [("Music", "com.apple.TVMusic"), ("Spotify", "com.spotify.client")]:
+            md = self._meta(MediaType.Video, app_name, app_id)
+            self.assertEqual(md["media_type"], str(MediaType.Music), app_name)
+            self.assertEqual(md["media_type_reported"], str(MediaType.Video))
+
+    def test_video_label_from_video_capable_app_is_kept(self) -> None:
+        md = self._meta(MediaType.Video, "YouTube", "com.google.ios.youtube")
+        self.assertEqual(md["media_type"], str(MediaType.Video))
 
     def test_hbo_music_label_is_corrected(self) -> None:
         md = self._meta(MediaType.Music, "HBO Max", "com.wbd.stream")
