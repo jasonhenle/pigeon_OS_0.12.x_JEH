@@ -144,7 +144,7 @@ _WATCH_PROVIDER_IDS_BY_NORM: dict[str, tuple[int, ...]] = {
     "peacock premium": (387, 386),
     "paramount": (531,),
     "paramount plus": (531,),
-    "apple tv": (350,),
+    "apple tv": (350, 2),
     "apple tv plus": (350,),
     "youtube": (192,),
     "discovery": (524,),

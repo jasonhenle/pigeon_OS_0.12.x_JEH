@@ -231,14 +231,16 @@ def _title_norm_matches_exact_tv_series_filter(must_norm: str, title_norm: str) 
 
 
 _WATCH_REGION = "US"
-_WATCH_PROVIDER_BUCKETS: tuple[str, ...] = ("flatrate", "ads", "free")
+# ``buy``/``rent`` count too: the Apple TV app plays store purchases and rentals (provider 2),
+# so a new release listed only there is still "on" the foreground service.
+_WATCH_PROVIDER_BUCKETS: tuple[str, ...] = ("flatrate", "ads", "free", "buy", "rent")
 _WATCH_PROVIDER_LOOKUP_CAP = 8
 # (kind, tmdb_id) → provider ids in US, or None when the lookup failed.
 _WATCH_PROVIDERS_CACHE: dict[tuple[str, int], frozenset[int] | None] = {}
 
 
 def _tmdb_watch_provider_ids(kind: MediaKind, tmdb_id: int) -> frozenset[int] | None:
-    """US subscription/free provider ids for one title, or None when the lookup fails."""
+    """US subscription/free/buy/rent provider ids for one title, or None when the lookup fails."""
     try:
         mid = int(tmdb_id)
     except (TypeError, ValueError):
@@ -2244,7 +2246,14 @@ def apply_tmdb_movie_query(
         # The episode → series lookup vouched for this show; trust it like an exact title.
         match_tier = 5
 
-    if not item.get(EPISODE_SERIES_FLAG) and not _LAST_FETCH_TRACE.get("forced_pick"):
+    # The Apple TV app also plays store purchases and channel content TMDb lists under other
+    # providers, so a near-exact runtime match outranks the "not on this service" check.
+    runtime_vouches = similarity is not None and similarity >= 0.9
+    if (
+        not item.get(EPISODE_SERIES_FLAG)
+        and not _LAST_FETCH_TRACE.get("forced_pick")
+        and not runtime_vouches
+    ):
         svc_ids = watch_provider_ids_for_streaming_service(
             app_name=app_name, app_id=app_id, service_hint=hint
         )
