@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import sys
 import threading
 
 from pigeon.runtime_paths import pigeon_state_dir
@@ -80,6 +81,8 @@ def device_name() -> str:
     name = str(_read().get("name") or "").strip()
     if name:
         return name
+    if sys.platform == "darwin":
+        return "PIGEON MACOS"
     return "Pigeon Marquee" if product() == "marquee" else "Pigeon Clock"
 
 
