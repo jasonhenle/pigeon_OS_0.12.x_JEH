@@ -1,8 +1,8 @@
 """
 System UI color keys — the theme menu on ``settings_pigeon`` (0.12).
 
-The page offers blue, green, yellow, pink and red here (plus a "dark" tile that
-is the ``color_format`` option, not a swatch). ``orange``, ``grey`` and
+The page offers blue, green, yellow, pink and red here (the sixth tile is the
+STANDARD / SIMPLE style toggle, not a swatch). ``orange``, ``grey`` and
 ``white`` are no longer offered but stay valid keys, so an install that saved
 one keeps its theme until the user picks another. Accent / button classes keep
 their saved keys (no longer user-editable) so older installs render the same.

@@ -3,7 +3,8 @@
 ``option1`` 12 / 24 hour, ``option2`` °F / °C, ``option3`` theme / dark
 (dark = red-tinted monochrome UI; the "dark" tile in the theme menu), ``option4``
 info / visualizer (what the now-playing zone 4 shows; no tile any more),
-``option6`` digital / analog clock. Updates are always automatic (the OS
+``option6`` digital / analog clock, ``option7`` standard / simple
+(simple = settings drawn in just the UI color and black, no background layer). Updates are always automatic (the OS
 installs the latest release only while nothing is playing; the old
 auto / manual update switch is gone and any saved "manual" reads as auto).
 ``option5`` picks the now-playing layout: zone 11 (TT across zones 1–3,
@@ -32,6 +33,7 @@ _DEFAULTS: dict[str, Any] = {
     "clock_format": "digital",
     "temp_format": "f",
     "color_format": "color",
+    "ui_style": "standard",
     "idle_standby": 60,
     "clock_saver": "on",
     "zone4_mode": "info",
@@ -47,6 +49,7 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (4, "zone4_mode", "info", "visualizer"),
     (5, "np_layout", "zone11", "zone63"),
     (6, "clock_format", "digital", "analog"),
+    (7, "ui_style", "standard", "simple"),
 )
 
 _STATE_KEY = "settings_options"
@@ -70,6 +73,8 @@ def _normalize(raw: object) -> dict[str, Any]:
         if col in ("dark", "bw", "b/w", "mono", "gray", "grey", "redmono", "red-mono")
         else "color"
     )
+    us = str(raw.get("ui_style") or out["ui_style"]).strip().lower()
+    out["ui_style"] = "simple" if us == "simple" else "standard"
     z4 = str(raw.get("zone4_mode") or out["zone4_mode"]).strip().lower()
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
     nl = str(raw.get("np_layout") or out["np_layout"]).strip().lower()
@@ -186,6 +191,11 @@ def ui_is_monochrome(state: MainSettingsState | None = None) -> bool:
     if _MONO_PREVIEW_OFF:
         return False
     return _vals(state)["color_format"] == "dark"
+
+
+def ui_is_simple(state: MainSettingsState | None = None) -> bool:
+    """option7 = simple: no background layer, only the UI color and black."""
+    return _vals(state)["ui_style"] == "simple"
 
 
 def zone4_visualizer_on(state: MainSettingsState | None = None) -> bool:
@@ -311,6 +321,7 @@ __all__ = [
     "ui_is_bright",
     "set_mono_preview_off",
     "ui_is_monochrome",
+    "ui_is_simple",
     "ui_paper_bgr",
     "write_options",
     "zone4_visualizer_on",

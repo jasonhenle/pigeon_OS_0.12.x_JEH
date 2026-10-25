@@ -676,6 +676,25 @@ def discover_integrated_pad_keys(
     return tuple(keys)
 
 
+def _kb_simple() -> bool:
+    """SIMPLE look (option7): keys are UI color + black only."""
+    try:
+        from pigeon.widgets.options_settings import ui_is_simple
+
+        return bool(ui_is_simple())
+    except Exception:
+        return False
+
+
+def _dim_hex(hexv: str, k: float) -> str:
+    h = hexv.lstrip("#")
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return hexv
+    return f"#{int(r * k):02X}{int(g * k):02X}{int(b * k):02X}"
+
+
 def _keyboard_idle_fill(theme: SettingsTheme) -> str:
     """Idle key chrome uses the UI color in place of black."""
     return str(theme.ui or COLOR_UI_DEFAULT)
@@ -700,6 +719,11 @@ def _keyboard_label_hex(
     inactive: str,
 ) -> str:
     """Selected keys are white; the glyph must be the UI color to stay visible."""
+    if _kb_simple():
+        # Selected key is UI-colored: black glyph. Idle keys are black: UI glyph.
+        if selected:
+            return "#000000"
+        return _dim_hex(ui_hex, 0.45) if muted_deselected else ui_hex
     if selected:
         return ui_hex
     if muted_deselected:
@@ -729,6 +753,15 @@ def _paint_kb_button_shape(
     theme: SettingsTheme,
 ) -> None:
     """Flat key fill — accent outlines are turned off on keyboards."""
+    if _kb_simple():
+        ui = str(theme.ui or COLOR_UI_DEFAULT)
+        _set_paint(node, fill=ui if selected else "#000000", stroke=ui)
+        # Keys are rasterized 1 px per unit, then shrunk by the cluster scale:
+        # widen the stroke so it lands on 3 px like settings_pigeon.
+        sw = f"{3.0 / _CLUSTER_SCALE:.3f}"
+        node.set("stroke-width", sw)
+        node.set("style", _rewrite_style_prop(node.get("style") or "", "stroke-width", sw))
+        return
     fill = theme.selected if selected else _keyboard_idle_fill(theme)
     _set_paint(node, fill=fill, stroke="none")
     style = node.get("style") or ""
@@ -820,6 +853,9 @@ def apply_keyboard_selection(
                         rx = float(node.get("rx") or 0.0)
                     except (TypeError, ValueError):
                         rx = 0.0
+                    if rx >= 8.0 and _kb_simple():
+                        _paint_kb_button_shape(node, selected=selected, theme=theme)
+                        continue
                     if rx >= 8.0:
                         fill = theme.selected if selected else theme.deselected
                         _set_paint(node, fill=fill, stroke="none")
@@ -1360,11 +1396,21 @@ def _align_qwerty_to_cluster(root: ET.Element) -> None:
     root.set("viewBox", f"{vx} {vy} {_CLUSTER_VB[2]} {_CLUSTER_VB[3]}")
 
 
+def _simple_pad_units() -> float:
+    """SIMPLE strokes sit on the key edge; give the raster room so they are not cropped."""
+    return 2.0 if _kb_simple() else 0.0
+
+
+def _simple_pad_px() -> int:
+    return int(round(_simple_pad_units() * _CLUSTER_SCALE))
+
+
 def _rasterize_svg_patch(root: ET.Element) -> tuple[np.ndarray, tuple[float, float, float, float]]:
     vb = viewbox_from_root(root)
-    w = max(1, int(round(vb[2])))
-    h = max(1, int(round(vb[3])))
-    root.set("viewBox", f"{vb[0]} {vb[1]} {vb[2]} {vb[3]}")
+    pad = _simple_pad_units()
+    w = max(1, int(round(vb[2] + 2 * pad)))
+    h = max(1, int(round(vb[3] + 2 * pad)))
+    root.set("viewBox", f"{vb[0] - pad} {vb[1] - pad} {vb[2] + 2 * pad} {vb[3] + 2 * pad}")
     patch = rasterize_settings_svg_bgra(root, width=w, height=h, font_mode="keyboard")
     return patch, vb
 
@@ -1426,7 +1472,7 @@ def _place_in_cluster(
         dest_y = cy + int(round((_CLUSTER_KEY_ROW_Y - 434.33) * _CLUSTER_SCALE))
     else:
         dest_y = cy
-    _blit_bottom_row(canvas, patch, dest_x=dest_x, dest_y=dest_y)
+    _blit_bottom_row(canvas, patch, dest_x=dest_x, dest_y=dest_y - _simple_pad_px())
 
 
 _SVG_BYTES: dict[str, bytes] = {}
@@ -1467,6 +1513,7 @@ def _keyboard_layout_key(
         bool(state.password_mask),
         bool(state.include_bottom_row),
         str(state.target or ""),
+        _kb_simple(),
     )
 
 
@@ -1645,6 +1692,8 @@ def _rasterize_keyboard_chars(
         content_w = max(1, int(round(vb[2])))
         layout = _integrated_pad_layout(vb, content_w=content_w)
         root.set("overflow", "visible")
+        if _kb_simple():
+            root.set("viewBox", " ".join(f"{v}" for v in layout.padded_vb))
         pad = rasterize_settings_svg_bgra(
             root,
             width=layout.out_w,
@@ -1726,7 +1775,7 @@ def _composite_keyboard_layers(
         cx, cy = _cluster_xy()
         cw, _ch = _cluster_wh()
         dest_x = cx + int(round((cw - row.shape[1]) * 0.5))
-        dest_y = cy
+        dest_y = cy - _simple_pad_px()
         _blit_bottom_row(canvas, row, dest_x=dest_x, dest_y=dest_y)
     return canvas
 

@@ -24,6 +24,7 @@ OPTION_VALUES: dict[str, tuple[str, ...]] = {
     "zone4_mode": ("info", "visualizer"),
     "np_layout": ("zone11", "zone63"),
     "clock_format": ("digital", "analog"),
+    "ui_style": ("standard", "simple"),
 }
 
 
