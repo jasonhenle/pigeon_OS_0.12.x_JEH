@@ -85,8 +85,8 @@ VOLUME_INNER_R = 162.46
 
 # 2×3 poster mask in 398×488 viewBox (rounded rect from poster_mask path).
 POSTER_2X3_LOCAL = (42.68, 6.34, 315.26, 472.90, 15.98)
-# 1×1 album mask.
-POSTER_1X1_LOCAL = (42.69, 85.16, 315.26, 315.26, 26.47)
+# 1×1 album mask (corner radius ≈ 15% of the side).
+POSTER_1X1_LOCAL = (42.69, 85.16, 315.26, 315.26, 48.0)
 
 # 16×9 poster across zone 6 (zones 1+2) or zone 7 (zones 2+3). YouTube uses
 # zone 6 so volume can stay in portrait column 3. Side insets match 2×3.
@@ -114,8 +114,8 @@ _POSTER_16X9_Y = min(
     max(0.0, VOLUME_LOCAL_CY - _POSTER_16X9_H / 2.0),
     POSTER_16X9_VIEW_H - _POSTER_16X9_H,
 )
-# 8px radius on the 267×150 widget art → ~21.3px at the 16×9 slot width.
-_POSTER_16X9_RX = 8.0 * (_POSTER_16X9_W / 267.0)
+# 16px radius on the 267×150 widget art, scaled to the 16×9 slot width.
+_POSTER_16X9_RX = 16.0 * (_POSTER_16X9_W / 267.0)
 POSTER_16X9_LOCAL = (
     _POSTER_16X9_INSET_L,
     _POSTER_16X9_Y,
