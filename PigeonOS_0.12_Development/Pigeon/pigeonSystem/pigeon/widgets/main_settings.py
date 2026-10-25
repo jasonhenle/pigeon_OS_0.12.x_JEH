@@ -582,6 +582,15 @@ def render_main_settings_bgra(
     )
 
 
+def _ui_simple() -> bool:
+    try:
+        from pigeon.widgets.options_settings import ui_is_simple
+
+        return bool(ui_is_simple())
+    except Exception:
+        return False
+
+
 class MainSettingsWidget:
     """Cached main-settings compositor (similar to ``NowPlayingScreenWidget``)."""
 
@@ -828,6 +837,7 @@ class MainSettingsWidget:
             )
         return (
             th.ui,
+            _ui_simple(),
             th.selected,
             th.deselected,
             th.inactive,
@@ -1013,6 +1023,7 @@ class MainSettingsWidget:
             int(st.focus_index) if not st.keyboard_open else -1,
             st.focus_ring,
             th.ui,
+            _ui_simple(),
             th.selected,
             th.deselected,
             th.inactive,
@@ -1135,6 +1146,7 @@ class MainSettingsWidget:
         return (
             st.focus_ring,
             th.ui,
+            _ui_simple(),
             th.selected,
             th.deselected,
             th.inactive,
@@ -2699,7 +2711,6 @@ class MainSettingsWidget:
             from pigeon.widgets.pigeon_settings import (
                 color_key_for_focus,
                 option_for_focus,
-                theme_key_for_focus,
                 view_for_section,
             )
 
@@ -2725,10 +2736,6 @@ class MainSettingsWidget:
                 return "timezone_dropdown_open"
             from pigeon.widgets.options_settings import set_option_value
 
-            if theme_key_for_focus(focused) == "dark":
-                st.options_values = set_option_value("color_format", "dark", st.options_values or None)
-                self.invalidate()
-                return "ui_color_dark"
             color = color_key_for_focus(focused)
             if color is not None:
                 st.commit_pigeon_color(color)
@@ -2904,7 +2911,11 @@ class MainSettingsWidget:
 
     def _pigeon_page_overlays(self, base: np.ndarray) -> np.ndarray:
         """settings_pigeon live layers over the cached page: clock + zip keypad."""
-        from pigeon.widgets.pigeon_settings import draw_companion_code, draw_pigeon_settings_clock
+        from pigeon.widgets.pigeon_settings import (
+            draw_companion_code,
+            draw_pigeon_settings_clock,
+            page_ink_rgb,
+        )
 
         st = self._state
         kb_sig = self._keyboard_overlay_sig()
@@ -2918,8 +2929,9 @@ class MainSettingsWidget:
 
             frame = draw_update_status_bar_bgra(frame, st)
         else:
-            frame = draw_pigeon_settings_clock(frame)
-            frame = draw_companion_code(frame)
+            ink = page_ink_rgb(st)
+            frame = draw_pigeon_settings_clock(frame, ink=ink)
+            frame = draw_companion_code(frame, ink=ink)
         if st.keyboard is not None and kb_sig is not None:
             from pigeon.widgets.settings_keyboard import render_keyboard_bgra
 

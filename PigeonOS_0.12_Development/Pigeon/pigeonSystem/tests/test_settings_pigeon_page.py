@@ -78,7 +78,7 @@ class FocusRingTests(unittest.TestCase):
                 "color:yellow",
                 "color:pink",
                 "color:red",
-                "color:dark",
+                "option:7",
                 "section2",
                 "section3",
             ),
@@ -107,15 +107,13 @@ class FocusRingTests(unittest.TestCase):
             if slot.kind.startswith("tbd"):
                 self.assertEqual(slot.focus_id, "")
 
-    def test_dark_is_not_a_ui_color_to_preview(self) -> None:
-        self.assertEqual(ps.theme_key_for_focus("color:dark"), "dark")
-        self.assertIsNone(ps.color_key_for_focus("color:dark"))
+    def test_only_color_tiles_preview_a_ui_color(self) -> None:
+        self.assertIsNone(ps.color_key_for_focus("option:7"))
         self.assertEqual(ps.color_key_for_focus("color:pink"), "pink")
 
     def test_theme_tiles_have_a_swatch(self) -> None:
         for key in ps.THEME_KEYS:
-            if key != "dark":
-                self.assertRegex(ucs.hex_for_color_key("ui", key), r"^#[0-9A-Fa-f]{6}$", key)
+            self.assertRegex(ucs.hex_for_color_key("ui", key), r"^#[0-9A-Fa-f]{6}$", key)
         self.assertEqual(ucs.hex_for_color_key("ui", "pink").upper(), "#FF5CA8")
 
     def test_svg_has_the_eight_buttons(self) -> None:
@@ -298,13 +296,15 @@ class PageStateTests(_IsolatedStateTest):
     def test_theme_tiles_show_color_dots(self) -> None:
         root = self._root(self._state("theme"))
         fills = []
-        for n in range(1, 7):
+        for n in range(1, 6):
             group = ps._by_id(root, f"toggle_0{n}_group")
             dots = [c for c in group if ps._local(c) == "circle"]
             self.assertEqual(len(dots), 1, n)
             fills.append(dots[0].get("fill").upper())
-        self.assertEqual(fills[:5], ["#4B9EEC", "#00A22D", "#E5FF0C", "#FF5CA8", "#FB0000"])
-        self.assertEqual(fills[5], "#000000")
+        self.assertEqual(fills, ["#4B9EEC", "#00A22D", "#E5FF0C", "#FF5CA8", "#FB0000"])
+        # Tile 6 is the STANDARD / SIMPLE toggle, not a color.
+        group = ps._by_id(root, "toggle_06_group")
+        self.assertFalse([c for c in group if ps._local(c) == "circle"])
 
     def test_update_badge_only_when_an_update_exists(self) -> None:
         def dots(root: ET.Element) -> int:
@@ -385,20 +385,32 @@ class NavigationTests(_IsolatedStateTest):
         self.assertEqual(w.state.theme.ui.upper(), "#FF5CA8")
         self.assertEqual(ucs.read_ui_color_keys()["ui"], "pink")
 
-    def test_dark_tile_switches_to_the_dark_look_and_a_color_undoes_it(self) -> None:
-        from pigeon.widgets.options_settings import read_options, ui_is_monochrome
+    def test_style_toggle_switches_between_standard_and_simple(self) -> None:
+        from pigeon.widgets.options_settings import read_options, ui_is_simple
 
         w = self._widget()
         self._open_menu(w, "theme")
-        self._focus(w, "color:dark")
-        self.assertEqual(w.activate(), "ui_color_dark")
-        self.assertTrue(ui_is_monochrome())
-        self.assertEqual(read_options()["color_format"], "dark")
-        # Focusing dark never re-themes the page.
+        self.assertFalse(ui_is_simple())
+        self._focus(w, "option:7")
+        self.assertEqual(w.activate(), "options_toggle:7")
+        self.assertTrue(ui_is_simple())
+        self.assertEqual(read_options()["ui_style"], "simple")
+        # The toggle never re-themes the page.
         self.assertEqual(w.state.theme.ui.upper(), "#4B9EEC")
-        self._focus(w, "color:green")
-        self.assertEqual(w.activate(), "ui_color_swatch:ui:green")
-        self.assertFalse(ui_is_monochrome())
+        self.assertEqual(w.activate(), "options_toggle:7")
+        self.assertFalse(ui_is_simple())
+
+    def test_simple_style_is_black_and_the_ui_color_only(self) -> None:
+        from pigeon.widgets.options_settings import set_option_value
+
+        w = self._widget()
+        self._open_menu(w, "theme")
+        w.state.options_values = set_option_value("ui_style", "simple", None)
+        frame = ps.render_pigeon_settings_bgra(w.state, assets_dir=None)
+        self.assertTrue((frame[5:15, 640:660, :3] == 0).all())  # no background layer
+        w.state.options_values = set_option_value("ui_style", "standard", None)
+        std = ps.render_pigeon_settings_bgra(w.state, assets_dir=None)
+        self.assertFalse((std[200:210, 640:660, :3] == 0).all())
 
     def test_color_tiles_preview_in_full_color_while_in_dark_mode(self) -> None:
         from pigeon.widgets.options_settings import set_mono_preview_off, ui_is_monochrome
@@ -406,13 +418,14 @@ class NavigationTests(_IsolatedStateTest):
         self.addCleanup(set_mono_preview_off, False)
         w = self._widget()
         self._open_menu(w, "theme")
-        self._focus(w, "color:dark")
-        w.activate()
-        self.assertTrue(ui_is_monochrome())
+        from pigeon.widgets.options_settings import set_option_value
+
+        w.state.options_values = set_option_value("color_format", "dark", None)
+        self._focus(w, "color:blue")
         self._focus(w, "color:green")  # preview: not dimmed
         self.assertFalse(ui_is_monochrome())
         self.assertEqual(w.state.theme.ui.upper(), "#00A22D")
-        self._focus(w, "color:dark")  # back on dark: dark again
+        self._focus(w, "option:7")  # off the colors: dark again
         self.assertTrue(ui_is_monochrome())
         self._focus(w, "color:red")
         self.assertFalse(ui_is_monochrome())

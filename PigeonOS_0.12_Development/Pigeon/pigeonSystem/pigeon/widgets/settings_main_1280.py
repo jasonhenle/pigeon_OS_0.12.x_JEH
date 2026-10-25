@@ -147,12 +147,13 @@ def _search_bar_root(*, double: bool, a_on: bool, b_on: bool, stroke: str) -> ET
     w = _search_plate_w(double)
     h = _SEARCH_BAR_H
     pad = _SEARCH_PAD
-    a_fill = _COLOR_WHITE if a_on else _COLOR_SLOT_OFF
-    b_fill = _COLOR_WHITE if b_on else _COLOR_SLOT_OFF
+    a_fill = _on_fill() if a_on else _COLOR_SLOT_OFF
+    b_fill = _on_fill() if b_on else _COLOR_SLOT_OFF
     parts = [
         f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w:g} {h:g}">',
         f'<rect x="3.5" y="3.5" width="{w - 7:g}" height="{h - 7:g}" '
-        f'rx="15" ry="15" fill="#202020" stroke="{stroke}" stroke-width="7"/>',
+        f'rx="15" ry="15" fill="{_plate_fill()}" stroke="{stroke}" '
+        f'stroke-width="{_stroke_units(1, 1) if _simple() else 7}"/>',
         f'<rect x="{pad:g}" y="{pad:g}" width="{_SEARCH_PILL_W:g}" '
         f'height="{_SEARCH_PILL_H:g}" rx="10.8" ry="10.8" fill="{a_fill}"/>',
     ]
@@ -166,7 +167,7 @@ def _search_bar_root(*, double: bool, a_on: bool, b_on: bool, stroke: str) -> ET
         cx = bx - _SEARCH_GAP * 0.5
         parts.append(
             f'<rect x="{cx - 2:g}" y="{h / 2 - 19:g}" width="4" height="38" rx="2" '
-            f'fill="{_COLOR_WHITE}"/>'
+            f'fill="{_on_fill()}"/>'
         )
     parts.append("</svg>")
     return ET.fromstring("".join(parts))
@@ -186,7 +187,7 @@ def _draw_search_bar(canvas: np.ndarray, st, *, focused: str, stroke: str) -> No
         y=py,
         w=pw,
         h=ph,
-        cache_key=("search_bar2", pw, ph, double, a_on, b_on, stroke),
+        cache_key=("search_bar2", pw, ph, double, a_on, b_on, stroke, _look_key()),
     )
     # The pinned title takes the SEARCH pill so it is obvious what CLEAR drops.
     _draw_centered_text(
@@ -194,7 +195,7 @@ def _draw_search_bar(canvas: np.ndarray, st, *, focused: str, stroke: str) -> No
         title.upper() if double else "SEARCH",
         box=geo["a"],
         size=46,
-        fill=(0, 0, 0) if a_on else (255, 255, 255),
+        fill=_ink(a_on),
         fit=True,
     )
     if double:
@@ -203,7 +204,7 @@ def _draw_search_bar(canvas: np.ndarray, st, *, focused: str, stroke: str) -> No
             "CLEAR",
             box=geo["b"],
             size=46,
-            fill=(0, 0, 0) if b_on else (255, 255, 255),
+            fill=_ink(b_on),
         )
 
 
@@ -367,6 +368,91 @@ def _tight_crop_logo(logo: np.ndarray) -> np.ndarray:
     return logo[int(ys.min()) : int(ys.max()) + 1, int(xs.min()) : int(xs.max()) + 1]
 
 
+def _counters(mask: np.ndarray, *, min_area: int) -> list[tuple[float, float, int]]:
+    """(cx, cy, area) of every enclosed hole in a binary mask."""
+    n, _lab, stats, cen = cv2.connectedComponentsWithStats(
+        (mask == 0).astype(np.uint8), connectivity=4
+    )
+    hh, ww = mask.shape
+    out = []
+    for i in range(1, n):
+        x, y, w, h, area = (int(v) for v in stats[i])
+        if x == 0 or y == 0 or x + w == ww or y + h == hh or area < min_area:
+            continue
+        out.append((float(cen[i][0]), float(cen[i][1]), area))
+    return out
+
+
+def _draw_skinny_pigeon(
+    canvas: np.ndarray,
+    box: tuple[int, int, int, int],
+    color: tuple[int, int, int],
+    logo_alpha: np.ndarray,
+) -> None:
+    """SIMPLE: an extrabold-italic "pigeon" thinned and laid inside the wordmark.
+
+    The wordmark's tracking differs from the font's, so each letter is kerned to
+    land centered on the one beneath: p, g and o by their counters, i / e / n by
+    their neighbors (the logo's e is open, i and n have no counter).
+    """
+    from pigeon.font_cache import load_font
+
+    path = resolve_ui_font_extrabold_italic()
+    x, y, w, h = box
+    if not path or w < 16 or h < 8:
+        return
+    text = "pigeon"
+    probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
+    size = max(8, h * 2)
+    while size > 8:
+        font = load_font(path, size)
+        l, t, r, b = probe.textbbox((0, 0), text, font=font)
+        if r - l <= w * 0.97 and b - t <= h * 0.95:
+            break
+        size -= 2
+    font = load_font(path, size)
+    l, t, r, b = probe.textbbox((0, 0), text, font=font)
+    ox = (w - (r - l)) // 2 - l
+    oy = (h - (b - t)) // 2 - t
+    k = max(2, h // 16)
+    kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+
+    glyphs = []
+    for i, ch in enumerate(text):
+        img = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(img).text(
+            (ox + int(round(font.getlength(text[:i]))), oy), ch, font=font, fill=255
+        )
+        glyphs.append(np.asarray(img))
+
+    # Logo counters on the letters' centerline (drops the gap between i and g).
+    holes = _counters((logo_alpha > 128).astype(np.uint8), min_area=max(8, h // 8))
+    if holes:
+        mid = float(np.median([c[1] for c in holes]))
+        holes = sorted((c for c in holes if abs(c[1] - mid) <= h * 0.1), key=lambda c: c[0])
+    shifts: dict[int, tuple[float, float]] = {}
+    if len(holes) == 3:
+        for idx, target in zip((0, 2, 4), holes):  # p, g, o
+            own = _counters((glyphs[idx] > 127).astype(np.uint8), min_area=max(8, h // 8))
+            if own:
+                shifts[idx] = (target[0] - own[0][0], target[1] - own[0][1])
+    if len(shifts) == 3:
+        dy = sum(v[1] for v in shifts.values()) / 3.0
+        shifts[1] = ((shifts[0][0] + shifts[2][0]) / 2.0, dy)  # i
+        shifts[3] = ((shifts[2][0] + shifts[4][0]) / 2.0, dy)  # e
+        shifts[5] = (shifts[4][0], dy)  # n
+    mask = np.zeros((h, w), dtype=np.uint8)
+    for idx, g in enumerate(glyphs):
+        dx, dy = shifts.get(idx, (0.0, 0.0))
+        m = np.float32([[1, 0, dx], [0, 1, dy]])
+        moved = cv2.warpAffine(g, m, (w, h), flags=cv2.INTER_LINEAR)
+        mask = np.maximum(mask, cv2.erode(moved, kern))
+    alpha = (mask.astype(np.float32) / 255.0)[:, :, None]
+    roi = canvas[y : y + h, x : x + w]
+    ink = np.array((color[2], color[1], color[0]), dtype=np.float32)
+    roi[:, :, :3] = (roi[:, :, :3] * (1.0 - alpha) + ink * alpha).astype(np.uint8)
+
+
 def _draw_zone2_pigeon(
     canvas: np.ndarray,
     box: tuple[int, int, int, int],
@@ -384,6 +470,10 @@ def _draw_zone2_pigeon(
     if logo.shape[0] > _PIGEON_WORDMARK_H:
         logo = logo[:_PIGEON_WORDMARK_H]
     logo = _tight_crop_logo(logo)
+    if _simple():
+        # Wordmark takes the card's ink (UI color, or black when selected).
+        logo = logo.copy()
+        logo[:, :, 0], logo[:, :, 1], logo[:, :, 2] = ink[2], ink[1], ink[0]
     lw, lh = int(logo.shape[1]), int(logo.shape[0])
     # Grow the wordmark through the space above the IP; keep a line gap.
     logo_h = max(16, int(ip_box[1]) - zy - _ZONE_LINE_GAP)
@@ -398,6 +488,12 @@ def _draw_zone2_pigeon(
         zx + (zw - ww) // 2,
         zy + logo_h - hh,
     )
+    if _simple():
+        # Opposite of the chunky wordmark: black on UI-colored, UI-colored on black.
+        skinny = _ink(False) if tuple(ink) == (0, 0, 0) else (0, 0, 0)
+        _draw_skinny_pigeon(
+            canvas, (zx + (zw - ww) // 2, zy + logo_h - hh, ww, hh), skinny, scaled[:, :, 3]
+        )
     if ip:
         _draw_centered_text(
             canvas,
@@ -692,10 +788,11 @@ def _paint_location_dots(root: ET.Element, index: int) -> None:
         el = _find(root, eid)
         if el is None:
             continue
+        ink = _on_fill() if _simple() else _COLOR_WHITE
         if i <= n:
-            _set_fill(el, _COLOR_WHITE, stroke=_COLOR_BLACK)
+            _set_fill(el, ink, stroke=_COLOR_BLACK)
         else:
-            _set_fill(el, "none", stroke=_COLOR_WHITE)
+            _set_fill(el, "none", stroke=ink)
 
 
 def _draw_location_column(
@@ -733,7 +830,7 @@ def _draw_location_column(
         label,
         box=(zx + 10, zy + int(zh * 0.46), max(8, zw - 20), max(24, int(zh * 0.36))),
         size=48,
-        fill=(0, 0, 0) if selected else (255, 255, 255),
+        fill=_ink(selected),
         digital=True,
         fit=True,
     )
@@ -849,8 +946,13 @@ def _draw_yes_no_above_zone1(canvas: np.ndarray, keyboard) -> None:
     for label, selected, px in (("YES", yes_on, x), ("NO", not yes_on, x + pill_w + gap)):
         img = Image.new("RGBA", (pill_w, pill_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        fill = (255, 255, 255, 255) if selected else (26, 26, 26, 255)
-        stroke = (0, 0, 0, 255)
+        if _simple():
+            ur, ug, ub = _ink(False)
+            fill = (ur, ug, ub, 255) if selected else (0, 0, 0, 255)
+            stroke = (ur, ug, ub, 255)
+        else:
+            fill = (255, 255, 255, 255) if selected else (26, 26, 26, 255)
+            stroke = (0, 0, 0, 255)
         draw.rounded_rectangle(
             (1, 1, pill_w - 2, pill_h - 2),
             radius=pill_h // 2,
@@ -865,7 +967,7 @@ def _draw_yes_no_above_zone1(canvas: np.ndarray, keyboard) -> None:
             label,
             box=(px, y, pill_w, pill_h),
             size=36,
-            fill=(0, 0, 0) if selected else (255, 255, 255),
+            fill=_ink(selected),
             digital=True,
             fit=True,
         )
@@ -898,8 +1000,15 @@ def _exit_root(state, *, assets_dir, selected: bool, label: str) -> ET.Element:
                 continue
             fill = (el.get("fill") or "").strip()
             if fill == "none":
+                if _simple():
+                    el.set("stroke", _chrome_stroke())  # the outline path
+                    el.set("stroke-width", _stroke_units(125.0, SETTINGS_MAIN_ZONES[0].w))
                 continue
-            _set_fill(el, _COLOR_WHITE if selected else "#202020")
+            if _simple():
+                _set_fill(el, _on_fill() if selected else _plate_fill(), stroke=_chrome_stroke())
+                el.set("stroke-width", _stroke_units(125.0, SETTINGS_MAIN_ZONES[0].w))
+            else:
+                _set_fill(el, _COLOR_WHITE if selected else "#202020")
     # SVG text is also redrawn by the rasterizer — hide it so Pillow is the only label.
     _hide(_find(root, "exit_text"))
     return root
@@ -963,6 +1072,7 @@ def _column_list(
     if not show_arrows:
         _hide(_find(chrome, "navigation_arrow_group"))
     labels = rows[scroll : scroll + _LIST_PAGE_SIZE]
+    list_w = zone_center_rect(zone, *_viewbox_wh(chrome))[2]
     for i, letter in enumerate(_ROW_LETTERS):
         cell = _find(chrome, f"sm_02-03-04-{letter}")
         if cell is None:
@@ -973,9 +1083,11 @@ def _column_list(
         on = i == int(selected_row)
         stroke = _chrome_stroke()
         if on:
-            _set_fill(cell, _COLOR_WHITE, stroke=stroke)
+            _set_fill(cell, _on_fill(), stroke=stroke)
         else:
-            _set_fill(cell, _COLOR_COLUMN_OFF, stroke=stroke)
+            _set_fill(cell, _off_fill(), stroke=stroke)
+        if _simple():
+            cell.set("stroke-width", _stroke_units(_viewbox_wh(chrome)[0], list_w))
     x, y, w, h = zone_center_rect(zone, *_viewbox_wh(chrome))
     _place_widget(
         canvas,
@@ -984,7 +1096,7 @@ def _column_list(
         y=y,
         w=w,
         h=h,
-        cache_key=("list", w, h, int(selected_row), len(labels), bool(show_arrows), _ui_bright()),
+        cache_key=("list", w, h, int(selected_row), len(labels), bool(show_arrows), _ui_bright(), _look_key()),
     )
     sx = w / _LIST_CHROME_VB[0]
     sy = h / _LIST_CHROME_VB[1]
@@ -995,7 +1107,7 @@ def _column_list(
             continue
         name, ip = labels[i]
         on = i == int(selected_row)
-        ink = (0, 0, 0) if on else (255, 255, 255)
+        ink = _ink(on)
         rx, ry, rw, rh = _LIST_ROW_SVG[i]
         box = (
             int(round(x + rx * sx)),
@@ -1030,7 +1142,7 @@ def _column_list(
                     box[0] + split - star_r - 2,
                     box[1] + box[3] / 2.0,
                     star_r,
-                    (0, 0, 0) if on else (255, 255, 255),
+                    ink,
                 )
         else:
             extra = int(round(star_r * 2 + 6)) if starred else 0
@@ -1047,7 +1159,7 @@ def _column_list(
                     box[0] + pad + star_r,
                     box[1] + box[3] / 2.0,
                     star_r,
-                    (0, 0, 0) if on else (255, 255, 255),
+                    ink,
                 )
 
 
@@ -1111,7 +1223,14 @@ def _draw_search_status_bar(
         bar_w = min(bar_w, x + w - bx - pad_x)
     radius = max(4, bar_h // 2)
     frac = max(0.0, min(1.0, float(fraction)))
-    if selected:
+    if _simple():
+        if selected:
+            track = (*_dim_ui(0.55), 255)
+            fill = (0, 0, 0, 255)
+        else:
+            track = (*_dim_ui(0.35), 255)
+            fill = (*_dim_ui(1.0), 255)
+    elif selected:
         track = (208, 208, 208, 255)
         fill = (32, 32, 32, 255)
     else:
@@ -1148,7 +1267,7 @@ def _draw_finding_scan(
         label,
         box=name_box,
         size=_FINDING_SIZE_PX,
-        fill=_FINDING_RGB,
+        fill=_ink(selected) if _simple() else _FINDING_RGB,
         digital=False,
         semibold=True,
         fit=True,
@@ -1165,6 +1284,67 @@ def clear_settings_main_compose_cache() -> None:
     _LAST_MAIN["frame"] = None
 
 
+_LOOK: dict[str, object] = {"simple": False, "ui": _COLOR_UI}
+
+
+def _set_look(ui_hex: str) -> None:
+    """SIMPLE look (option7): UI color + black only, no background layer."""
+    try:
+        from pigeon.widgets.options_settings import ui_is_simple
+
+        simple = bool(ui_is_simple())
+    except Exception:
+        simple = False
+    _LOOK["simple"] = simple
+    _LOOK["ui"] = str(ui_hex or _COLOR_UI)
+
+
+def _simple() -> bool:
+    return bool(_LOOK["simple"])
+
+
+def _look_key() -> tuple[object, ...]:
+    return ("simple", _LOOK["ui"]) if _simple() else ("std",)
+
+
+def _on_fill() -> str:
+    return str(_LOOK["ui"]) if _simple() else _COLOR_WHITE
+
+
+def _off_fill() -> str:
+    return _COLOR_BLACK if _simple() else _COLOR_COLUMN_OFF
+
+
+def _plate_fill() -> str:
+    return _COLOR_BLACK if _simple() else "#202020"
+
+
+def _ink(on: bool) -> tuple[int, int, int]:
+    """Text on a button: black when selected, else white (UI color in SIMPLE)."""
+    if on:
+        return (0, 0, 0)
+    if _simple():
+        h = str(_LOOK["ui"]).lstrip("#")
+        try:
+            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        except ValueError:
+            pass
+    return (255, 255, 255)
+
+
+_SIMPLE_STROKE_PX = 3.0  # matches the settings_pigeon page
+
+
+def _stroke_units(view_w: float, px_w: float) -> str:
+    """Stroke width in a widget's own units that lands on 3 px once scaled."""
+    return f"{_SIMPLE_STROKE_PX * float(view_w) / max(1.0, float(px_w)):.3f}"
+
+
+def _dim_ui(k: float) -> tuple[int, int, int]:
+    r, g, b = _ink(False)
+    return (int(r * k), int(g * k), int(b * k))
+
+
 def _ui_bright() -> bool:
     try:
         from pigeon.widgets.options_settings import ui_is_bright
@@ -1175,7 +1355,7 @@ def _ui_bright() -> bool:
 
 
 def _chrome_stroke() -> str:
-    return _COLOR_BLACK
+    return str(_LOOK["ui"]) if _simple() else _COLOR_BLACK
 
 
 def _settings_main_bg(
@@ -1188,6 +1368,10 @@ def _settings_main_bg(
         settings_background_ui_hex,
     )
 
+    if _simple():
+        black = np.zeros((DESIGN_H, DESIGN_W, 4), dtype=np.uint8)
+        black[:, :, 3] = 255
+        return black
     tint = settings_background_ui_hex(ui_hex)
     key = (
         str(tint or "").lower(),
@@ -1291,6 +1475,7 @@ def _settings_main_structure_sig(
         str(getattr(st, "manual_search_title", "") or ""),
         bool(st.search_bar_visible()) if hasattr(st, "search_bar_visible") else False,
         _ui_bright(),
+        _look_key(),
     )
 
 
@@ -1309,13 +1494,15 @@ def _zone_focused(zone_index: int, focused: str) -> bool:
     return False
 
 
-def _style_column_container(root: ET.Element, *, selected: bool) -> None:
+def _style_column_container(root: ET.Element, *, selected: bool, px_w: float = 0.0) -> None:
     el = _find(root, "sm_container")
     stroke = _chrome_stroke()
     if selected:
-        _set_fill(el, _COLOR_WHITE, stroke=stroke)
+        _set_fill(el, _on_fill(), stroke=stroke)
     else:
-        _set_fill(el, _COLOR_COLUMN_OFF, stroke=stroke)
+        _set_fill(el, _off_fill(), stroke=stroke)
+    if _simple() and el is not None and px_w:
+        el.set("stroke-width", _stroke_units(_viewbox_wh(root)[0], px_w))
 
 
 def _tint_add_art(root: ET.Element, color: str) -> None:
@@ -1365,6 +1552,7 @@ def render_settings_main_1280_bgra(
     logout = bool(st.keyboard_open and kb_target == "wifi_logout")
     focused = "" if st.keyboard_open else st.focused_id
     ui_hex = str(getattr(st.theme, "ui", _COLOR_UI) or _COLOR_UI)
+    _set_look(ui_hex)
     hide_columns = bool(st.keyboard_open and kb_target not in ("", "wifi_logout"))
     structure = _settings_main_structure_sig(
         st, assets_dir=assets_dir, skip_text_entry=skip_text_entry
@@ -1420,14 +1608,14 @@ def render_settings_main_1280_bgra(
             _exit_root(st, assets_dir=assets_dir, selected=exit_sel, label="EXIT"),
             0,
             align="center",
-            cache_key=("exit", exit_sel),
+            cache_key=("exit", exit_sel, _look_key()),
         )
         _draw_centered_text(
             canvas,
             "EXIT",
             box=_exit_button_box(),
             size=46,
-            fill=(0, 0, 0) if exit_sel else (255, 255, 255),
+            fill=_ink(exit_sel),
         )
 
     loc_picker = bool(st.show_location_picker)
@@ -1443,11 +1631,16 @@ def render_settings_main_1280_bgra(
         dual = _load_widget("dual", assets_dir=assets_dir)
         _set_fill(
             _find(dual, "dual_container"),
-            "#202020",
+            _plate_fill(),
             stroke=_chrome_stroke(),
         )
-        _set_fill(_find(dual, "dual_button_container_a"), _COLOR_WHITE if a_on else _COLOR_SLOT_OFF)
-        _set_fill(_find(dual, "dual_button_container_b"), _COLOR_WHITE if b_on else _COLOR_SLOT_OFF)
+        if _simple():
+            _find(dual, "dual_container").set(
+                "stroke-width", _stroke_units(_viewbox_wh(dual)[0], SETTINGS_MAIN_ZONES[1].w)
+            )
+            _set_fill(_find(dual, "dual___icon"), _on_fill())  # the "|" divider
+        _set_fill(_find(dual, "dual_button_container_a"), _on_fill() if a_on else _COLOR_SLOT_OFF)
+        _set_fill(_find(dual, "dual_button_container_b"), _on_fill() if b_on else _COLOR_SLOT_OFF)
         zone1 = SETTINGS_MAIN_ZONES[1]
         zw, zh = int(round(zone1.w)), int(round(zone1.h))
         _place_widget(
@@ -1457,7 +1650,7 @@ def render_settings_main_1280_bgra(
             y=int(round(zone1.y)),
             w=zw,
             h=zh,
-            cache_key=("dual", zw, zh, a_on, b_on, _ui_bright()),
+            cache_key=("dual", zw, zh, a_on, b_on, _ui_bright(), _look_key()),
         )
 
     if (
@@ -1485,7 +1678,7 @@ def render_settings_main_1280_bgra(
                 "AUTHENTICATION CODE",
                 box=_auth_code_box(loc_box),
                 size=42,
-                fill=(255, 255, 255),
+                fill=_ink(False),
                 digital=True,
                 fit=True,
             )
@@ -1500,7 +1693,7 @@ def render_settings_main_1280_bgra(
                 size=48,
                 fill=(128, 128, 128)
                 if loc_placeholder
-                else ((0, 0, 0) if a_on else (255, 255, 255)),
+                else _ink(a_on),
             )
 
     show_password = bool(st.keyboard_open and kb_target == "network") or bool(st.wifi_connecting)
@@ -1512,7 +1705,7 @@ def render_settings_main_1280_bgra(
                 kb_buffer.upper(),
                 box=net_text_box,
                 size=48,
-                fill=(0, 0, 0) if b_on else (255, 255, 255),
+                fill=_ink(b_on),
             )
         elif kb_target == "pin":
             _draw_centered_text(
@@ -1555,7 +1748,7 @@ def render_settings_main_1280_bgra(
                 _wifi_logout_instruction_text(st).upper(),
                 box=(net_box[0] + 16, net_box[1], max(8, net_box[2] - 32), net_box[3]),
                 size=36,
-                fill=(0, 0, 0) if b_on else (255, 255, 255),
+                fill=_ink(b_on),
                 digital=True,
                 fit=True,
             )
@@ -1572,7 +1765,7 @@ def render_settings_main_1280_bgra(
                 canvas,
                 wifi_box,
                 level=int(getattr(st, "wifi_level", 3) or 0),
-                color_bgr=_hex_to_bgr(ui_hex),
+                color_bgr=(0, 0, 0) if (_simple() and b_on) else _hex_to_bgr(ui_hex),
                 none=none,
             )
             _draw_centered_text(
@@ -1580,7 +1773,7 @@ def render_settings_main_1280_bgra(
                 str(label or "").upper(),
                 box=net_text_box,
                 size=42,
-                fill=(0, 0, 0) if b_on else (255, 255, 255),
+                fill=_ink(b_on),
             )
 
     column_boxes: dict[int, tuple[int, int, int, int]] = {}
@@ -1606,7 +1799,7 @@ def render_settings_main_1280_bgra(
         if not _want(zone_index):
             continue
         container = _load_widget("column_container", assets_dir=assets_dir)
-        _style_column_container(container, selected=column_on[zone_index])
+        _style_column_container(container, selected=column_on[zone_index], px_w=rect[2])
         _place_widget(
             canvas,
             container,
@@ -1614,7 +1807,7 @@ def render_settings_main_1280_bgra(
             y=rect[1],
             w=rect[2],
             h=rect[3],
-            cache_key=("col", rect[2], rect[3], column_on[zone_index], _ui_bright()),
+            cache_key=("col", rect[2], rect[3], column_on[zone_index], _ui_bright(), _look_key()),
         )
 
     def _column_text_box(zone_index: int) -> tuple[int, int, int, int]:
@@ -1623,7 +1816,7 @@ def render_settings_main_1280_bgra(
         return (x + pad, y + pad, max(8, w - 2 * pad), max(8, h - 2 * pad))
 
     def _column_text_rgb(zone_index: int) -> tuple[int, int, int]:
-        return (0, 0, 0) if column_on[zone_index] else (255, 255, 255)
+        return _ink(column_on[zone_index])
 
     ip = local_ipv4_address() or ""
     if not hide_columns and loc_picker:
@@ -1805,6 +1998,7 @@ def draw_settings_main_text_entry(bgra: np.ndarray, state) -> None:
     """Patch dual-bar field text onto cached chrome (keyboard overlay)."""
     from pigeon.widgets.main_settings import _location_display_text
 
+    _set_look(str(getattr(state.theme, "ui", _COLOR_UI) or _COLOR_UI))
     loc_box = dual_slot_design(DUAL_SLOT_A)
     net_box = dual_slot_design(DUAL_SLOT_B)
     kb = state.keyboard
@@ -1831,7 +2025,7 @@ def draw_settings_main_text_entry(bgra: np.ndarray, state) -> None:
             "AUTHENTICATION CODE",
             box=_auth_code_box(loc_box),
             size=42,
-            fill=(255, 255, 255),
+            fill=_ink(False),
             digital=True,
             fit=True,
         )
@@ -1853,14 +2047,10 @@ def draw_settings_main_text_entry(bgra: np.ndarray, state) -> None:
             loc_fill = (0, 0, 0)
         elif loc_editing:
             label = (kb_initial or str(_location_display_text(state) or "")).upper()
-            loc_fill = (128, 128, 128)
+            loc_fill = _dim_ui(0.5) if _simple() else (128, 128, 128)
         else:
             label = str(_location_display_text(state) or "").upper()
-            loc_fill = (
-                (0, 0, 0)
-                if state.focused_id == "main_dual_location_button"
-                else (255, 255, 255)
-            )
+            loc_fill = _ink(state.focused_id == "main_dual_location_button")
         _dots_box, loc_text_box = _location_field_boxes(loc_box)
         _draw_centered_text(
             bgra,
@@ -1888,7 +2078,8 @@ def _field_root(w: int, h: int, *, fill: str, stroke: str, pad: float) -> ET.Ele
     parts = [
         f'<svg xmlns="{SVG_NS}" viewBox="0 0 {w} {h}">',
         f'<rect x="3.5" y="3.5" width="{w - 7}" height="{h - 7}" rx="15" ry="15" '
-        f'fill="#202020" stroke="{stroke}" stroke-width="7"/>',
+        f'fill="{_plate_fill()}" stroke="{stroke}" '
+        f'stroke-width="{_stroke_units(1, 1) if _simple() else 7}"/>',
         f'<rect x="{pad:g}" y="{pad:g}" width="{w - 2 * pad:g}" height="{h - 2 * pad:g}" '
         f'rx="10.8" ry="10.8" fill="{fill}"/>',
         "</svg>",
@@ -1916,6 +2107,7 @@ def draw_search_overlay(bgra: np.ndarray, state, *, caret_on: bool) -> None:
     kb = state.keyboard
     if kb is None or str(getattr(kb, "target", "") or "") != "search":
         return
+    _set_look(str(getattr(state.theme, "ui", _COLOR_UI) or _COLOR_UI))
     h_img, w_img = int(bgra.shape[0]), int(bgra.shape[1])
     plate_top = int(round(MENU_PLATE_XYWH[1]))
 
@@ -1926,9 +2118,9 @@ def draw_search_overlay(bgra: np.ndarray, state, *, caret_on: bool) -> None:
     stroke = _chrome_stroke()
     zone = SETTINGS_MAIN_ZONES[1]
     fx, fy, fw, fh = (int(round(v)) for v in zone.xywh)
-    root = _field_root(fw, fh, fill=_COLOR_WHITE, stroke=stroke, pad=13.5)
+    root = _field_root(fw, fh, fill=_on_fill(), stroke=stroke, pad=13.5)
     _place_widget(
-        bgra, root, x=fx, y=fy, w=fw, h=fh, cache_key=("search_field", fw, fh, stroke)
+        bgra, root, x=fx, y=fy, w=fw, h=fh, cache_key=("search_field", fw, fh, stroke, _look_key())
     )
     buffer = str(getattr(kb, "buffer", "") or "")
     box = (fx + 30, fy + 14, fw - 60, fh - 28)
@@ -1938,7 +2130,7 @@ def draw_search_overlay(bgra: np.ndarray, state, *, caret_on: bool) -> None:
         )
     else:
         _draw_centered_text(
-            bgra, "SEARCH TITLES", box=box, size=48, fill=(128, 128, 128), fit=True
+            bgra, "SEARCH TITLES", box=box, size=48, fill=_dim_ui(0.5) if _simple() else (128, 128, 128), fit=True
         )
     if caret_on:
         text_w = 0
@@ -1962,17 +2154,17 @@ def draw_search_overlay(bgra: np.ndarray, state, *, caret_on: bool) -> None:
         rx, ry, rw, rh = rect
         on = i == focus_row
         row_root = _field_root(
-            rw, rh, fill=_COLOR_WHITE if on else _COLOR_SLOT_OFF, stroke=stroke, pad=8.0
+            rw, rh, fill=_on_fill() if on else _COLOR_SLOT_OFF, stroke=stroke, pad=8.0
         )
         _place_widget(
             bgra, row_root, x=rx, y=ry, w=rw, h=rh,
-            cache_key=("search_row", rw, rh, on, stroke),
+            cache_key=("search_row", rw, rh, on, stroke, _look_key()),
         )
         _draw_centered_text(
             bgra,
             str(rows[i]).upper(),
             box=(rx + 24, ry + 6, rw - 48, rh - 12),
             size=38,
-            fill=(0, 0, 0) if on else (255, 255, 255),
+            fill=_ink(on),
             fit=True,
         )
