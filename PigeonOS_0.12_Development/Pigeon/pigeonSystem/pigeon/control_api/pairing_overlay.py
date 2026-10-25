@@ -68,7 +68,7 @@ def render_pairing_image(code: str, width: int, height: int) -> Image.Image:
 
     centered("ADD THIS PIGEON TO THE PIGEON APP", heading, h * 0.22, ACCENT_RGB)
     centered(text, big, h * 0.50, (255, 255, 255))
-    centered("Enter this code on your phone.", hint, h * 0.76, (154, 154, 154))
+    centered("Enter this code on your device.", hint, h * 0.76, (154, 154, 154))
     return img
 
 
