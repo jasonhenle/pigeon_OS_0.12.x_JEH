@@ -10,6 +10,7 @@
 		121DB773A35E34FBBEF8FC78 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5013FC18FF49E1805AE52DBA /* SearchView.swift */; };
 		229BA0AFD578E9B12CAC7796 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C65045E40B6726CB54509F0 /* Keychain.swift */; };
 		31E66E040635671A8175C92B /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3884DEDC3F80F5BE1B7B5B4 /* API.swift */; };
+		348DD35B94B7FFCE61A51B0D /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A7C01AA68AE4B49AB9463DE1 /* AppIcon.icon */; };
 		392065FEC31AED571E3477D3 /* DeviceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E78CAFD971EFA4D21AD41FC /* DeviceStore.swift */; };
 		3D570AC8514A419B79EF5169 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A77ACCD83710B7EF97D506A /* Assets.xcassets */; };
 		64EB8E2E0D8C956ACC7DCCDB /* SharpSansMedium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 27E071529EB338C9A3462FF9 /* SharpSansMedium.otf */; };
@@ -53,6 +54,7 @@
 		A04A113353711EA6C8B406FA /* Pigeon.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Pigeon.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5D705F3F3E9ED241835C65C /* ClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientTests.swift; sourceTree = "<group>"; };
 		A7B9CFC40C338AD19039EAFF /* DeviceBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBrowser.swift; sourceTree = "<group>"; };
+		A7C01AA68AE4B49AB9463DE1 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		B3884DEDC3F80F5BE1B7B5B4 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		B6C3EDE037F6DF21B83900EC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -132,6 +134,7 @@
 		BCE596A885B61A72FDF9F0EB /* Pigeon */ = {
 			isa = PBXGroup;
 			children = (
+				A7C01AA68AE4B49AB9463DE1 /* AppIcon.icon */,
 				7A77ACCD83710B7EF97D506A /* Assets.xcassets */,
 				B6C3EDE037F6DF21B83900EC /* Info.plist */,
 				3762431839A00E0481DC1636 /* PigeonApp.swift */,
@@ -238,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				348DD35B94B7FFCE61A51B0D /* AppIcon.icon in Resources */,
 				3D570AC8514A419B79EF5169 /* Assets.xcassets in Resources */,
 				88A78968C788591AFCD162EF /* Digital-7.ttf in Resources */,
 				64EB8E2E0D8C956ACC7DCCDB /* SharpSansMedium.otf in Resources */,
@@ -354,7 +358,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -367,7 +371,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -430,7 +434,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -449,7 +453,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
