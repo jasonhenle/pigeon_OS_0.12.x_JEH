@@ -7,6 +7,8 @@ struct KnownDevice: Codable, Identifiable, Hashable {
     var product: String
     var host: String
     var port: Int
+    /// Certificate pin learned when the device was paired (nil for devices paired before TLS existed).
+    var pin: TLSPin?
 }
 
 /// The app's registry of claimed devices. Tokens live in the Keychain, the rest in UserDefaults.
@@ -47,7 +49,7 @@ final class DeviceStore: ObservableObject {
     func token(for id: String) -> String? { Keychain.get(id) }
 
     func client(for device: KnownDevice) -> PigeonClient {
-        PigeonClient(host: device.host, port: device.port, token: Keychain.get(device.id))
+        PigeonClient(host: device.host, port: device.port, token: Keychain.get(device.id), pin: device.pin)
     }
 
     func add(_ device: KnownDevice, token: String) {
@@ -63,6 +65,14 @@ final class DeviceStore: ObservableObject {
               devices[i].host != host || devices[i].port != port else { return }
         devices[i].host = host
         devices[i].port = port
+        persist()
+    }
+
+    /// Moves a device paired over plain HTTP onto pinned HTTPS, using the fingerprint it reports now.
+    /// Never replaces an existing pin: a different fingerprint then means a different device or an attacker.
+    func adoptPin(id: String, _ pin: TLSPin) {
+        guard let i = devices.firstIndex(where: { $0.id == id }), devices[i].pin == nil else { return }
+        devices[i].pin = pin
         persist()
     }
 

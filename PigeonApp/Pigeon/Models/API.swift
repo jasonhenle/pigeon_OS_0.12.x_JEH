@@ -11,6 +11,14 @@ struct Hello: Codable, Equatable {
     var version: String
     var claimed: Bool
     var setupMode: Bool
+    /// Present on firmware that serves HTTPS; absent on older devices (plain HTTP only).
+    var tls: TLSInfo?
+}
+
+struct TLSInfo: Codable, Equatable {
+    var port: Int
+    var fingerprintSha256: String
+    var pin: TLSPin { TLSPin(port: port, fingerprint: fingerprintSha256.lowercased()) }
 }
 
 struct ClaimRequest: Codable {

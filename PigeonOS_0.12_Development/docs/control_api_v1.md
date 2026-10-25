@@ -11,13 +11,13 @@ These resolve the roadmap's open decisions with its recommendations. Changing on
 |---|---|---|---|
 | 1 | Marquee board | Pi Zero 2 W is the floor, validated in roadmap Phase 3 | `profile.limits` |
 | 2 | Headless provisioning | Setup hotspot (not BLE) | §3 |
-| 3 | Transport security | Plain HTTP on the LAN with a bearer token in v1; HTTPS + pinning reserved | §2.3 |
+| 3 | Transport security | HTTPS with a self-signed certificate pinned by SHA-256 fingerprint; the plain port only serves `/hello` | §2.3 |
 | 4 | Naming | `pigeon` package and `PigeonOS` unchanged; `product` field distinguishes devices | §4 |
 | 5 | Multi-device | Per-device API only; the app fans out to several devices itself | §1 |
 
 ## 1. Conventions
 
-- **Base URL:** `http://<host>:8780/api/v1` (port `8780`, configurable). Host comes from mDNS (§2.1).
+- **Base URL:** `https://<host>:8781/api/v1` (TLS port `8781`, `PIGEON_CONTROL_TLS_PORT`), certificate pinned per §2.3. A plain `http://<host>:8780/api/v1` listener remains for `GET /hello`, `POST /pair/start` and `POST /pair/cancel` only; everything else there returns `426 tls_required`. Host comes from mDNS (§2.1).
 - **Format:** JSON, UTF-8. `Content-Type: application/json` on bodies. Timestamps are RFC 3339 UTC strings.
 - **Versioning:** the path carries the major version. Within v1, changes are **additive only**: new endpoints, new optional fields, new enum values. Clients must ignore unknown fields and tolerate unknown enum values.
 - **Auth:** `Authorization: Bearer <token>` on everything except endpoints marked *open*.
@@ -99,7 +99,15 @@ A device is **unclaimed** until a controller claims it. The claim proves physica
 - Tokens never appear in URLs or query strings.
 - `GET /controllers` lists controllers; `DELETE /controllers/{id}` revokes one. A physical factory reset (`POST /factory-reset` with a fresh on-screen code) returns the device to unclaimed.
 
-**HTTPS reservation:** a future `GET /hello` field `tls: { port, fingerprint_sha256 }` lets a v1 client opt into pinned HTTPS without an API version bump. Not implemented in v1.
+**Transport security.** The device generates a self-signed EC P-256 certificate on first start (`control_api_tls_cert.pem` / `control_api_tls_key.pem` in the state directory, key mode `0600`, valid 10 years, regenerated if unreadable or within 30 days of expiry). No CA is involved: clients pin it.
+
+- `GET /hello` (plain or TLS) and the mDNS TXT record (`tlsport`, `fp`) carry `tls: { "port": 8781, "fingerprint_sha256": "<64 hex>" }`, the SHA-256 of the certificate's DER bytes.
+- A client reads the fingerprint **before the first claim**, then connects to the TLS port and accepts only a certificate whose SHA-256 matches (hostname and chain checks are skipped; the pin replaces them). It stores the fingerprint alongside the token and keeps enforcing it. A changed fingerprint means a different device, a factory reset or an attack: surface it, do not silently re-trust.
+- `/claim`, the token and every other request go over TLS only. The plain listener answers `426 tls_required` (with the `tls` details) and ignores any request that carries an `Authorization` header.
+- Trust on first use: an attacker who is an active man-in-the-middle during the very first `GET /hello` can substitute their own fingerprint. The on-screen pairing code is still needed to claim, so they cannot get a token from the real device; showing the fingerprint's first characters on the device screen for the user to compare would close the gap (not built yet).
+- Legacy clients: `PIGEON_CONTROL_ALLOW_PLAIN=1` serves the full API over plain HTTP again (tokens in the clear; only until the companion app ships pinning). `PIGEON_CONTROL_TLS=0` disables TLS and logs a warning. If TLS is wanted but no certificate can be created (no `openssl` command and no `cryptography` package), the API does not start rather than falling back to plain HTTP.
+
+**Connection limits.** At most 24 concurrent connections, 8 per client address; extras get `503` (`Retry-After: 2`) without costing a thread. Every socket read or write has a 10 s timeout (TLS handshake, headers, body, idle keep-alive, a stalled event-stream reader), and a request must be fully received within 15 s. Clients should reuse connections and keep only a few open besides `GET /events`.
 
 ## 3. First-boot provisioning (setup hotspot)
 

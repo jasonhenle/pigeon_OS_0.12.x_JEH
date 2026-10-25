@@ -18,6 +18,8 @@ struct AddDeviceView: View {
         var name: String
         var product: String
         var deviceID: String
+        var pin: TLSPin?
+        var client: PigeonClient { PigeonClient(host: host, port: port, pin: pin) }
     }
 
     var body: some View {
@@ -86,8 +88,12 @@ struct AddDeviceView: View {
 
     /// Make the device put its code on its own screen, then open the code entry sheet.
     private func begin(_ t: Target) async {
+        var t = t
         do {
-            try await PigeonClient(host: t.host, port: t.port).pairStart()
+            // Learn the certificate pin before anything secret (the claim code, the token) is sent.
+            // Older firmware has no `tls` and stays on plain HTTP.
+            t.pin = try await PigeonClient(host: t.host, port: t.port).hello().tls?.pin
+            try await t.client.pairStart()
             manualError = nil
             target = t
         } catch PigeonError.api(_, "already_claimed", _) {
@@ -147,7 +153,7 @@ struct ClaimView: View {
         .task { focused = true }
         .onDisappear {
             // Backing out (or finishing) clears the on-screen code. A successful claim already did.
-            Task { await PigeonClient(host: target.host, port: target.port).pairCancel() }
+            Task { await target.client.pairCancel() }
         }
         .presentationDetents([.medium])
     }
@@ -157,10 +163,10 @@ struct ClaimView: View {
         busy = true
         defer { busy = false }
         do {
-            let r = try await PigeonClient(host: target.host, port: target.port)
+            let r = try await target.client
                 .claim(code: code, controllerName: UIDevice.current.name, controllerID: store.controllerID)
             store.add(KnownDevice(id: r.device.id, name: r.device.name, product: target.product,
-                                  host: target.host, port: target.port), token: r.token)
+                                  host: target.host, port: target.port, pin: target.pin), token: r.token)
             dismiss()
             onDone()
         } catch let PigeonError.api(_, code, message) {

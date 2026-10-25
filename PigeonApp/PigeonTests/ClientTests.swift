@@ -27,6 +27,26 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(u.absoluteString, "http://pi.local:8780/api/v1/search/suggest?q=blade%20run")
     }
 
+    func testPinnedClientUsesHTTPSOnTLSPort() {
+        let pin = TLSPin(port: 8781, fingerprint: "ab")
+        let u = PigeonClient(host: "pi.local", port: 8780, pin: pin).url("/status")
+        XCTAssertEqual(u.absoluteString, "https://pi.local:8781/api/v1/status")
+    }
+
+    func testHelloDecodesTLSAndToleratesItsAbsence() throws {
+        let d = JSONDecoder(); d.keyDecodingStrategy = .convertFromSnakeCase
+        let base = #""id":"pgn-1","name":"C","product":"clock","api":1,"version":"0.12","claimed":false,"setup_mode":false"#
+        let old = try d.decode(Hello.self, from: Data("{\(base)}".utf8))
+        XCTAssertNil(old.tls)
+        let new = try d.decode(Hello.self, from: Data(#"{\#(base),"tls":{"port":8781,"fingerprint_sha256":"AB12"}}"#.utf8))
+        XCTAssertEqual(new.tls?.pin, TLSPin(port: 8781, fingerprint: "ab12"))
+    }
+
+    func testKnownDeviceFromBeforeTLSStillDecodes() throws {
+        let json = #"{"id":"a","name":"n","product":"clock","host":"h","port":8780}"#
+        XCTAssertNil(try JSONDecoder().decode(KnownDevice.self, from: Data(json.utf8)).pin)
+    }
+
     func testBearerHeaderAndDecoding() async throws {
         StubURLProtocol.handler = { req in
             XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer pgt_x")

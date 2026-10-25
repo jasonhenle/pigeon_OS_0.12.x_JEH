@@ -13,6 +13,11 @@ struct RootView: View {
                     Task {
                         if let r = await DeviceBrowser.resolve(d.endpoint) {
                             store.updateAddress(id: d.id, host: r.host, port: r.port)
+                            if let known = store.devices.first(where: { $0.id == d.id }), known.pin == nil,
+                               let hello = try? await PigeonClient(host: r.host, port: r.port).hello(),
+                               hello.id == d.id, let tls = hello.tls {
+                                store.adoptPin(id: d.id, tls.pin)
+                            }
                         }
                     }
                 }
