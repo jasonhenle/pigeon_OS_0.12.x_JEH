@@ -191,6 +191,9 @@ class MainSettingsState:
     # Timezone list over section1 (clock menu's TIME ZONE tile).
     tz_dropdown_open: bool = False
     tz_dropdown_index: int = 0
+    # Live-games list over the page (general menu's SPORTS tile).
+    sports_dropdown_open: bool = False
+    sports_dropdown_index: int = 0
     show_preferences: bool = False
     # Metadata inspector ([4]): pages 0=player, 1=hdmi, 2=pigeon.
     show_metadata_debug: bool = False
@@ -734,6 +737,7 @@ class MainSettingsState:
         self.close_update_popup()
         self.close_preferences()
         self.close_tz_dropdown()
+        self.close_sports_dropdown()
         self.close_metadata_debug()
         load_persisted_theme_into_state(self)
         self.ui_color_committed_key = str(self.ui_color_ui_key or "blue")
@@ -770,6 +774,7 @@ class MainSettingsState:
         self.close_update_popup()
         self.close_preferences()
         self.close_tz_dropdown()
+        self.close_sports_dropdown()
         self.show_metadata_debug = True
         self.metadata_debug_page = 0
         try:
@@ -792,6 +797,7 @@ class MainSettingsState:
         self.close_update_popup()
         self.close_preferences()
         self.close_tz_dropdown()
+        self.close_sports_dropdown()
         self.close_metadata_debug()
         self._restore_committed_ui_color()
         self.show_pigeon_settings = False
@@ -882,6 +888,42 @@ class MainSettingsState:
             persist=True,
         )
         self.ui_color_committed_key = str(self.ui_color_ui_key or key)
+
+    def open_sports_dropdown(self) -> None:
+        from pigeon.sports_scores import refresh_events
+
+        refresh_events()
+        self.sports_dropdown_open = True
+        self.sports_dropdown_index = 0
+
+    def close_sports_dropdown(self) -> None:
+        self.sports_dropdown_open = False
+        self.sports_dropdown_index = 0
+
+    def navigate_sports_dropdown(self, *, forward: bool = True) -> None:
+        from pigeon.widgets.pigeon_settings import sports_dropdown_entries
+
+        n = len(sports_dropdown_entries())
+        step = 1 if forward else -1
+        self.sports_dropdown_index = (int(self.sports_dropdown_index) + step) % max(1, n)
+
+    def activate_sports_dropdown(self) -> str:
+        """Pick the focused game (leaves settings for the board), or turn it off.
+        Message rows (loading / no games) just close the list."""
+        from pigeon.sports_scores import SportsEvent, clear_selection, select_event
+        from pigeon.widgets.pigeon_settings import SPORTS_OFF, sports_dropdown_entries
+
+        entries = sports_dropdown_entries()
+        payload = entries[int(self.sports_dropdown_index) % len(entries)][2]
+        self.close_sports_dropdown()
+        if payload == SPORTS_OFF:
+            clear_selection()
+            return "sports_off"
+        if isinstance(payload, SportsEvent):
+            select_event(payload)
+            self.exit_pigeon_settings()
+            return "exit" if self.exit_enabled else "pigeon_settings_back"
+        return "sports_dropdown_close"
 
     def open_tz_dropdown(self) -> None:
         from pigeon.pigeon_locale import current_timezone_choice_index
@@ -1107,6 +1149,9 @@ class MainSettingsState:
             return
         if self.tz_dropdown_open:
             self.navigate_tz_dropdown(forward=forward)
+            return
+        if self.sports_dropdown_open:
+            self.navigate_sports_dropdown(forward=forward)
             return
         if self.show_preferences:
             self.navigate_preferences(forward=forward)

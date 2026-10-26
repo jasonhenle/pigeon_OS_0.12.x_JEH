@@ -124,6 +124,27 @@ def _apply_dev_phase_widgets(*, label, settings_frame) -> None:
 _LIVE_PACE: list[float | None] = [None]
 
 
+def _sports_scoreboard_bgr(cap_w: int, cap_h: int, *, DevPhase, dev_phase) -> np.ndarray | None:
+    """Live scoreboard frame while a sports event is picked (settings stay on top)."""
+    if dev_phase[0] != DevPhase.OFF:
+        return None
+    try:
+        from pigeon.widgets.sports_scoreboard import scoreboard_frame_bgr
+
+        return scoreboard_frame_bgr(cap_w, cap_h)
+    except Exception:
+        return None
+
+
+def _sports_board_token() -> int:
+    try:
+        from pigeon.sports_scores import board_token, scoreboard_active
+
+        return board_token() if scoreboard_active() else -1
+    except Exception:
+        return -1
+
+
 def _live_pace_delay_ms(frame_t0: float, now: float, interval_ms: int) -> int:
     """Delay to the next slot on a fixed ``interval_ms`` grid.
 
@@ -786,6 +807,12 @@ def compose_display_from_source(
         crop2 = rsz[src_y0 : src_y0 + ch, src_x0 : src_x0 + cw]
         sub = canvas_bgr[dst_y0:dst_y1, dst_x0:dst_x1]
         sub[:] = alpha_blend_bgra_over_bgr(sub, crop2)
+    if not show_grid:
+        tw, th = display_dims[0], display_dims[1]
+        cap_w, cap_h, use_cap = _composite_cap_dims(tw, th)
+        board = _sports_scoreboard_bgr(cap_w, cap_h, DevPhase=DevPhase, dev_phase=dev_phase)
+        if board is not None:
+            return _present_frame_to_display(board, tw, th) if use_cap else board
     if _paused_screen_active() and not show_grid:
         tw, th = display_dims[0], display_dims[1]
         cap_w, cap_h, use_cap = _composite_cap_dims(tw, th)
@@ -1251,6 +1278,9 @@ def compose_display_fast_no_grid(
         pass
     dw, dh = display_dims[0], display_dims[1]
     cap_w, cap_h, use_cap = _composite_cap_dims(dw, dh)
+    board = _sports_scoreboard_bgr(cap_w, cap_h, DevPhase=DevPhase, dev_phase=dev_phase)
+    if board is not None:
+        return _present_frame_to_display(board, dw, dh) if use_cap else board
     if _paused_screen_active():
         base_pause = _compose_paused_screen(cap_w, cap_h)
         if use_cap:
@@ -1926,6 +1956,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 int(display_view_holder[0]),
                 _np_vol_sig,
             )
+            scene_off_key = (*scene_off_key, _sports_board_token())
             if no_anim and skip_cache[0] == scene_off_key:
                 _schedule_next_render()
                 return
@@ -1992,7 +2023,11 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 )
             )
         )
-        if last_frame[0] is None and not _static_compose_without_video:
+        if (
+            last_frame[0] is None
+            and not _static_compose_without_video
+            and _sports_board_token() < 0
+        ):
             _schedule_next_render()
             return
         if not _PIGEON_EXT and scaled_display[0] is None:
@@ -2018,6 +2053,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
         tick_key = int(now * 5)
     else:
         tick_key = int(time.time()) if _PIGEON_EXT else 0
+    tick_key = (tick_key, _sports_board_token())
     idle_s_here = (
         max(0.0, min(1.0, _compose_idle_strength_holder[0])) if _PIGEON_EXT else 0.0
     )
