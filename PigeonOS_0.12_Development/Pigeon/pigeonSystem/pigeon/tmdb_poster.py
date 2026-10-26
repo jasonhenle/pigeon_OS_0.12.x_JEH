@@ -326,6 +326,16 @@ def _listed_only_elsewhere(
     return bool(have) and not (have & watch_provider_ids)
 
 
+def _runtime_vouches_for_service(similarity: float | None, match_tier: int) -> bool:
+    """
+    True when a near-exact runtime **and** an exact title let a hit skip the service check.
+
+    The Apple TV app also plays channel content TMDb lists under other providers. Runtime alone
+    is not enough: an unrelated or ambiguous title can land within 10% of the player duration.
+    """
+    return similarity is not None and similarity >= 0.9 and match_tier >= 5
+
+
 def _result_pick_key(
     item: dict,
     media_kind: MediaKind | None,
@@ -2246,13 +2256,10 @@ def apply_tmdb_movie_query(
         # The episode → series lookup vouched for this show; trust it like an exact title.
         match_tier = 5
 
-    # The Apple TV app also plays store purchases and channel content TMDb lists under other
-    # providers, so a near-exact runtime match outranks the "not on this service" check.
-    runtime_vouches = similarity is not None and similarity >= 0.9
     if (
         not item.get(EPISODE_SERIES_FLAG)
         and not _LAST_FETCH_TRACE.get("forced_pick")
-        and not runtime_vouches
+        and not _runtime_vouches_for_service(similarity, match_tier)
     ):
         svc_ids = watch_provider_ids_for_streaming_service(
             app_name=app_name, app_id=app_id, service_hint=hint
