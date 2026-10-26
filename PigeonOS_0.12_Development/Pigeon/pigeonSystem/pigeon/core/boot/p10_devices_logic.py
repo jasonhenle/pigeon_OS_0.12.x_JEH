@@ -908,6 +908,11 @@ def run(ctx) -> None:
 
             root.after(600, _go)  # let the 202 reach the phone first
 
+        def _control_api_factory_reset() -> None:
+            """Same as RESET on the Pigeon page."""
+            _handle_main_settings_action("pigeon_factory_reset")
+            _control_api_repaint()
+
         def _control_api_apply_update() -> None:
             """Download + install the newest GitHub release, then restart (no dialogs)."""
             if _api_update["applying"]:
@@ -942,6 +947,7 @@ def run(ctx) -> None:
 
         if _control_api.start(
             restart=_control_api_restart,
+            factory_reset=_control_api_factory_reset,
             apply_update=_control_api_apply_update,
             update_state=lambda: dict(_api_update),
             pair_scan=_control_api_pair_scan,

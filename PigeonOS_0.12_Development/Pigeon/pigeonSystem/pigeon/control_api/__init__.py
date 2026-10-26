@@ -78,6 +78,7 @@ def start(
     apply_location: Callable[[], object] | None = None,
     apply_settings: Callable[[], object] | None = None,
     restart: Callable[[], object] | None = None,
+    factory_reset: Callable[[], object] | None = None,
     apply_update: Callable[[], object] | None = None,
     update_state: Callable[[], dict[str, Any]] | None = None,
     pair_scan: Callable[[str], object] | None = None,
@@ -107,7 +108,7 @@ def start(
                 status_provider=status_provider, run_on_ui=run_on_ui,
                 metadata_provider=metadata_provider, fetch_provider=fetch_provider, respawn=respawn,
                 apply_location=apply_location, apply_settings=apply_settings,
-                restart=restart, apply_update=apply_update, update_state=update_state,
+                restart=restart, factory_reset=factory_reset, apply_update=apply_update, update_state=update_state,
                 pair_scan=pair_scan,
             )
             srv = ControlServer(

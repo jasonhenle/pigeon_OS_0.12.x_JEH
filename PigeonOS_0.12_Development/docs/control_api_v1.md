@@ -172,6 +172,8 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 | `viz` | ✓ | – | visual settings in `/settings` |
 | `rotary` | ✓ | – | rotary/hardware settings |
 | `update` | ✓ | ✓ | `/update/*` |
+| `restart` | ✓ | ✓ | `/device/restart` |
+| `factory_reset` | ✓ | – | `/device/reset` |
 
 An endpoint whose capability is absent returns `422 unsupported`. The Marquee column is the working assumption and may change as that product is specified.
 
@@ -388,6 +390,7 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
 | Method & path | Capability | Behavior |
 |---|---|---|
 | `POST /device/restart` | `restart` | `202 {"state":"restarting"}`; relaunches Pigeon (systemd on the Pi). `503` while an update installs. |
+| `POST /device/reset` | `factory_reset` | `202 {"state":"resetting"}`; same as RESET on the Pigeon page: settings, theme, location, rooms and paired players/receivers go back to defaults. Controllers stay paired. `503` while an update installs. |
 | `GET /update` | `update` | Checks GitHub now: `{local_version, remote_version, update_available, error, applying}`. |
 | `POST /update` | `update` | `202 {"state":"updating"}`; installs the newest version, then restarts. `409` if already installing. |
 | `POST /now-playing/refresh` | `tmdb_refresh` | Re-runs the TMDb lookup for what is playing (forced). Returns the `/now-playing/detail` body; `409` if nothing is playing. |
