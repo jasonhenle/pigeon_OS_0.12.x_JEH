@@ -67,7 +67,17 @@ class FocusRingTests(unittest.TestCase):
     def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
             ps.pigeon_focus_ring("general"),
-            ("exit", "update", "reset", "restart", "option:2", "option:5", "section2", "section3"),
+            (
+                "exit",
+                "update",
+                "reset",
+                "restart",
+                "option:2",
+                "option:5",
+                "sports",
+                "section2",
+                "section3",
+            ),
         )
         self.assertEqual(
             ps.pigeon_focus_ring("theme"),
@@ -245,7 +255,7 @@ class PageStateTests(_IsolatedStateTest):
     def test_general_tiles(self) -> None:
         root = self._root(self._state("general"))
         texts = self._texts(root)
-        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "TBD"):
+        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "SPORTS", "OFF"):
             self.assertIn(label, texts, label)
 
     def test_clock_tiles(self) -> None:

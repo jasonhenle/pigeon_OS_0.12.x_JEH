@@ -591,6 +591,16 @@ def _ui_simple() -> bool:
         return False
 
 
+def _sports_board_token() -> int:
+    """Event list / picked game version: the SPORTS tile and list repaint on it."""
+    try:
+        from pigeon.sports_scores import board_token
+
+        return board_token()
+    except Exception:
+        return 0
+
+
 class MainSettingsWidget:
     """Cached main-settings compositor (similar to ``NowPlayingScreenWidget``)."""
 
@@ -1001,6 +1011,9 @@ class MainSettingsWidget:
             tuple(sorted((str(k), str(v)) for k, v in (st.options_values or {}).items())),
             bool(st.tz_dropdown_open),
             int(st.tz_dropdown_index) if st.tz_dropdown_open else -1,
+            bool(st.sports_dropdown_open),
+            int(st.sports_dropdown_index) if st.sports_dropdown_open else -1,
+            _sports_board_token(),
         )
 
     def _main_state_sig(self) -> tuple[object, ...]:
@@ -1462,7 +1475,12 @@ class MainSettingsWidget:
                 render_pigeon_settings_bgra,
             )
 
-            if st.tz_dropdown_open or st.show_update_popup or st.show_metadata_debug:
+            if (
+                st.tz_dropdown_open
+                or st.sports_dropdown_open
+                or st.show_update_popup
+                or st.show_metadata_debug
+            ):
                 return
             ring = pigeon_focus_ring(st.pigeon_view)
             n = len(ring)
@@ -1677,7 +1695,12 @@ class MainSettingsWidget:
                 render_pigeon_settings_bgra,
             )
 
-            if st.tz_dropdown_open or st.show_update_popup or st.show_metadata_debug:
+            if (
+                st.tz_dropdown_open
+                or st.sports_dropdown_open
+                or st.show_update_popup
+                or st.show_metadata_debug
+            ):
                 return
             ring = pigeon_focus_ring(st.pigeon_view)
             n = len(ring)
@@ -2676,6 +2699,10 @@ class MainSettingsWidget:
                 action = st.activate_tz_dropdown()
                 self.invalidate()
                 return action
+            if st.sports_dropdown_open:
+                action = st.activate_sports_dropdown()
+                self.invalidate()
+                return action
             if st.show_preferences:
                 action = st.activate_preferences()
                 # Soft invalidate: keep neighbor focus bitmaps; drop current paste only.
@@ -2734,6 +2761,10 @@ class MainSettingsWidget:
                 st.open_tz_dropdown()
                 self.invalidate()
                 return "timezone_dropdown_open"
+            if focused == "sports":
+                st.open_sports_dropdown()
+                self.invalidate()
+                return "sports_dropdown_open"
             from pigeon.widgets.options_settings import set_option_value
 
             color = color_key_for_focus(focused)

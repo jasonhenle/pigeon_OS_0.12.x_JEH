@@ -100,7 +100,7 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "restart", "RESTART"),
     Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
     Slot("toggle", f"option:{OPT_NP_LAYOUT}", choices=("ZONE 11", "ZONE 6,3")),
-    Slot("tbd_toggle", choices=("TBD", "TBD")),
+    Slot("button", "sports", "SPORTS"),
 )
 _THEME_SLOTS: tuple[Slot, ...] = tuple(
     Slot("color", f"color:{k}", k) for k in THEME_KEYS
@@ -139,6 +139,14 @@ _DROPDOWN_ROW_GAP = 6
 _DROPDOWN_RADIUS = 18
 _DROPDOWN_FONT_PX = 44
 _DROPDOWN_MAX_ROWS = 7
+
+# Sports list: game left, status right, centered on the page.
+_SPORTS_ROW_W = 860
+_SPORTS_ROW_H = 56
+_SPORTS_ROW_GAP = 8
+_SPORTS_FONT_PX = 30
+_SPORTS_MAX_ROWS = 7
+SPORTS_OFF = "off"
 
 # Tile text (SVG board units).
 _TOGGLE_LABEL_PX = 22
@@ -535,6 +543,19 @@ def _sync_slot(
         _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX, color=text_ink)
         _add_text(
             group, _zipcode_text(state), cx=cx, y=cy + 36, size=_VALUE_PX, digital=True, color=text_ink
+        )
+    elif slot.focus_id == "sports":
+        from pigeon.sports_scores import scoreboard_active
+
+        _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX, color=text_ink)
+        _add_text(
+            group,
+            "LIVE" if scoreboard_active() else "OFF",
+            cx=cx,
+            y=cy + 36,
+            size=_VALUE_PX,
+            digital=True,
+            color=text_ink,
         )
     elif slot.focus_id == "timezone":
         from pigeon.pigeon_locale import timezone_abbrev
@@ -1000,6 +1021,107 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None
     frame[:] = _composite_bgra_over_bgra(frame, overlay)
 
 
+def sports_dropdown_entries() -> list[tuple[str, str, object]]:
+    """(game, status, payload) rows. Payload is a ``SportsEvent``,
+    :data:`SPORTS_OFF` (turn the board off), or None (a message row)."""
+    from pigeon.sports_scores import events_snapshot, selected_event, status_label
+
+    tz = None
+    try:
+        from zoneinfo import ZoneInfo
+
+        from pigeon.pigeon_locale import read_timezone
+
+        name = read_timezone()
+        tz = ZoneInfo(name) if name else None
+    except Exception:
+        pass
+    events, loading, failed = events_snapshot()
+    rows: list[tuple[str, str, object]] = []
+    picked = selected_event()
+    if picked is not None:
+        rows.append(("SCORES OFF", "", SPORTS_OFF))
+    for ev in events:
+        rows.append((ev.title, status_label(ev, tz=tz), ev))
+    if not events:
+        msg = "LOADING…" if loading else ("NO CONNECTION" if failed else "NO GAMES TODAY")
+        rows.append((msg, "", None))
+    return rows
+
+
+def sports_dropdown_rows(state: MainSettingsState) -> tuple[list[tuple[str, str, bool]], int, int]:
+    """(rows on screen as (game, status, is_live), first visible index, focused index)."""
+    from pigeon.sports_scores import LIVE, SportsEvent
+
+    entries = sports_dropdown_entries()
+    focus = int(getattr(state, "sports_dropdown_index", 0)) % len(entries)
+    visible = min(_SPORTS_MAX_ROWS, len(entries))
+    first = max(0, min(focus - visible // 2, len(entries) - visible))
+    rows = [
+        (game, status, isinstance(payload, SportsEvent) and payload.phase == LIVE)
+        for game, status, payload in entries[first : first + visible]
+    ]
+    return rows, first, focus
+
+
+def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
+    from PIL import Image, ImageDraw
+
+    from pigeon.font_paths import resolve_ui_font_bold
+    from pigeon.widgets.settings_svg_text import _load_font
+
+    rows, first, focus = sports_dropdown_rows(state)
+    if not rows:
+        return
+    h = len(rows) * (_SPORTS_ROW_H + _SPORTS_ROW_GAP) - _SPORTS_ROW_GAP
+    x0 = (DESIGN_W - _SPORTS_ROW_W) // 2
+    y0 = max(0, (DESIGN_H - h) // 2)
+    patch = Image.new("RGBA", (_SPORTS_ROW_W, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(patch)
+    font_path = resolve_ui_font_bold()
+    font = _load_font(font_path, _SPORTS_FONT_PX) if font_path else None
+    pad = 24
+    for i, (game, status, live) in enumerate(rows):
+        top = i * (_SPORTS_ROW_H + _SPORTS_ROW_GAP)
+        mid = top + _SPORTS_ROW_H // 2
+        selected = first + i == focus
+        fill = (255, 255, 255, 255) if selected else (0, 0, 0, 255)
+        ink = (0, 0, 0, 255) if selected else (255, 255, 255, 255)
+        draw.rounded_rectangle(
+            (0, top, _SPORTS_ROW_W - 1, top + _SPORTS_ROW_H - 1),
+            radius=_DROPDOWN_RADIUS,
+            fill=fill,
+            outline=(255, 255, 255, 255),
+            width=2,
+        )
+        status_w = int(draw.textlength(status, font=font)) if status else 0
+        right = _SPORTS_ROW_W - pad
+        if status:
+            draw.text((right, mid), status, font=font, fill=ink, anchor="rm")
+            if live:
+                dx = right - status_w - 18
+                draw.ellipse((dx - 8, mid - 8, dx + 8, mid + 8), fill=(255, 0, 0, 255))
+                status_w += 30
+        max_w = _SPORTS_ROW_W - 2 * pad - (status_w + 24 if status else 0)
+        text = game.upper()
+        if draw.textlength(text, font=font) > max_w:
+            while len(text) > 1 and draw.textlength(text + "…", font=font) > max_w:
+                text = text[:-1].rstrip()
+            text += "…"
+        if status:
+            draw.text((pad, mid), text, font=font, fill=ink, anchor="lm")
+        else:
+            draw.text((_SPORTS_ROW_W // 2, mid), text, font=font, fill=ink, anchor="mm")
+    import cv2
+
+    bgra = cv2.cvtColor(np.asarray(patch), cv2.COLOR_RGBA2BGRA)
+    overlay = np.zeros_like(frame)
+    x1 = min(DESIGN_W, x0 + bgra.shape[1])
+    y1 = min(DESIGN_H, y0 + bgra.shape[0])
+    overlay[y0:y1, x0:x1] = bgra[: y1 - y0, : x1 - x0]
+    frame[:] = _composite_bgra_over_bgra(frame, overlay)
+
+
 def render_pigeon_settings_bgra(
     state: MainSettingsState | None = None,
     *,
@@ -1046,6 +1168,8 @@ def render_pigeon_settings_bgra(
         frame = bg.copy()
     if getattr(st, "tz_dropdown_open", False):
         _draw_timezone_dropdown(frame, st)
+    if getattr(st, "sports_dropdown_open", False):
+        _draw_sports_dropdown(frame, st)
     if clock:
         frame = draw_pigeon_settings_clock(frame, ink=page_ink_rgb(st))
     return frame
@@ -1285,6 +1409,8 @@ __all__ = [
     "pigeon_focus_ring",
     "render_pigeon_settings_bgra",
     "section_targets",
+    "sports_dropdown_entries",
+    "sports_dropdown_rows",
     "timezone_dropdown_rows",
     "version_label",
     "view_for_section",
