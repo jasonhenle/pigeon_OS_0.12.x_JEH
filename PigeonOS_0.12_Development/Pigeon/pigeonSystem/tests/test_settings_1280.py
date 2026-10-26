@@ -818,6 +818,27 @@ class SettingsRenderTests(unittest.TestCase):
         self.assertGreater(int(blue.sum()), 30)
         self.assertLess(float(blue.mean()), 0.28)
 
+    def test_rename_field_swaps_wifi_logo_for_pencil(self) -> None:
+        from unittest import mock
+
+        from pigeon.settings_layout import DUAL_SLOT_B
+        from pigeon.widgets import settings_main_1280 as m
+        from pigeon.widgets.main_settings import MainSettingsState
+
+        assets = Path(__file__).resolve().parents[2] / "pigeonAssets"
+        state = MainSettingsState()
+        state.selected_wifi_ssid = "HENLI"
+        state.show_location_picker = True
+        with (
+            mock.patch.object(MainSettingsState, "needs_wifi_setup", return_value=False),
+            mock.patch.object(m, "_draw_wifi_fan") as fan,
+            mock.patch.object(m, "_draw_pencil_icon", wraps=m._draw_pencil_icon) as pencil,
+        ):
+            m.render_settings_main_1280_bgra(state, assets_dir=assets)
+        fan.assert_not_called()
+        pencil.assert_called_once()
+        self.assertEqual(pencil.call_args.args[1], m._network_field_boxes(dual_slot_design(DUAL_SLOT_B))[0])
+
 
 class SettingsKeyboard1280Tests(unittest.TestCase):
     def test_native_keyboards_use_shared_bottom_row(self) -> None:
