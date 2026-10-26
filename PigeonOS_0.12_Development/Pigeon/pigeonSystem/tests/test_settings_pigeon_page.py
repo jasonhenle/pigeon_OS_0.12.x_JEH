@@ -307,12 +307,14 @@ class PageStateTests(_IsolatedStateTest):
         self.assertFalse([c for c in group if ps._local(c) == "circle"])
 
     def test_update_badge_only_when_an_update_exists(self) -> None:
-        def dots(root: ET.Element) -> int:
+        def dots(root: ET.Element) -> list[ET.Element]:
             group = ps._by_id(root, "toggle_01_group")
-            return len([c for c in group if ps._local(c) == "circle"])
+            return [c for c in group if ps._local(c) == "circle"]
 
-        self.assertEqual(dots(self._root(self._state("general"))), 0)
-        self.assertEqual(dots(self._root(self._state("general", update_available=True))), 1)
+        self.assertEqual(dots(self._root(self._state("general"))), [])
+        badge = dots(self._root(self._state("general", update_available=True)))
+        self.assertEqual(len(badge), 1)
+        self.assertEqual(badge[0].get("fill").upper(), "#FF0000")
 
     def test_clock_hands_survive_the_background_sweep(self) -> None:
         root = self._root(self._state("general"))

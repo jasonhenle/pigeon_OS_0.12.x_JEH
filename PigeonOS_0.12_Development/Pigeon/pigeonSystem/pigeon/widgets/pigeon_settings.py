@@ -557,7 +557,11 @@ def _sync_slot(
             dot.set("cx", f"{x1 - 22:.2f}")
             dot.set("cy", f"{y0 + 22:.2f}")
             dot.set("r", "9")
-            dot.set("fill", _COLOR_STATUS_OK)
+            dot.set("fill", _COLOR_STATUS_BAD)
+            if simple and selected:
+                # Red badge on a UI-colored tile (red theme): ring it in black.
+                dot.set("stroke", _COLOR_BLACK)
+                dot.set("stroke-width", "4")
 
 
 def _add_color_dot(group: ET.Element, cx: float, cy: float, key: str) -> None:
