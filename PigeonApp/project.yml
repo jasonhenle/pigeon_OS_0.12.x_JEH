@@ -11,8 +11,8 @@ settings:
     # separately). Info.plist reads these. Every iOS change bumps both together:
     # MARKETING_VERSION 0.1.N and CURRENT_PROJECT_VERSION N (a test checks they agree).
     # Then run tools/sync-pigeon-ios.sh.
-    MARKETING_VERSION: "0.1.6"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "0.1.7"
+    CURRENT_PROJECT_VERSION: "7"
 targets:
   Pigeon:
     type: application
@@ -34,6 +34,12 @@ targets:
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # App Store requires all four on iPad (multitasking); iPhone stays portrait-only.
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIAppFonts: [Digital-7.ttf, SharpSansMedium.otf, SharpSansSemibold.otf]
         NSLocalNetworkUsageDescription: Pigeon Remote finds and controls the Pigeon devices on your home network.
         NSBonjourServices: [_pigeon._tcp]
