@@ -459,11 +459,9 @@ def _wifi_logout_instruction_text(state: MainSettingsState) -> str:
 
 def _pairing_instruction_text(state: MainSettingsState) -> str:
     sess = state.box_pairing
-    if sess is None:
-        return "PAIR COMPANION (1 of 2)"
-    if sess.step == "airplay_pin":
-        return "PAIR AIRPLAY (2 of 2)"
-    return "PAIR COMPANION (1 of 2)"
+    if sess is not None and sess.step == "airplay_pin":
+        return "Enter pairing code 2 of 2 for Apple TV."
+    return "Enter pairing code 1 of 2 for Apple TV."
 
 
 def _layer_class(logical_id: str) -> str | None:
