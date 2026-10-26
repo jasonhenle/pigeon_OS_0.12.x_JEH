@@ -114,22 +114,89 @@ class RankTests(unittest.TestCase):
         self.assertEqual(merged.league_badge, "https://example.invalid/l.png")
 
 
-class FetchTests(unittest.TestCase):
-    def test_free_key_asks_each_sport_per_day(self) -> None:
+class FetchTests(_Reset):
+    def test_asks_each_in_season_us_league_by_id(self) -> None:
         urls: list[str] = []
 
         def fake(url, headers=None):
             urls.append(url)
+            return {"events": [_row("1", status="Q1")]} if "l=4387" in url else {"events": None}
+
+        with mock.patch.object(ss, "_get_json", side_effect=fake):
+            events, failed = ss.fetch_available_events(key=ss.FREE_API_KEY, now=NOW)
+        self.assertFalse(failed)
+        self.assertEqual([e.event_id for e in events], ["1"])
+        self.assertTrue(all("/123/eventsday.php" in u and "&l=" in u for u in urls))
+        self.assertFalse(any("s=" in u for u in urls))
+        # Late October: all six leagues are in season (WNBA runs through October).
+        self.assertEqual(len(urls), len(ss.list_queries(NOW)))
+
+    def test_queries_cover_tonight_in_utc_today_first(self) -> None:
+        # 20:00 UTC: tonight's US games are already on the next UTC date.
+        q = ss.list_queries(NOW)
+        days = list(dict.fromkeys(d for _l, d in q))
+        self.assertEqual(days, ["2026-10-26", "2026-10-27"])
+        leagues = [lid for lid, d in q if d == "2026-10-26"]
+        self.assertEqual(leagues, [lid for lid, _l, _a, _b in ss.LIST_LEAGUES])
+
+    def test_out_of_season_leagues_are_skipped(self) -> None:
+        july = ss.list_queries(datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc))
+        names = {n for lid, n, _a, _b in ss.LIST_LEAGUES if lid in {q[0] for q in july}}
+        self.assertEqual(names, {"MLB", "MLS", "WNBA"})
+        self.assertTrue(ss.league_in_season(9, 2, 1))  # NFL in January
+        self.assertFalse(ss.league_in_season(9, 2, 5))
+
+    def test_league_days_are_cached(self) -> None:
+        calls = []
+
+        def fake(url, headers=None):
+            calls.append(url)
+            return {"events": None}
+
+        with mock.patch.object(ss, "_get_json", side_effect=fake):
+            ss.fetch_available_events(key=ss.FREE_API_KEY, now=NOW)
+            n = len(calls)
+            ss.fetch_available_events(key=ss.FREE_API_KEY, now=NOW)
+        self.assertEqual(len(calls), n)
+
+    def test_429_stops_the_list_and_keeps_what_arrived(self) -> None:
+        calls = []
+
+        def fake(url, headers=None):
+            calls.append(url)
+            if len(calls) == 2:
+                raise ss.RateLimited
             return {"events": [_row("1", status="Q1")]}
 
-        with mock.patch.object(ss, "_get_json", side_effect=fake), mock.patch.object(
-            ss, "_local_tz", return_value=timezone(timedelta(hours=-5))
-        ):
-            events = ss.fetch_available_events(key=ss.FREE_API_KEY, now=NOW)
+        with mock.patch.object(ss, "_get_json", side_effect=fake):
+            events, failed = ss.fetch_available_events(key=ss.FREE_API_KEY, now=NOW)
+        self.assertEqual(len(calls), 2)
         self.assertEqual([e.event_id for e in events], ["1"])
-        self.assertTrue(all("/123/eventsday.php" in u for u in urls))
-        self.assertFalse(any("livescore" in u for u in urls))
-        self.assertEqual(len(urls), len(ss.LIST_SPORTS))  # 20:00 UTC = same local date
+        self.assertFalse(failed)
+
+    def test_get_backs_off_for_retry_after(self) -> None:
+        import urllib.error
+
+        err = urllib.error.HTTPError("u", 429, "Too Many", {"Retry-After": "90"}, None)
+        with mock.patch.object(ss.urllib.request, "urlopen", side_effect=err) as op:
+            with self.assertRaises(ss.RateLimited):
+                ss._get("https://example.invalid/a")
+            self.assertGreater(ss.backoff_remaining_s(), 80)
+            # During the backoff nothing goes out.
+            with self.assertRaises(ss.RateLimited):
+                ss._get("https://example.invalid/b")
+            self.assertEqual(op.call_count, 1)
+
+    def test_requests_are_spaced_out(self) -> None:
+        resp = mock.MagicMock()
+        resp.__enter__.return_value.read.return_value = b"{}"
+        with mock.patch.object(ss.urllib.request, "urlopen", return_value=resp), mock.patch.object(
+            ss.time, "sleep"
+        ) as sleep:
+            ss._get("https://example.invalid/a")
+            ss._get("https://example.invalid/b")
+        self.assertEqual(sleep.call_count, 1)
+        self.assertGreater(sleep.call_args[0][0], ss._MIN_GAP_FREE_S - 0.5)
 
     def test_premium_key_reads_the_livescore_feed_first(self) -> None:
         seen: list[tuple[str, dict | None]] = []
@@ -141,7 +208,7 @@ class FetchTests(unittest.TestCase):
             return {"events": [_row("9", status="NS", home="", away="")]}
 
         with mock.patch.object(ss, "_get_json", side_effect=fake):
-            (ev,) = ss.fetch_available_events(key="premium-key", now=NOW)
+            (ev,), _failed = ss.fetch_available_events(key="premium-key", now=NOW)
         self.assertEqual((ev.status, ev.home_score), ("2H", "2"))
         self.assertIn("/v2/json/livescore/all", seen[0][0])
         self.assertEqual(seen[0][1], {"X-API-KEY": "premium-key"})
@@ -249,6 +316,11 @@ class SettingsListTests(_Reset):
         self.assertEqual((label, payload), ("NO GAMES TODAY", None))
         self.assertEqual(w.activate(), "sports_dropdown_close")
         self.assertTrue(w.state.show_pigeon_settings)
+
+    def test_backoff_shows_a_busy_row(self) -> None:
+        ss._blocked_until_mono = ss.time.monotonic() + 60
+        ((label, _status, payload),) = ps.sports_dropdown_entries()
+        self.assertEqual((label, payload), ("BUSY · TRY AGAIN SOON", None))
 
     def test_list_draws_over_the_page(self) -> None:
         self._with_events(_ev("1", status="Q2"))
