@@ -52,15 +52,17 @@ LIST_LEAGUES: tuple[tuple[str, str, int, int], ...] = (
     ("4516", "WNBA", 5, 10),
 )
 _LIST_TTL_S = 60.0
-# One league's games on one date, reused across list opens.
-_DAY_TTL_S = 120.0
+# One league's games on one date, reused across list opens. The picked
+# game polls on its own, so list scores can be a few minutes old.
+_DAY_TTL_S = 300.0
 # Games in the list start within this window around now, so the UTC dates
 # it covers are the ones to ask for (US evening games are tomorrow in UTC).
 _LIST_WINDOW_BACK = timedelta(hours=5)
 _LIST_WINDOW_AHEAD = timedelta(hours=12)
-# Spacing between API requests. Free: half the documented 30/min, since a
-# burst of ~7 quick requests already draws a 429. Premium: 100/min.
-_MIN_GAP_FREE_S = 4.0
+# Spacing between API requests. Free: the key is documented at 30/min but
+# measured at 10 before a 429 (then 2 min blocked), so stay near 9/min.
+# Premium: 100/min.
+_MIN_GAP_FREE_S = 6.5
 _MIN_GAP_PREMIUM_S = 0.7
 _BACKOFF_DEFAULT_S = 120.0
 # Free key: 30 requests/min. Premium: 100/min, and the feed itself moves
