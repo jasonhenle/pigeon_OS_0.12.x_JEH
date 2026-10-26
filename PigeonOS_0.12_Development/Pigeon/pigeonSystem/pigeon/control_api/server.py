@@ -80,6 +80,7 @@ class ControlService:
         apply_location: Callable[[], object] | None = None,
         apply_settings: Callable[[], object] | None = None,
         restart: Callable[[], object] | None = None,
+        factory_reset: Callable[[], object] | None = None,
         apply_update: Callable[[], object] | None = None,
         update_state: Callable[[], Mapping[str, Any]] | None = None,
         pair_scan: Callable[[str], object] | None = None,
@@ -95,6 +96,7 @@ class ControlService:
         self._apply_location = apply_location
         self._apply_settings = apply_settings
         self._restart = restart
+        self._factory_reset = factory_reset
         self._apply_update = apply_update
         self._update_state = update_state or (lambda: {})
         self._pair_scan = pair_scan
@@ -186,6 +188,8 @@ class ControlService:
                 return self._patch_device(body)
         elif route == "/device/restart" and method == "POST":
             return self._restart_device()
+        elif route == "/device/reset" and method == "POST":
+            return self._reset_device()
         elif route == "/update":
             return self._update(method)
         elif route == "/capabilities" and method == "GET":
@@ -259,6 +263,18 @@ class ControlService:
         self.hub.publish("device", {"restarting": True})
         self._on_ui(self._restart)
         return 202, {"state": "restarting"}
+
+    def _reset_device(self) -> Response:
+        """Settings > Pigeon > RESET: settings, rooms and pairings back to defaults. The phone stays paired."""
+        if not profile.has_capability("factory_reset"):
+            return _err(422, "unsupported", "factory_reset not supported on this device.")
+        if self._factory_reset is None:
+            return _err(503, "busy", "Reset is not available right now.")
+        if self._update_state().get("applying"):
+            return _err(503, "busy", "The device is installing an update.")
+        self._on_ui(self._factory_reset)
+        self.hub.publish("settings", {"changed": ["reset"]})
+        return 202, {"state": "resetting"}
 
     def _update(self, method: str) -> Response:
         """GET checks GitHub for a newer version; POST installs it and restarts."""

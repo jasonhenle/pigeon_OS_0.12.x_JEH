@@ -237,6 +237,16 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(seen, ["GET /api/v1/display", "PATCH /api/v1/display"])
     }
 
+    func testFactoryResetPostsToDeviceReset() async throws {
+        var seen: [String] = []
+        StubURLProtocol.handler = { req in
+            seen.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            return (202, #"{"state":"resetting"}"#.data(using: .utf8)!)
+        }
+        try await client().factoryReset()
+        XCTAssertEqual(seen, ["POST /api/v1/device/reset"])
+    }
+
     func testSuggestionSubtitle() {
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: "tv", title: "X", year: 2020).subtitle, "TV · 2020")
         XCTAssertEqual(Suggestion(tmdbId: 1, kind: nil, title: "X", year: nil).subtitle, "")

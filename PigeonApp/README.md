@@ -12,4 +12,5 @@ Try it against a Mac: start PigeonOS with `PIGEON_CONTROL_API=1`, read the code 
 Settings > Pigeon (or `pigeon.control_api.pairing_code()`), then Devices > + in the app.
 
 Implemented: discovery (Bonjour), claim with the on-screen code, device list/rename/remove,
-live search and pin/clear via `/search/*`, SSE updates. Not yet: Wi-Fi, room, clock, pairing, settings.
+live search and pin/clear via `/search/*`, SSE updates, rooms, brightness, and Pigeon Clock Settings in
+the device's General / Theme / Clock menus (update, reset, restart included). Not yet: Wi-Fi.

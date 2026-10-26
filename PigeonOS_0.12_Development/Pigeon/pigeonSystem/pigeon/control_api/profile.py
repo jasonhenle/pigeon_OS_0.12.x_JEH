@@ -20,7 +20,7 @@ _LOCK = threading.Lock()
 _CAPABILITIES: dict[str, tuple[str, ...]] = {
     "clock": (
         "now_playing", "manual_search", "now_playing_override", "rooms", "pigeon_settings", "display_brightness", "clock", "locations", "wifi",
-        "pairing_player", "pairing_receiver", "viz", "rotary", "update", "restart", "tmdb_refresh",
+        "pairing_player", "pairing_receiver", "viz", "rotary", "update", "restart", "factory_reset", "tmdb_refresh",
     ),
     "marquee": (
         "now_playing", "manual_search", "now_playing_override", "rooms", "display_brightness", "locations", "wifi",
@@ -37,7 +37,7 @@ def product() -> str:
 def capabilities() -> list[str]:
     """Capabilities implemented by *this build* for this product (Phase 1 subset)."""
     implemented = {"now_playing", "manual_search", "now_playing_override", "rooms", "pigeon_settings", "display_brightness",
-                   "update", "restart", "tmdb_refresh", "pairing_player", "pairing_receiver"}
+                   "update", "restart", "factory_reset", "tmdb_refresh", "pairing_player", "pairing_receiver"}
     return [c for c in _CAPABILITIES[product()] if c in implemented]
 
 

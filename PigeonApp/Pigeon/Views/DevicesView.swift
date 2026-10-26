@@ -157,7 +157,8 @@ struct DeviceDetailView: View {
     }
 }
 
-/// Everything about the device itself: room, its settings, status and software.
+/// The device's Settings > Pigeon page, in the same three menus it shows on screen:
+/// General, Theme and Clock.
 struct PigeonClockSettingsView: View {
     @EnvironmentObject private var store: DeviceStore
     let device: KnownDevice
@@ -166,36 +167,138 @@ struct PigeonClockSettingsView: View {
     let status: DeviceStatus?
 
     var body: some View {
+        PigeonClockSettingsPage(client: store.client(for: device), device: device,
+                                caps: caps?.capabilities ?? [], info: info, status: status)
+            .navigationTitle("Pigeon Clock Settings")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+enum PigeonSettingsSection: String, CaseIterable, Identifiable {
+    case general, theme, clock
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+private struct PigeonClockSettingsPage: View {
+    @StateObject private var settings: PigeonSettingsModel
+    @State private var section: PigeonSettingsSection = .general
+    /// Bumped after a reset so everything re-reads the device.
+    @State private var reload = 0
+    let client: PigeonClient
+    let device: KnownDevice
+    let caps: [String]
+    let info: DeviceInfo?
+    let status: DeviceStatus?
+
+    init(client: PigeonClient, device: KnownDevice, caps: [String], info: DeviceInfo?, status: DeviceStatus?) {
+        _settings = StateObject(wrappedValue: PigeonSettingsModel(client: client))
+        self.client = client
+        self.device = device
+        self.caps = caps
+        self.info = info
+        self.status = status
+    }
+
+    private var hasSettings: Bool { caps.contains("pigeon_settings") }
+
+    var body: some View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    if caps?.capabilities.contains("rooms") == true {
-                        RoomsCard(client: store.client(for: device))
+                    SectionTabs(selection: $section)
+                    switch section {
+                    case .general: general
+                    case .theme: theme
+                    case .clock: clock
                     }
-                    if caps?.capabilities.contains("pigeon_settings") == true {
-                        PigeonSettingsCard(client: store.client(for: device))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        LCDLabel(text: "Status", size: 18, color: Theme.accent)
-                        row("State", status?.state.capitalized ?? "—")
-                        row("Now playing", status?.nowPlaying?.title ?? "Nothing")
-                        row("Version", info?.version ?? "—")
-                        row("Address", "\(device.host):\(device.port)")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading).tile()
-
-                    if caps?.capabilities.contains("restart") == true || caps?.capabilities.contains("update") == true {
-                        MaintenanceCard(client: store.client(for: device), caps: caps?.capabilities ?? [],
-                                        version: info?.version)
-                    }
+                    if let e = settings.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
                 }
                 .padding(Theme.gutter)
             }
         }
-        .navigationTitle("Pigeon Clock Settings")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if settings.busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } } }
+        .task(id: reload) { if hasSettings { await settings.load() } }
+    }
+
+    // MARK: General: rooms, the now-playing switches, status, update / reset / restart
+
+    @ViewBuilder private var general: some View {
+        if caps.contains("rooms") {
+            RoomsCard(client: client).id(reload)
+        }
+        if hasSettings, let d = settings.data {
+            SettingsTile(title: "Display") {
+                OptionRow(model: settings, data: d, key: "temp_format", title: "Temperature",
+                          labels: ["f": "°F", "c": "°C"])
+                OptionRow(model: settings, data: d, key: "np_layout", title: "Now playing layout",
+                          labels: ["zone11": "Zone 11", "zone63": "Zone 6,3"],
+                          note: d.options["np_layout"] == "zone63"
+                              ? "Wide title, with the volume beside it."
+                              : "Title across the top, with input, volume and running time below it.")
+                OptionRow(model: settings, data: d, key: "zone4_mode", title: "Playback bar",
+                          labels: ["info": "Info", "visualizer": "Visualizer"])
+            }
+        }
+
+        SettingsTile(title: "Status") {
+            row("State", status?.state.capitalized ?? "—")
+            row("Now playing", status?.nowPlaying?.title ?? "Nothing")
+            row("Version", settings.data?.version ?? info?.version ?? "—")
+            row("Address", "\(device.host):\(device.port)")
+        }
+
+        if caps.contains("restart") || caps.contains("update") || caps.contains("factory_reset") {
+            MaintenanceCard(client: client, caps: caps, version: info?.version) { reload += 1 }
+        }
+    }
+
+    // MARK: Theme: interface color and standard / simple
+
+    @ViewBuilder private var theme: some View {
+        if hasSettings, let d = settings.data {
+            SettingsTile(title: "Color") {
+                ColorSwatches(model: settings, data: d)
+            }
+            if d.optionValues["ui_style"] != nil {
+                SettingsTile(title: "Style") {
+                    OptionRow(model: settings, data: d, key: "ui_style", title: "Settings look",
+                              labels: ["standard": "Standard", "simple": "Simple"],
+                              note: d.options["ui_style"] == "simple"
+                                  ? "Settings are drawn in just the theme color and black."
+                                  : "Settings are drawn over the full themed background.")
+                }
+            }
+        } else {
+            placeholder
+        }
+    }
+
+    // MARK: Clock: 12 / 24 hour, face, zip and timezone
+
+    @ViewBuilder private var clock: some View {
+        if hasSettings, let d = settings.data {
+            SettingsTile(title: "Clock") {
+                OptionRow(model: settings, data: d, key: "time_format", title: "Hours",
+                          labels: ["12": "12 hr", "24": "24 hr"])
+                OptionRow(model: settings, data: d, key: "clock_format", title: "Clock face",
+                          labels: ["digital": "Digital", "analog": "Analog"])
+            }
+            SettingsTile(title: "Location") {
+                LocationFields(model: settings, data: d)
+            }
+        } else {
+            placeholder
+        }
+    }
+
+    @ViewBuilder private var placeholder: some View {
+        if !hasSettings {
+            Text("This device doesn't have these settings.").font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
+        } else if settings.errorText == nil {
+            ProgressView().frame(maxWidth: .infinity)
+        }
     }
 
     private func row(_ k: String, _ v: String) -> some View {
@@ -204,6 +307,42 @@ struct PigeonClockSettingsView: View {
             Spacer()
             Text(v).font(Theme.uiBold(15)).foregroundStyle(.white).multilineTextAlignment(.trailing)
         }
+    }
+}
+
+/// General / Theme / Clock, like the device's two big section buttons.
+private struct SectionTabs: View {
+    @Binding var selection: PigeonSettingsSection
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(PigeonSettingsSection.allCases) { s in
+                Button { selection = s } label: {
+                    LCDLabel(text: s.title, size: 20, color: selection == s ? .black : .white)
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(selection == s ? Theme.accent : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == s ? .isSelected : [])
+            }
+        }
+        .padding(5)
+        .background(Theme.tile, in: Capsule())
+    }
+}
+
+private struct SettingsTile<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LCDLabel(text: title, size: 18, color: Theme.accent)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tile()
     }
 }
 
@@ -333,6 +472,16 @@ final class MaintenanceModel: ObservableObject {
         } catch { errorText = error.localizedDescription; phase = .idle }
     }
 
+    func reset() async -> Bool {
+        phase = .working("Resetting…")
+        do {
+            try await client.factoryReset()
+            errorText = nil
+            phase = .done("Pigeon is back to its default settings.")
+            return true
+        } catch { errorText = error.localizedDescription; phase = .idle; return false }
+    }
+
     func check() async {
         phase = .working("Checking for updates…")
         do {
@@ -358,19 +507,23 @@ struct MaintenanceCard: View {
     @StateObject private var model: MaintenanceModel
     let caps: [String]
     let version: String?
+    /// Called once a reset has gone through, so the other cards can re-read the device.
+    let onReset: () -> Void
     @State private var confirmRestart = false
     @State private var confirmInstall = false
+    @State private var confirmReset = false
 
-    init(client: PigeonClient, caps: [String], version: String?) {
+    init(client: PigeonClient, caps: [String], version: String?, onReset: @escaping () -> Void = {}) {
         _model = StateObject(wrappedValue: MaintenanceModel(client: client))
         self.caps = caps
         self.version = version
+        self.onReset = onReset
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                LCDLabel(text: "Pigeon Clock Software", size: 18, color: Theme.accent)
+                LCDLabel(text: "Update, reset, restart", size: 18, color: Theme.accent)
                 Spacer()
                 if model.busy { ProgressView() }
             }
@@ -392,6 +545,9 @@ struct MaintenanceCard: View {
                     button("Check for updates", filled: false) { Task { await model.check() } }
                 }
             }
+            if caps.contains("factory_reset") {
+                button("Reset Pigeon", filled: false) { confirmReset = true }
+            }
             if caps.contains("restart") {
                 button("Restart Pigeon", filled: false) { confirmRestart = true }
             }
@@ -407,6 +563,18 @@ struct MaintenanceCard: View {
             Button("Update") { Task { await model.install() } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Pigeon downloads the update, installs it and restarts. Your settings are kept.") }
+        .alert("Reset Pigeon?", isPresented: $confirmReset) {
+            Button("Reset", role: .destructive) {
+                Task {
+                    guard await model.reset() else { return }
+                    try? await Task.sleep(for: .seconds(1.5))  // the device resets just after it replies
+                    onReset()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Theme, clock, location, rooms and paired players and receivers go back to their defaults. This phone stays connected.")
+        }
     }
 
     private func button(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
@@ -442,13 +610,9 @@ final class PigeonSettingsModel: ObservableObject {
         await send(.init(zip: nil, timezone: nil, options: [key: value], uiColor: nil))
     }
 
-    /// Picking a color also leaves dark mode, like the device's theme menu.
+    /// Picking a color also leaves the old dark mode, like the device's theme menu.
     func setColor(_ key: String) async {
         await send(.init(zip: nil, timezone: nil, options: ["color_format": "color"], uiColor: key))
-    }
-
-    func setDark() async {
-        await send(.init(zip: nil, timezone: nil, options: ["color_format": "dark"], uiColor: nil))
     }
 
     func setTimezone(_ name: String) async {
@@ -470,109 +634,91 @@ final class PigeonSettingsModel: ObservableObject {
     }
 }
 
-struct PigeonSettingsCard: View {
-    @StateObject private var model: PigeonSettingsModel
-    init(client: PigeonClient) { _model = StateObject(wrappedValue: PigeonSettingsModel(client: client)) }
+/// One of the device's two-way switches. Hidden when the device doesn't offer the option.
+private struct OptionRow: View {
+    @ObservedObject var model: PigeonSettingsModel
+    let data: PigeonSettings
+    let key: String
+    let title: String
+    let labels: [String: String]
+    var note: String? = nil
 
-    private static let rows: [(key: String, title: String, labels: [String: String])] = [
-        ("time_format", "Clock", ["12": "12 hr", "24": "24 hr"]),
-        ("temp_format", "Temperature", ["f": "°F", "c": "°C"]),
-        ("clock_format", "Clock face", ["digital": "Digital", "analog": "Analog"]),
-        ("zone4_mode", "Playback bar", ["info": "Info", "visualizer": "Visualizer"]),
-    ]
+    var body: some View {
+        if let values = data.optionValues[key] {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+                Picker(title, selection: Binding(
+                    get: { data.options[key] ?? values.first ?? "" },
+                    set: { v in Task { await model.setOption(key, v) } })) {
+                    ForEach(values, id: \.self) { v in Text(labels[v] ?? v).tag(v) }
+                }
+                .pickerStyle(.segmented)
+                if let note { Text(note).font(Theme.ui(12)).foregroundStyle(Theme.secondaryText) }
+            }
+        }
+    }
+}
 
-    private func isDark(_ d: PigeonSettings) -> Bool { d.options["color_format"] == "dark" }
+private struct ColorSwatches: View {
+    @ObservedObject var model: PigeonSettingsModel
+    let data: PigeonSettings
 
-    private static let swatches: [String: Color] = [
+    static let swatches: [String: Color] = [
         "blue": Color(hex: 0x4EA6F7), "green": Color(hex: 0x00A32E), "yellow": Color(hex: 0xE6FF0A),
-        "pink": Color(hex: 0xFF5CA8),
-        "orange": Color(hex: 0xE39F00), "red": Color(hex: 0xFF0000), "grey": Color(hex: 0x777777),
-        "white": .white,
+        "pink": Color(hex: 0xFF5CA8), "red": Color(hex: 0xFF0000),
+        "orange": Color(hex: 0xE39F00), "grey": Color(hex: 0x777777), "white": .white,
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                LCDLabel(text: "Pigeon settings", size: 18, color: Theme.accent)
-                Spacer()
-                if model.busy { ProgressView() }
+        HStack(spacing: 14) {
+            ForEach(data.uiColorChoices, id: \.self) { key in
+                let selected = data.uiColor == key && data.options["color_format"] != "dark"
+                Button { Task { await model.setColor(key) } } label: {
+                    Circle().fill(Self.swatches[key] ?? .gray)
+                        .frame(width: 38, height: 38)
+                        .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 0).padding(-4))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(key.capitalized)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            if let d = model.data {
-                // Location
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Zip code").font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
-                    HStack {
-                        TextField("5 digits", text: $model.zipText)
-                            .keyboardType(.numberPad).font(Theme.uiBold(17))
-                            .padding(10)
-                            .background(Theme.tileRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        Button("Save") { Task { await model.saveZip() } }
-                            .font(Theme.uiBold(16))
-                            .disabled(model.zipText.count != 5 || model.zipText == (d.zip ?? ""))
-                    }
-                    Text("Timezone").font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
-                    Menu {
-                        ForEach(d.timezoneChoices, id: \.self) { tz in
-                            Button(tz) { Task { await model.setTimezone(tz) } }
-                        }
-                    } label: {
-                        HStack {
-                            Text(d.timezone ?? "System default").font(Theme.uiBold(16)).foregroundStyle(.white)
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.secondaryText)
-                        }
-                        .padding(10)
-                        .background(Theme.tileRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                }
-
-                // The switches (clock, temperature, clock face, playback bar)
-                ForEach(Self.rows, id: \.key) { row in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(row.title).font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
-                        Picker(row.title, selection: Binding(
-                            get: { d.options[row.key] ?? "" },
-                            set: { v in Task { await model.setOption(row.key, v) } })) {
-                            ForEach(d.optionValues[row.key] ?? [], id: \.self) { v in
-                                Text(row.labels[v] ?? v).tag(v)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-
-                // UI color
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Interface color").font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
-                    HStack(spacing: 12) {
-                        ForEach(d.uiColorChoices, id: \.self) { key in
-                            Button { Task { await model.setColor(key) } } label: {
-                                Circle().fill(Self.swatches[key] ?? .gray)
-                                    .frame(width: 34, height: 34)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: d.uiColor == key && !isDark(d) ? 3 : 0).padding(-4))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        // Dark: monochrome red on black.
-                        Button { Task { await model.setDark() } } label: {
-                            Circle().fill(.black)
-                                .overlay(Circle().stroke(Color(hex: 0xD60000), lineWidth: 5))
-                                .frame(width: 34, height: 34)
-                                .overlay(Circle().stroke(Color.white, lineWidth: isDark(d) ? 3 : 0).padding(-4))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Dark")
-                    }
-                }
-                Text("Pigeon \(d.version)").font(Theme.ui(12)).foregroundStyle(Theme.secondaryText)
-            } else if model.errorText == nil {
-                ProgressView()
-            }
-            if let e = model.errorText { Text(e).font(Theme.ui(13)).foregroundStyle(Theme.bad) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tile()
-        .task { await model.load() }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct LocationFields: View {
+    @ObservedObject var model: PigeonSettingsModel
+    let data: PigeonSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Zip code").font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+            HStack {
+                TextField("5 digits", text: $model.zipText)
+                    .keyboardType(.numberPad).font(Theme.uiBold(17))
+                    .padding(10)
+                    .background(Theme.tileRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Button("Save") { Task { await model.saveZip() } }
+                    .font(Theme.uiBold(16))
+                    .disabled(model.zipText.count != 5 || model.zipText == (data.zip ?? ""))
+            }
+            Text("Time zone").font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+            Menu {
+                ForEach(data.timezoneChoices, id: \.self) { tz in
+                    Button(tz) { Task { await model.setTimezone(tz) } }
+                }
+            } label: {
+                HStack {
+                    Text(data.timezone ?? "System default").font(Theme.uiBold(16)).foregroundStyle(.white)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").foregroundStyle(Theme.secondaryText)
+                }
+                .padding(10)
+                .background(Theme.tileRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            Text("Setting a zip code also sets the time zone.").font(Theme.ui(12)).foregroundStyle(Theme.secondaryText)
+        }
     }
 }
 

@@ -218,6 +218,11 @@ struct PigeonClient {
         let _: StateReply = try await send("POST", "/device/restart")
     }
 
+    /// RESET on the Pigeon page: settings, rooms and paired players go back to defaults. This phone stays paired.
+    func factoryReset() async throws {
+        let _: StateReply = try await send("POST", "/device/reset")
+    }
+
     /// Asks the device to look on GitHub, which can take a while on a slow link.
     func checkUpdate() async throws -> UpdateInfo { try await send("GET", "/update", timeout: 25) }
 

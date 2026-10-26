@@ -209,6 +209,7 @@ class MaintenanceRouteTests(_Base):
         self.svc = ControlService(
             run_on_ui=lambda fn: fn(), on_manual_set=lambda: None,
             restart=lambda: self.calls.append("restart"),
+            factory_reset=lambda: self.calls.append("reset"),
             apply_update=lambda: self.calls.append("update"),
             pair_scan=lambda kind: self.calls.append(("scan", kind)),
             metadata_provider=lambda: {"title": "Heat", "query": "Heat"},
@@ -222,6 +223,14 @@ class MaintenanceRouteTests(_Base):
     def test_restart(self) -> None:
         self.assertEqual(self.call("POST", "/device/restart")[0], 202)
         self.assertEqual(self.calls, ["restart"])
+
+    def test_factory_reset(self) -> None:
+        self.assertEqual(self.call("POST", "/device/reset"), (202, {"state": "resetting"}))
+        self.assertEqual(self.calls, ["reset"])
+        self.svc._update_state = lambda: {"applying": True}
+        self.assertEqual(self.call("POST", "/device/reset")[0], 503)
+        with mock.patch.dict(os.environ, {"PIGEON_PRODUCT": "marquee"}):
+            self.assertEqual(self.call("POST", "/device/reset")[0], 422)
 
     def test_update_check_and_apply(self) -> None:
         from types import SimpleNamespace
