@@ -927,6 +927,45 @@ def _draw_wifi_fan(
         )
 
 
+def _draw_pencil_icon(
+    canvas: np.ndarray,
+    box: tuple[int, int, int, int],
+    *,
+    color_bgr: tuple[int, int, int],
+) -> None:
+    """Filled 45° pencil (tip bottom-left, eraser top-right) for the RENAME field."""
+    x, y, w, h = box
+    side = int(round(min(w, h) * 0.8))
+    if side < 8:
+        return
+    ox = x + (w - side) // 2
+    oy = y + (h - side) // 2
+    ss = 4
+    s = side * ss
+    # Axis runs from the tip at (0.1, 0.9) to the eraser end at (0.9, 0.1) of the square.
+    tip = np.array([0.1, 0.9]) * s
+    u = np.array([0.9, 0.1]) * s - tip
+    length = float(np.hypot(*u))
+    u = u / length
+    v = np.array([-u[1], u[0]])
+    hw = 0.11 * s
+
+    def _quad(t0: float, t1: float) -> np.ndarray:
+        a, b = tip + u * (t0 * length), tip + u * (t1 * length)
+        return np.array([a - v * hw, b - v * hw, b + v * hw, a + v * hw], dtype=np.int32)
+
+    tip_cone = np.array(
+        [tip, tip + u * (0.24 * length) - v * hw, tip + u * (0.24 * length) + v * hw],
+        dtype=np.int32,
+    )
+    layer = np.zeros((s, s, 4), dtype=np.uint8)
+    fill = (*color_bgr, 255)
+    for poly in (tip_cone, _quad(0.29, 0.76), _quad(0.81, 1.0)):
+        cv2.fillPoly(layer, [poly], fill, lineType=cv2.LINE_AA)
+    layer = cv2.resize(layer, (side, side), interpolation=cv2.INTER_AREA)
+    _blit(canvas, layer, ox, oy)
+
+
 def _draw_yes_no_above_zone1(canvas: np.ndarray, keyboard) -> None:
     """YES/NO confirmation sits in the EXIT band, centered above the dual bar."""
     from pigeon.widgets.settings_keyboard import KeyAction
@@ -1761,13 +1800,18 @@ def render_settings_main_1280_bgra(
             elif label in (None, "CONNECTED"):
                 label = shown or "CONNECTED"
             wifi_box, net_text_box = _network_field_boxes(net_box)
-            _draw_wifi_fan(
-                canvas,
-                wifi_box,
-                level=int(getattr(st, "wifi_level", 3) or 0),
-                color_bgr=(0, 0, 0) if (_simple() and b_on) else _hex_to_bgr(ui_hex),
-                none=none,
-            )
+            icon_bgr = (0, 0, 0) if (_simple() and b_on) else _hex_to_bgr(ui_hex)
+            if label == "RENAME":
+                # Picking a room turns this field into the rename CTA; Wi‑Fi bars would mislead.
+                _draw_pencil_icon(canvas, wifi_box, color_bgr=icon_bgr)
+            else:
+                _draw_wifi_fan(
+                    canvas,
+                    wifi_box,
+                    level=int(getattr(st, "wifi_level", 3) or 0),
+                    color_bgr=icon_bgr,
+                    none=none,
+                )
             _draw_centered_text(
                 canvas,
                 str(label or "").upper(),

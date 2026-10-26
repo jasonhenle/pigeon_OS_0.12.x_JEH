@@ -31,8 +31,17 @@ class ListedOnlyElsewhereTests(unittest.TestCase):
             self.assertFalse(self._check(HULU))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class RuntimeVouchesForServiceTests(unittest.TestCase):
+    def test_exact_title_and_close_runtime_vouch(self):
+        self.assertTrue(tmdb_poster._runtime_vouches_for_service(0.95, 5))
+
+    def test_close_runtime_alone_does_not_vouch(self):
+        self.assertFalse(tmdb_poster._runtime_vouches_for_service(0.95, 4))
+        self.assertFalse(tmdb_poster._runtime_vouches_for_service(1.0, 2))
+
+    def test_loose_or_unknown_runtime_does_not_vouch(self):
+        self.assertFalse(tmdb_poster._runtime_vouches_for_service(0.85, 5))
+        self.assertFalse(tmdb_poster._runtime_vouches_for_service(None, 5))
 
 
 class RerankPrefersServiceTests(unittest.TestCase):
@@ -53,3 +62,7 @@ class RerankPrefersServiceTests(unittest.TestCase):
                 scored, media_kind="movie", title_pick=horror_frozen, watch_provider_ids=DISNEY
             )
         self.assertEqual(pick["id"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
