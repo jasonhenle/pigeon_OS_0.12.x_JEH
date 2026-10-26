@@ -1024,7 +1024,7 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None
 def sports_dropdown_entries() -> list[tuple[str, str, object]]:
     """(game, status, payload) rows. Payload is a ``SportsEvent``,
     :data:`SPORTS_OFF` (turn the board off), or None (a message row)."""
-    from pigeon.sports_scores import events_snapshot, selected_event, status_label
+    from pigeon.sports_scores import backoff_remaining_s, events_snapshot, selected_event, status_label
 
     tz = None
     try:
@@ -1044,7 +1044,12 @@ def sports_dropdown_entries() -> list[tuple[str, str, object]]:
     for ev in events:
         rows.append((ev.title, status_label(ev, tz=tz), ev))
     if not events:
-        msg = "LOADING…" if loading else ("NO CONNECTION" if failed else "NO GAMES TODAY")
+        if loading:
+            msg = "LOADING…"
+        elif backoff_remaining_s() > 0:
+            msg = "BUSY · TRY AGAIN SOON"
+        else:
+            msg = "NO CONNECTION" if failed else "NO GAMES TODAY"
         rows.append((msg, "", None))
     return rows
 

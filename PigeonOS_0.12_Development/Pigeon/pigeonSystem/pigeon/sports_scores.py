@@ -7,9 +7,15 @@ matters. The board clears itself a while after the final whistle.
 
 API key: ``PIGEON_SPORTSDB_KEY`` or ``~/.pigeon_0_6/sportsdb_api_key`` (one
 line). Without one Pigeon uses TheSportsDB's free key, which has no live feed
-and caps ``eventsday`` at a few events per sport, so scores update only as
+and caps ``eventsday`` at a few events per query, so scores update only as
 fast as TheSportsDB refreshes its event records. A Premium key adds the v2
 livescore feed (every live game, scores within a couple of minutes).
+
+The list asks for each US league by id. A sport-wide query spends its few
+free results on whichever leagues sort first (German basketball, the KHL),
+so the NBA and NHL went missing. Requests are spaced out and stop for the
+server's Retry-After on HTTP 429: the free key is blocked for minutes after
+a short burst.
 
 Network work runs on daemon threads; the UI only reads snapshots.
 """
@@ -35,15 +41,28 @@ _V2 = "https://www.thesportsdb.com/api/v2/json"
 _KEY_FILE = "sportsdb_api_key"
 _FETCH_TIMEOUT_S = 8.0
 
-# Sports listed on the free key (one eventsday call each, per date).
-LIST_SPORTS: tuple[str, ...] = (
-    "American Football",
-    "Basketball",
-    "Baseball",
-    "Ice Hockey",
-    "Soccer",
+# (league id, name, first month, last month of the season incl. playoffs).
+# Out-of-season leagues are not asked for; a season may wrap the new year.
+LIST_LEAGUES: tuple[tuple[str, str, int, int], ...] = (
+    ("4391", "NFL", 9, 2),
+    ("4387", "NBA", 10, 6),
+    ("4380", "NHL", 10, 6),
+    ("4424", "MLB", 3, 11),
+    ("4346", "MLS", 2, 12),
+    ("4516", "WNBA", 5, 10),
 )
 _LIST_TTL_S = 60.0
+# One league's games on one date, reused across list opens.
+_DAY_TTL_S = 120.0
+# Games in the list start within this window around now, so the UTC dates
+# it covers are the ones to ask for (US evening games are tomorrow in UTC).
+_LIST_WINDOW_BACK = timedelta(hours=5)
+_LIST_WINDOW_AHEAD = timedelta(hours=12)
+# Spacing between API requests. Free: half the documented 30/min, since a
+# burst of ~7 quick requests already draws a 429. Premium: 100/min.
+_MIN_GAP_FREE_S = 4.0
+_MIN_GAP_PREMIUM_S = 0.7
+_BACKOFF_DEFAULT_S = 120.0
 # Free key: 30 requests/min. Premium: 100/min, and the feed itself moves
 # about every couple of minutes, so 30 s never misses an update.
 POLL_LIVE_PREMIUM_S = 30.0
@@ -215,13 +234,57 @@ def is_premium(key: str | None = None) -> bool:
     return (key if key is not None else load_api_key()) != FREE_API_KEY
 
 
-def _get(url: str, *, headers: dict[str, str] | None = None) -> bytes:
+class RateLimited(Exception):
+    """TheSportsDB said 429; no API requests until :func:`backoff_remaining_s` is 0."""
+
+
+_net_lock = threading.Lock()
+_last_request_mono = 0.0
+_blocked_until_mono = 0.0
+
+
+def backoff_remaining_s(now: float | None = None) -> float:
+    return max(0.0, _blocked_until_mono - (now if now is not None else time.monotonic()))
+
+
+def _note_rate_limited(retry_after: object) -> None:
+    global _blocked_until_mono
+    try:
+        wait = float(str(retry_after).strip())
+    except (TypeError, ValueError):
+        wait = _BACKOFF_DEFAULT_S
+    _blocked_until_mono = max(_blocked_until_mono, time.monotonic() + max(1.0, wait))
+    _bump()
+
+
+def _get(url: str, *, headers: dict[str, str] | None = None, paced: bool = True) -> bytes:
+    """GET ``url``. API calls (``paced``) are spaced out, one at a time, and
+    raise :class:`RateLimited` during a 429 backoff instead of asking."""
+    global _last_request_mono
     req = urllib.request.Request(url, headers={"User-Agent": "Pigeon/0.12 (sports)", **(headers or {})})
-    with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_S) as resp:
-        return resp.read()
+    if not paced:
+        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_S) as resp:
+            return resp.read()
+    with _net_lock:
+        if backoff_remaining_s() > 0:
+            raise RateLimited
+        gap = _MIN_GAP_PREMIUM_S if is_premium() else _MIN_GAP_FREE_S
+        wait = _last_request_mono + gap - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_mono = time.monotonic()
+        try:
+            with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_S) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                _note_rate_limited(e.headers.get("Retry-After") if e.headers else None)
+                raise RateLimited from e
+            raise
 
 
 def _get_json(url: str, *, headers: dict[str, str] | None = None) -> Any:
+    """Parsed JSON, or None when offline / not JSON. :class:`RateLimited` propagates."""
     try:
         return json.loads(_get(url, headers=headers).decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
@@ -238,10 +301,22 @@ def _rows(data: Any, *keys: str) -> list:
     return []
 
 
-def _fetch_day(key: str, day: str, sport: str) -> list[SportsEvent]:
-    q = urllib.parse.urlencode({"d": day, "s": sport})
+_day_cache: dict[tuple[str, str, str], tuple[float, list[SportsEvent]]] = {}
+
+
+def _fetch_league_day(key: str, league_id: str, day: str) -> list[SportsEvent] | None:
+    """One league's games on one UTC date; None when the request failed."""
+    ck = (key, league_id, day)
+    hit = _day_cache.get(ck)
+    if hit is not None and time.monotonic() - hit[0] < _DAY_TTL_S:
+        return hit[1]
+    q = urllib.parse.urlencode({"d": day, "l": league_id})
     data = _get_json(f"{_V1}/{key}/eventsday.php?{q}")
-    return [e for e in map(parse_event, _rows(data, "events")) if e is not None]
+    if not isinstance(data, dict):
+        return None
+    events = [e for e in map(parse_event, _rows(data, "events")) if e is not None]
+    _day_cache[ck] = (time.monotonic(), events)
+    return events
 
 
 def _fetch_livescores(key: str, scope: str = "all") -> list[SportsEvent] | None:
@@ -258,25 +333,28 @@ def _fetch_event(key: str, event_id: str) -> SportsEvent | None:
     return parse_event(rows[0]) if rows else None
 
 
-def _local_tz() -> Any:
-    try:
-        from zoneinfo import ZoneInfo
-
-        from pigeon.pigeon_locale import read_timezone
-
-        name = read_timezone()
-        return ZoneInfo(name) if name else None
-    except Exception:
-        return None
+def league_in_season(first: int, last: int, month: int) -> bool:
+    if first <= last:
+        return first <= month <= last
+    return month >= first or month <= last
 
 
 def _list_days(now: datetime) -> list[str]:
-    """TheSportsDB files events by UTC date; an evening game locally is
-    tomorrow in UTC, so ask for both."""
-    tz = _local_tz()
-    local = now.astimezone(tz) if tz is not None else now.astimezone()
-    days = [local.strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")]
+    """UTC dates the list window touches, today's first. TheSportsDB files
+    events by UTC date, and a US evening game is already tomorrow there."""
+    now = now.astimezone(timezone.utc)
+    days = [now.strftime("%Y-%m-%d")]
+    for edge in (now + _LIST_WINDOW_AHEAD, now - _LIST_WINDOW_BACK):
+        days.append(edge.strftime("%Y-%m-%d"))
     return list(dict.fromkeys(days))
+
+
+def list_queries(now: datetime) -> list[tuple[str, str]]:
+    """(league id, UTC date) to ask for: every in-season league for today
+    first, so a backoff part-way still lists each league's current games."""
+    month = now.astimezone(timezone.utc).month
+    leagues = [lid for lid, _name, a, b in LIST_LEAGUES if league_in_season(a, b, month)]
+    return [(lid, day) for day in _list_days(now) for lid in leagues]
 
 
 def _merge_score(base: SportsEvent, fresh: SportsEvent) -> SportsEvent:
@@ -314,17 +392,36 @@ def rank_events(events: list[SportsEvent], *, now: datetime | None = None) -> li
     return sorted(keep.values(), key=key)
 
 
-def fetch_available_events(*, key: str | None = None, now: datetime | None = None) -> list[SportsEvent]:
+def fetch_available_events(
+    *,
+    key: str | None = None,
+    now: datetime | None = None,
+    on_progress: Any = None,
+) -> tuple[list[SportsEvent], bool]:
+    """(ranked events, every request failed). Stops early on a 429;
+    ``on_progress(events)`` sees the list grow as each league answers."""
     key = key or load_api_key()
     now = now or datetime.now(timezone.utc)
     found: list[SportsEvent] = []
-    if is_premium(key):
-        found.extend(_fetch_livescores(key) or [])
-    for day in _list_days(now):
-        for sport in LIST_SPORTS:
-            found.extend(_fetch_day(key, day, sport))
-    # Livescore rows first: they are the freshest.
-    return rank_events(found, now=now)
+    answered = False
+    try:
+        if is_premium(key):
+            # Livescore rows first: they are the freshest.
+            live = _fetch_livescores(key)
+            answered = live is not None
+            found.extend(live or [])
+        for league_id, day in list_queries(now):
+            rows = _fetch_league_day(key, league_id, day)
+            if rows is None:
+                continue
+            answered = True
+            if rows:
+                found.extend(rows)
+                if on_progress is not None:
+                    on_progress(rank_events(found, now=now))
+    except RateLimited:
+        pass
+    return rank_events(found, now=now), not answered
 
 
 # --- badges -------------------------------------------------------------------
@@ -350,7 +447,8 @@ def _fetch_badge(url: str) -> np.ndarray | None:
     # ``/small`` is TheSportsDB's 250 px variant; plenty for the board.
     for u in (f"{url.rstrip('/')}/small", url):
         try:
-            img = _decode_badge(_get(u))
+            # Images come from the CDN, outside the API's rate limit.
+            img = _decode_badge(_get(u, paced=False))
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
             img = None
         if img is not None:
@@ -424,18 +522,23 @@ def refresh_events(*, force: bool = False) -> bool:
         _events_loading = True
     _bump()
 
+    def progress(found: list[SportsEvent]) -> None:
+        global _events
+        with _lock:
+            _events = tuple(found)
+        _bump()
+
     def worker() -> None:
         global _events, _events_mono, _events_loading, _events_error
         try:
-            found = fetch_available_events()
-            err = False
+            found, err = fetch_available_events(on_progress=progress)
         except Exception:
             found, err = [], True
         with _lock:
-            if found or err or not _events:
-                _events = tuple(found)
-            _events_error = err
-            _events_mono = time.monotonic()
+            _events = tuple(found)
+            _events_error = err and not found
+            # A cut-short list (429) is not fresh: ask again on the next open.
+            _events_mono = 0.0 if backoff_remaining_s() > 0 else time.monotonic()
             _events_loading = False
         _bump()
 
@@ -535,7 +638,7 @@ def _poll_loop() -> None:
             apply_update(fresh)
             delay = poll_interval_s(selected_event(), premium=is_premium(key))
         else:
-            delay = _POLL_RETRY_S
+            delay = max(_POLL_RETRY_S, backoff_remaining_s())
         if delay is None:
             # Over: sleep until the hold runs out (or a new pick wakes us).
             _wake.wait(timeout=30.0)
@@ -557,6 +660,10 @@ def _start_poller() -> None:
 
 def _reset_for_tests() -> None:
     global _events, _events_mono, _events_loading, _events_error, _selected, _final_since
+    global _blocked_until_mono, _last_request_mono
+    _blocked_until_mono = 0.0
+    _last_request_mono = 0.0
+    _day_cache.clear()
     with _lock:
         _events = ()
         _events_mono = 0.0
@@ -571,10 +678,13 @@ def _reset_for_tests() -> None:
 
 __all__ = [
     "FINAL",
+    "LIST_LEAGUES",
     "LIVE",
     "UPCOMING",
+    "RateLimited",
     "SportsEvent",
     "apply_update",
+    "backoff_remaining_s",
     "badge_bgra",
     "board_token",
     "clear_selection",
@@ -582,6 +692,8 @@ __all__ = [
     "events_snapshot",
     "fetch_available_events",
     "is_premium",
+    "league_in_season",
+    "list_queries",
     "load_api_key",
     "parse_event",
     "poll_interval_s",
