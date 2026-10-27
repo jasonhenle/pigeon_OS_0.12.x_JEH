@@ -237,6 +237,83 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(seen, ["GET /api/v1/display", "PATCH /api/v1/display"])
     }
 
+    private static func bodyJSON(_ req: URLRequest) -> [String: Any]? {
+        let body = req.httpBodyStream.map { s -> Data in
+            s.open(); defer { s.close() }
+            var d = Data(); var buf = [UInt8](repeating: 0, count: 256)
+            while s.hasBytesAvailable { let n = s.read(&buf, maxLength: 256); if n <= 0 { break }; d.append(buf, count: n) }
+            return d
+        } ?? req.httpBody ?? Data()
+        return try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+    }
+
+    func testSportsSettingsAndFollow() async throws {
+        var seen: [String] = []
+        StubURLProtocol.handler = { req in
+            seen.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            if req.httpMethod == "PATCH" {
+                let obj = Self.bodyJSON(req)
+                XCTAssertEqual(Set(obj?.keys.map { $0 } ?? []), ["scores_shown"])
+                XCTAssertEqual(obj?["scores_shown"] as? Bool, false)
+            }
+            if req.url?.path.hasSuffix("/follow") == true { return (204, Data()) }
+            if req.url?.path.hasSuffix("/teams") == true {
+                return (200, #"{"league":{"id":"4607","name":"NCAA BASKETBALL","by_letter":true},"teams":[{"id":"138803","name":"Michigan","letter":"M","followed":false}]}"#.data(using: .utf8)!)
+            }
+            return (200, """
+            {"scores_shown":false,"followed_auto":true,"followed_active":false,
+             "leagues":[{"id":"4391","name":"NFL","team_count":32,"by_letter":false,"followed":["134936"]}],
+             "board":{"id":"9","league":"NFL","league_id":"4391","home":"Philadelphia Eagles","away":"Dallas Cowboys",
+                      "home_score":null,"away_score":null,"phase":"live","status":"Q3 8:12","start":null,
+                      "home_badge":null,"away_badge":null,"league_badge":null}}
+            """.data(using: .utf8)!)
+        }
+        let c = client()
+        let s = try await c.patchSports(.init(scoresShown: false, followedAuto: nil))
+        XCTAssertFalse(s.scoresShown)
+        XCTAssertTrue(s.followedAuto)
+        XCTAssertFalse(s.followedActive)
+        XCTAssertEqual(s.leagues.first?.followed, ["134936"])
+        XCTAssertNil(s.board?.homeScore)
+        XCTAssertEqual(s.board?.status, "Q3 8:12")
+        let t = try await c.sportsTeams(league: "4607")
+        XCTAssertTrue(t.league.byLetter)
+        XCTAssertEqual(t.teams.first?.letter, "M")
+        try await c.setFollow(league: "4607", team: "138803", true)
+        try await c.setFollow(league: "4607", team: "138803", false)
+        XCTAssertEqual(seen, [
+            "PATCH /api/v1/sports",
+            "GET /api/v1/sports/leagues/4607/teams",
+            "PUT /api/v1/sports/leagues/4607/teams/138803/follow",
+            "DELETE /api/v1/sports/leagues/4607/teams/138803/follow",
+        ])
+    }
+
+    func testTodaysGamesAndBoard() async throws {
+        var seen: [String] = []
+        StubURLProtocol.handler = { req in
+            seen.append("\(req.httpMethod ?? "") \(req.url?.path ?? "")")
+            if req.httpMethod == "DELETE" { return (204, Data()) }
+            if req.httpMethod == "PUT" {
+                XCTAssertEqual(Self.bodyJSON(req)?["event_id"] as? String, "1")
+                return (200, #"{"scores_shown":true,"followed_auto":true,"followed_active":true,"leagues":[],"board":null}"#.data(using: .utf8)!)
+            }
+            return (200, """
+            {"games":[{"id":"1","league":"NHL","league_id":"4380","home":"Edmonton Oilers","away":"Detroit Red Wings",
+                       "home_score":"3","away_score":"1","phase":"live","status":"P2","start":"2026-10-27T01:30:00+00:00",
+                       "home_badge":null,"away_badge":null,"league_badge":null}],
+             "loading":false,"failed":false,"busy":true}
+            """.data(using: .utf8)!)
+        }
+        let c = client()
+        let g = try await c.sportsGames()
+        XCTAssertTrue(g.busy)
+        XCTAssertEqual(g.games.first?.homeScore, "3")
+        _ = try await c.showGame("1")
+        try await c.clearGame()
+        XCTAssertEqual(seen, ["GET /api/v1/sports/games", "PUT /api/v1/sports/board", "DELETE /api/v1/sports/board"])
+    }
+
     func testFactoryResetPostsToDeviceReset() async throws {
         var seen: [String] = []
         StubURLProtocol.handler = { req in

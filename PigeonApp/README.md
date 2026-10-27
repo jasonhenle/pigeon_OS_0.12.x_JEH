@@ -13,4 +13,5 @@ Settings > Pigeon (or `pigeon.control_api.pairing_code()`), then Devices > + in 
 
 Implemented: discovery (Bonjour), claim with the on-screen code, device list/rename/remove,
 live search and pin/clear via `/search/*`, SSE updates, rooms, brightness, and Pigeon Clock Settings in
-the device's General / Theme / Clock menus (update, reset, restart included). Not yet: Wi-Fi.
+the device's General / Theme / Clock menus (update, reset, restart included), and Sports (scores show /
+hide, followed teams, today's games) via `/sports*`. Not yet: Wi-Fi.
