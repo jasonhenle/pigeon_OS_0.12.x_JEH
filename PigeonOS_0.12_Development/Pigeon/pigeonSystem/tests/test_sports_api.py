@@ -140,6 +140,17 @@ class GamesTests(_Base):
         self.assertEqual(self.call("DELETE", "/sports/board")[0], 204)
         self.assertIsNone(ss.selected_event())
 
+    def test_games_say_when_the_list_is_stale(self) -> None:
+        ss._events = (_ev("1"),)
+        ss._events_mono = 1e18
+        self.assertFalse(self.call("GET", "/sports/games")[1]["stale"])
+        ss._events_stale = True
+        ss._events_error = True
+        d = self.call("GET", "/sports/games")[1]
+        self.assertTrue(d["stale"])
+        self.assertFalse(d["failed"])  # rows are still there to show
+        self.assertEqual(len(d["games"]), 1)
+
     def test_hidden_scores_are_not_sent(self) -> None:
         ss._events = (_ev("1"),)
         ss._events_mono = 1e18

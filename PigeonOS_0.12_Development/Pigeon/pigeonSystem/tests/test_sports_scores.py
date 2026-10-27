@@ -369,5 +369,187 @@ class SettingsListTests(_Reset):
         self.assertFalse(np.array_equal(with_list, ps.render_pigeon_settings_bgra(st)))
 
 
+
+def _soon(eid: str, hours: float = 1.0, **kw) -> ss.SportsEvent:
+    """A game relative to the real clock (list ranking drops old / far games)."""
+    return _ev(eid, status="NS", start=datetime.now(timezone.utc) + timedelta(hours=hours), **kw)
+
+
+class RefreshFreshnessTests(_Reset):
+    """refresh_events(): what the list holds, and what it admits to, after
+    empty, failed, cut-short and successful refreshes."""
+
+    def _refresh(self, *, result=None, raises: bool = False, rate_limit: bool = False) -> None:
+        def fetch(**_kw):
+            if rate_limit:
+                ss._blocked_until_mono = ss.time.monotonic() + 60
+            if raises:
+                raise RuntimeError("boom")
+            return result
+
+        threads = []
+        with mock.patch.object(ss, "fetch_available_events", side_effect=fetch), mock.patch.object(
+            ss.threading, "Thread", side_effect=lambda **kw: threads.append(kw) or mock.Mock()
+        ):
+            self.assertTrue(ss.refresh_events(force=True))
+            threads[0]["target"]()
+
+    def _ids(self) -> list[str]:
+        return [e.event_id for e in ss.events_snapshot()[0]]
+
+    def test_empty_success_replaces_the_old_list(self) -> None:
+        ss._events = (_soon("old"),)
+        self._refresh(result=([], False))
+        self.assertEqual(self._ids(), [])
+        self.assertFalse(ss.events_stale())
+        self.assertFalse(ss.events_snapshot()[2])
+        ((label, _status, payload),) = ps.sports_dropdown_entries()
+        self.assertEqual((label, payload), ("NO GAMES TODAY", None))
+        # An empty answer is still a fresh one: no re-fetch on the next open.
+        self.assertFalse(ss.refresh_events())
+
+    def test_failed_refresh_keeps_old_games_flagged(self) -> None:
+        ss._events = (_soon("old"),)
+        self._refresh(result=([], True))
+        self.assertEqual(self._ids(), ["old"])
+        self.assertTrue(ss.events_stale())
+        self.assertTrue(ss.events_snapshot()[2])
+        rows = ps.sports_dropdown_entries()
+        self.assertEqual(rows[0], ("EARLIER LIST · COULDN'T UPDATE", "", None))
+        self.assertEqual(rows[1][2].event_id, "old")
+        # Not fresh: the next open asks again.
+        with mock.patch.object(ss.threading, "Thread"):
+            self.assertTrue(ss.refresh_events())
+
+    def test_crashed_refresh_counts_as_failed(self) -> None:
+        ss._events = (_soon("old"),)
+        self._refresh(raises=True)
+        self.assertEqual(self._ids(), ["old"])
+        self.assertTrue(ss.events_stale())
+        self.assertTrue(ss.events_snapshot()[2])
+
+    def test_failed_refresh_with_nothing_before(self) -> None:
+        self._refresh(result=([], True))
+        self.assertEqual(self._ids(), [])
+        self.assertFalse(ss.events_stale())
+        ((label, _status, _payload),) = ps.sports_dropdown_entries()
+        self.assertEqual(label, "NO CONNECTION")
+
+    def test_cut_short_refresh_marks_the_kept_rows(self) -> None:
+        ss._events = (_soon("old", hours=2),)
+        self._refresh(result=([_soon("new")], False), rate_limit=True)
+        self.assertEqual(sorted(self._ids()), ["new", "old"])
+        self.assertTrue(ss.events_stale())
+        self.assertFalse(ss.events_snapshot()[2])
+        self.assertEqual(ps.sports_dropdown_entries()[0][0], "EARLIER LIST · TRY AGAIN SOON")
+
+    def test_cut_short_with_only_new_rows_is_not_stale(self) -> None:
+        self._refresh(result=([_soon("new")], False), rate_limit=True)
+        self.assertEqual(self._ids(), ["new"])
+        self.assertFalse(ss.events_stale())
+
+    def test_success_clears_the_stale_flag(self) -> None:
+        ss._events = (_soon("old"),)
+        self._refresh(result=([], True))
+        self.assertTrue(ss.events_stale())
+        self._refresh(result=([_soon("new")], False))
+        self.assertEqual(self._ids(), ["new"])
+        self.assertFalse(ss.events_stale())
+        self.assertFalse(ss.events_snapshot()[2])
+        self.assertIsInstance(ps.sports_dropdown_entries()[0][2], ss.SportsEvent)
+
+    def test_saved_list_is_stale_until_a_refresh_finishes(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        path = Path(tempfile.mkdtemp()) / "sports_events.json"
+        p = mock.patch.object(ss, "_events_path", return_value=path)
+        p.start()
+        self.addCleanup(p.stop)
+        ss._disk_enabled = True
+        ss._save_disk_events((_soon("saved"),))
+        ss._disk_loaded = False
+        self.assertEqual(self._ids(), ["saved"])
+        self.assertTrue(ss.events_stale())
+        ss._events_loading = True
+        self.assertEqual(ps.sports_dropdown_entries()[0][0], "EARLIER LIST · UPDATING…")
+        ss._events_loading = False
+        # An empty successful refresh replaces the saved copy too.
+        self._refresh(result=([], False))
+        ss._events = ()
+        ss._disk_loaded = False
+        self.assertEqual(self._ids(), [])
+
+    def test_stale_banner_is_not_a_game_and_games_stay_pickable(self) -> None:
+        ss._events = (_soon("old"),)
+        self._refresh(result=([], True))
+        ss._events_mono = 1e18  # opening the list must not start another fetch here
+        w = MainSettingsWidget()
+        with mock.patch.object(MainSettingsState, "refresh_network_ssid"):
+            w.state.enter_pigeon_settings()
+        w.state.open_sports_dropdown()
+        # The banner is first: activating it only closes the list.
+        self.assertEqual(w.state.activate_sports_dropdown(), "sports_dropdown_close")
+        self.assertIsNone(ss.selected_event())
+        # The game below it can still be picked, with the banner above it.
+        w.state.open_sports_dropdown()
+        w.state.navigate_sports_dropdown(forward=True)
+        w.state.activate_sports_dropdown()
+        self.assertEqual(ss.selected_event().event_id, "old")
+
+
+class PollOrderTests(_Reset):
+    """The first score fetch must not wait on badge downloads."""
+
+    def test_score_is_fetched_while_badges_are_still_downloading(self) -> None:
+        import threading
+
+        gate = threading.Event()
+        badge_calls: list[str] = []
+
+        def slow_badge(url: str):
+            badge_calls.append(url)
+            gate.wait(5.0)
+            return None
+
+        ev = _ev("1", status="Q1", home="0", away="0")
+        ss.select_event(ev)
+        fresh = _ev("1", status="Q1", home="7", away="0")
+        with mock.patch.object(ss, "_fetch_badge", side_effect=slow_badge), mock.patch.object(
+            ss, "_fetch_update", return_value=fresh
+        ) as update:
+            t0 = ss.time.monotonic()
+            delay = ss._poll_once(ev)
+            elapsed = ss.time.monotonic() - t0
+            update.assert_called_once()
+            self.assertLess(elapsed, 1.0)
+            self.assertEqual(ss.selected_event().home_score, "7")
+            self.assertEqual(delay, ss.POLL_LIVE_FREE_S)
+            # Badges are still on their own thread; a second poll does not
+            # start them again.
+            self.assertFalse(gate.is_set())
+            self.assertIsNone(ss._ensure_badges_async(ev.home_badge, ev.away_badge))
+            gate.set()
+            for th in [t for t in threading.enumerate() if t.name == "pigeon-sports-badges"]:
+                th.join(5.0)
+        self.assertEqual(sorted(badge_calls), sorted([ev.home_badge, ev.away_badge]))
+        self.assertIn(ev.home_badge, ss._badges)
+        self.assertEqual(ss._badge_inflight, set())
+
+    def test_cached_badges_start_no_thread(self) -> None:
+        ev = _ev("1", status="Q1")
+        ss._badges[ev.home_badge] = None
+        ss._badges[ev.away_badge] = None
+        self.assertIsNone(ss._ensure_badges_async(ev.home_badge, ev.away_badge, ""))
+
+    def test_failed_poll_still_waits_out_a_backoff(self) -> None:
+        ev = _ev("1", status="Q1")
+        ss._blocked_until_mono = ss.time.monotonic() + 90
+        with mock.patch.object(ss, "_fetch_update", return_value=None), mock.patch.object(
+            ss, "_ensure_badges_async"
+        ):
+            self.assertGreater(ss._poll_once(ev), 60)
+
+
 if __name__ == "__main__":
     unittest.main()

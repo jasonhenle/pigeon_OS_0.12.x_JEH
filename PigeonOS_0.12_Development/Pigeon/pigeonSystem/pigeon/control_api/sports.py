@@ -120,7 +120,7 @@ def set_follow(league_id: str, team_id: str, on: bool) -> None:
 def read_games() -> dict[str, Any]:
     """Today's games (starts a refresh when the list is stale)."""
     from pigeon import sports_follow as sf
-    from pigeon.sports_scores import backoff_remaining_s, events_snapshot, refresh_events
+    from pigeon.sports_scores import backoff_remaining_s, events_snapshot, events_stale, refresh_events
 
     refresh_events()
     events, loading, failed = events_snapshot()
@@ -130,6 +130,7 @@ def read_games() -> dict[str, Any]:
         "games": [_event_body(ev, tz=tz, scores=shown) for ev in events],
         "loading": loading,
         "failed": failed and not events,
+        "stale": bool(events) and events_stale(),
         "busy": backoff_remaining_s() > 0,
     }
 
