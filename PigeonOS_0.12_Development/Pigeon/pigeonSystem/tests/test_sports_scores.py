@@ -286,6 +286,17 @@ class BoardRenderTests(_Reset):
         self.assertGreater(lit(b), 30 * lit(a))
         self.assertGreater(lit(a), 0)
 
+    def test_hidden_scores_leave_the_numbers_out(self) -> None:
+        ev = _ev("1", status="Q3", home="21", away="17")
+        shown = np.asarray(board.render_scoreboard_rgba(ev, badges={}))
+        token = ss.board_token()
+        sf.toggle_scores()
+        self.assertGreater(ss.board_token(), token)
+        hidden = np.asarray(board.render_scoreboard_rgba(ev, badges={}))
+        band = (slice(board._BADGE_CY - 60, board._BADGE_CY + 60), slice(board._SCORE_CX[0] - 60, board._SCORE_CX[0] + 60))
+        self.assertGreater(int(np.count_nonzero(shown[band][:, :, :3])), 0)
+        self.assertEqual(int(np.count_nonzero(hidden[band][:, :, :3])), 0)
+
     def test_badge_is_pasted_when_loaded(self) -> None:
         ev = _ev("1", status="Q1")
         red = np.zeros((100, 100, 4), dtype=np.uint8)
@@ -305,7 +316,7 @@ class SettingsListTests(_Reset):
         w.state.pigeon_focus_index = ring.index("sports")
         self.assertEqual(w.activate(), "sports_page_open")
         ring = ps.pigeon_focus_ring(w.state.pigeon_view)
-        w.state.pigeon_focus_index = ring.index("sports_games")
+        w.state.pigeon_focus_index = ring.index("sports_today")
         return w
 
     def _with_events(self, *events: ss.SportsEvent) -> None:

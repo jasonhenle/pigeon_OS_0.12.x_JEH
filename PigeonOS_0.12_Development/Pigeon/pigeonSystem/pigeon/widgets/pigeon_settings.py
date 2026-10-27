@@ -553,13 +553,13 @@ def _sync_slot(
             group, _zipcode_text(state), cx=cx, y=cy + 36, size=_VALUE_PX, digital=True, color=text_ink
         )
     elif slot.focus_id == "sports":
-        from pigeon.sports_follow import all_followed, auto_enabled
+        from pigeon.sports_follow import all_followed, auto_active
         from pigeon.sports_scores import scoreboard_active
 
         if scoreboard_active():
             value = "LIVE"
         else:
-            value = "AUTO" if auto_enabled() and all_followed() else "OFF"
+            value = "AUTO" if auto_active() and all_followed() else "OFF"
         _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX, color=text_ink)
         _add_text(
             group,
@@ -1119,8 +1119,11 @@ def sports_dropdown_entries() -> list[tuple[str, str, object]]:
     return rows
 
 
-def sports_dropdown_rows(state: MainSettingsState) -> tuple[list[tuple[str, str, bool]], int, int]:
-    """(rows on screen as (game, status, is_live), first visible index, focused index)."""
+def sports_dropdown_rows(
+    state: MainSettingsState,
+) -> tuple[list[tuple[str, str, bool, tuple[str, str] | None]], int, int]:
+    """(rows on screen as (game, status, is_live, (home, away) or None),
+    first visible index, focused index)."""
     from pigeon.sports_scores import LIVE, SportsEvent
 
     entries = sports_dropdown_entries()
@@ -1128,7 +1131,12 @@ def sports_dropdown_rows(state: MainSettingsState) -> tuple[list[tuple[str, str,
     visible = min(_SPORTS_MAX_ROWS, len(entries))
     first = max(0, min(focus - visible // 2, len(entries) - visible))
     rows = [
-        (game, status, isinstance(payload, SportsEvent) and payload.phase == LIVE)
+        (
+            game,
+            status,
+            isinstance(payload, SportsEvent) and payload.phase == LIVE,
+            (payload.home, payload.away) if isinstance(payload, SportsEvent) and payload.home and payload.away else None,
+        )
         for game, status, payload in entries[first : first + visible]
     ]
     return rows, first, focus
@@ -1138,6 +1146,7 @@ def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
     from PIL import Image, ImageDraw
 
     from pigeon.font_paths import resolve_ui_font_bold
+    from pigeon.sports_names import ellipsize, fit_matchup
     from pigeon.widgets.settings_svg_text import _load_font
 
     rows, first, focus = sports_dropdown_rows(state)
@@ -1154,7 +1163,7 @@ def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
     font_path = resolve_ui_font_bold()
     font = _load_font(font_path, _SPORTS_FONT_PX) if font_path else None
     pad = 24
-    for i, (game, status, live) in enumerate(rows):
+    for i, (game, status, live, matchup) in enumerate(rows):
         top = i * (_SPORTS_ROW_H + _SPORTS_ROW_GAP)
         mid = top + _SPORTS_ROW_H // 2
         selected = first + i == focus
@@ -1176,11 +1185,12 @@ def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
                 draw.ellipse((dx - 8, mid - 8, dx + 8, mid + 8), fill=(255, 0, 0, 255))
                 status_w += 30
         max_w = _SPORTS_ROW_W - 2 * pad - (status_w + 24 if status else 0)
-        text = game.upper()
-        if draw.textlength(text, font=font) > max_w:
-            while len(text) > 1 and draw.textlength(text + "…", font=font) > max_w:
-                text = text[:-1].rstrip()
-            text += "…"
+
+        def fits(t: str, _w: int = max_w) -> bool:
+            return draw.textlength(t, font=font) <= _w
+
+        # Too long: abbreviate the cities (PHI EAGLES VS DAL COWBOYS), then cut.
+        text = fit_matchup(*matchup, fits) if matchup else ellipsize(game.upper(), fits)
         if status:
             draw.text((pad, mid), text, font=font, fill=ink, anchor="lm")
         else:

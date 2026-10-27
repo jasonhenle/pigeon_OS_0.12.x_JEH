@@ -2763,8 +2763,9 @@ class MainSettingsWidget:
 
             focused = st.pigeon_focused_id
             from pigeon.widgets.sports_settings import (
-                FOCUS_AUTO,
-                FOCUS_GAMES,
+                FOCUS_FOLLOWED,
+                FOCUS_SCORES,
+                FOCUS_TODAY,
                 SPORTS_VIEW,
                 league_for_focus,
             )
@@ -2779,13 +2780,19 @@ class MainSettingsWidget:
                     st.open_sports_teams(league_id)
                     self.invalidate()
                     return f"sports_teams_open:{league_id}"
-                if focused == FOCUS_AUTO:
+                if focused == FOCUS_SCORES:
+                    from pigeon.sports_follow import toggle_scores
+
+                    shown = toggle_scores()
+                    self.invalidate()
+                    return f"sports_scores:{'show' if shown else 'hide'}"
+                if focused == FOCUS_FOLLOWED:
                     from pigeon.sports_follow import toggle_auto
 
                     on = toggle_auto()
                     self.invalidate()
-                    return f"sports_auto:{'on' if on else 'off'}"
-                if focused == FOCUS_GAMES:
+                    return f"sports_followed:{'auto' if on else 'off'}"
+                if focused == FOCUS_TODAY:
                     st.open_sports_dropdown()
                     self.invalidate()
                     return "sports_dropdown_open"

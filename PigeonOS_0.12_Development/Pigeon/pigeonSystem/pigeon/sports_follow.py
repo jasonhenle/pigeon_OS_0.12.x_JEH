@@ -1,13 +1,19 @@
-"""Followed teams and AUTO SCORES.
+"""Scores show / hide, followed teams, and their automatic games.
 
-The sports page (settings_pigeon → SPORTS) lets the user follow teams in the
-leagues of :mod:`pigeon.sports_teams`. With AUTO SCORES on, a background
-watcher asks TheSportsDB for each followed team's next game and puts that game
-on the scoreboard from its start time until the final hold runs out.
+The sports page (settings_pigeon → SPORTS) has two settings, one under the
+other:
+
+* **SCORES: SHOW / HIDE** — whether the scoreboard shows the score numbers.
+  Hidden, a game still comes up, spoiler-free (teams, league, status, clock).
+* **FOLLOWED TEAMS: AUTO / OFF** — only with scores shown. A background
+  watcher asks TheSportsDB for each followed team (leagues of
+  :mod:`pigeon.sports_teams`) when its next game is and puts that game on the
+  scoreboard from its start until the final hold runs out. Hiding scores turns
+  this off (the AUTO choice is kept for when scores are shown again).
 
 Saved in ``state.json`` as ``sports_follow``::
 
-    {"auto": true, "teams": {"4391": ["134936", ...], ...}}
+    {"show_scores": true, "auto": true, "teams": {"4391": ["134936", ...], ...}}
 
 Request budget: one ``eventsnext`` per followed team every few hours, every
 10 minutes once its game is near. A manual pick from the LIVE GAMES list always
@@ -73,6 +79,7 @@ def _load() -> dict:
         raw = raw if isinstance(raw, dict) else {}
         teams = raw.get("teams") if isinstance(raw.get("teams"), dict) else {}
         _cache = {
+            "show_scores": bool(raw.get("show_scores", True)),
             "auto": bool(raw.get("auto", True)),
             "teams": {str(k): [str(t) for t in v] for k, v in teams.items() if isinstance(v, list)},
         }
@@ -90,6 +97,13 @@ def _save() -> None:
         pass
     _version += 1
     _wake.set()
+    # The board draws the scores setting: repaint it too.
+    try:
+        from pigeon.sports_scores import _bump
+
+        _bump()
+    except Exception:
+        pass
 
 
 def settings_version() -> int:
@@ -97,9 +111,31 @@ def settings_version() -> int:
     return _version
 
 
+def scores_shown() -> bool:
+    with _lock:
+        return bool(_load()["show_scores"])
+
+
+def toggle_scores() -> bool:
+    """SCORES: SHOW ↔ HIDE; returns True when now shown."""
+    with _lock:
+        data = _load()
+        data["show_scores"] = not data["show_scores"]
+        _save()
+        return data["show_scores"]
+
+
 def auto_enabled() -> bool:
+    """FOLLOWED TEAMS as set (see :func:`auto_active` for whether it runs)."""
     with _lock:
         return bool(_load()["auto"])
+
+
+def auto_active() -> bool:
+    """Followed teams come up on their own: AUTO, and scores shown."""
+    with _lock:
+        data = _load()
+        return bool(data["auto"] and data["show_scores"])
 
 
 def set_auto(on: bool) -> None:
@@ -184,7 +220,7 @@ def check_once(*, now: datetime | None = None, mono: float | None = None) -> Spo
     """Refresh stale teams, then put a due game on an empty board."""
     now = now or datetime.now(timezone.utc)
     mono = time.monotonic() if mono is None else mono
-    if not auto_enabled():
+    if not auto_active():
         return None
     teams = all_followed()
     if not teams:
@@ -242,7 +278,7 @@ def start_auto_watch() -> None:
 
 def _reset_for_tests() -> None:
     global _cache, _version
-    _cache = {"auto": True, "teams": {}}
+    _cache = {"show_scores": True, "auto": True, "teams": {}}
     _version = 0
     _next.clear()
     _auto_shown.clear()
@@ -250,6 +286,7 @@ def _reset_for_tests() -> None:
 
 __all__ = [
     "all_followed",
+    "auto_active",
     "auto_enabled",
     "check_once",
     "followed",
@@ -259,6 +296,8 @@ __all__ = [
     "set_auto",
     "settings_version",
     "start_auto_watch",
+    "scores_shown",
     "toggle_auto",
+    "toggle_scores",
     "toggle_follow",
 ]
