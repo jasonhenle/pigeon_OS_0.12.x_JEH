@@ -490,6 +490,12 @@ _events_mono = 0.0
 _events_loading = False
 _events_error = False
 _selected: SportsEvent | None = None
+# Last list on disk: shown at once on the next open (and after a restart)
+# while a fresh one loads behind it.
+_EVENTS_FILE = "sports_events.json"
+_DISK_MAX_AGE_S = 12 * 3600.0
+_disk_loaded = False
+_disk_enabled = True
 _final_since: float | None = None
 _wake = threading.Event()
 _poller: threading.Thread | None = None
@@ -507,27 +513,104 @@ def board_token() -> int:
         return _version
 
 
+def _events_path():
+    from pigeon.runtime_paths import pigeon_state_dir
+
+    return pigeon_state_dir() / _EVENTS_FILE
+
+
+def _event_to_json(ev: SportsEvent) -> dict:
+    row = {k: getattr(ev, k) for k in SportsEvent.__dataclass_fields__}
+    row["start_utc"] = ev.start_utc.isoformat() if ev.start_utc else None
+    return row
+
+
+def _event_from_json(row: object) -> SportsEvent | None:
+    if not isinstance(row, dict) or not row.get("event_id"):
+        return None
+    fields = {k: str(row.get(k) or "") for k in SportsEvent.__dataclass_fields__ if k != "start_utc"}
+    start = None
+    if row.get("start_utc"):
+        try:
+            start = datetime.fromisoformat(str(row["start_utc"]))
+        except ValueError:
+            start = None
+    return SportsEvent(**fields, start_utc=start)
+
+
+def _save_disk_events(events: tuple[SportsEvent, ...]) -> None:
+    if not _disk_enabled or not events:
+        return
+    import json
+
+    try:
+        path = _events_path()
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"saved": time.time(), "events": [_event_to_json(e) for e in events]}))
+        tmp.replace(path)
+    except Exception:
+        pass
+
+
+def _load_disk_events(*, now: datetime | None = None) -> None:
+    """Seed an empty list from disk once (still marked stale, so it refreshes)."""
+    global _disk_loaded, _events
+    with _lock:
+        if _disk_loaded or not _disk_enabled:
+            return
+        _disk_loaded = True
+        if _events:
+            return
+    import json
+
+    try:
+        data = json.loads(_events_path().read_text())
+    except Exception:
+        return
+    if not isinstance(data, dict) or time.time() - float(data.get("saved") or 0) > _DISK_MAX_AGE_S:
+        return
+    rows = [e for e in map(_event_from_json, data.get("events") or []) if e is not None]
+    ranked = tuple(rank_events(rows, now=now))
+    with _lock:
+        if not _events:
+            _events = ranked
+    _bump()
+
+
+def _merge_lists(fresh: list[SportsEvent], old: tuple[SportsEvent, ...]) -> list[SportsEvent]:
+    """Fresh rows, plus old rows a cut-short refresh has not reached yet."""
+    ids = {e.event_id for e in fresh}
+    return rank_events([*fresh, *(e for e in old if e.event_id not in ids)])
+
+
 def events_snapshot() -> tuple[tuple[SportsEvent, ...], bool, bool]:
     """(events, loading, failed)."""
+    _load_disk_events()
     with _lock:
         return _events, _events_loading, _events_error
 
 
 def refresh_events(*, force: bool = False) -> bool:
-    """Fetch the event list off-thread; False if a fresh list or a fetch is already there."""
+    """Fetch the event list off-thread; False if a fresh list or a fetch is already there.
+
+    The current (or last saved) list stays up while the fetch runs; rows are
+    replaced league by league as answers arrive.
+    """
     global _events_loading
+    _load_disk_events()
     with _lock:
         if _events_loading:
             return False
         if not force and _events and time.monotonic() - _events_mono < _LIST_TTL_S:
             return False
         _events_loading = True
+        previous = _events
     _bump()
 
     def progress(found: list[SportsEvent]) -> None:
         global _events
         with _lock:
-            _events = tuple(found)
+            _events = tuple(_merge_lists(found, previous))
         _bump()
 
     def worker() -> None:
@@ -536,13 +619,19 @@ def refresh_events(*, force: bool = False) -> bool:
             found, err = fetch_available_events(on_progress=progress)
         except Exception:
             found, err = [], True
+        cut_short = backoff_remaining_s() > 0
         with _lock:
-            _events = tuple(found)
-            _events_error = err and not found
-            # A cut-short list (429) is not fresh: ask again on the next open.
-            _events_mono = 0.0 if backoff_remaining_s() > 0 else time.monotonic()
+            # Complete: the fresh list alone. Cut short (429) or offline: keep
+            # what was already up for the leagues it did not reach.
+            _events = tuple(found if found and not cut_short else _merge_lists(found, previous))
+            _events_error = err and not _events
+            # A cut-short list is not fresh: ask again on the next open.
+            _events_mono = 0.0 if cut_short else time.monotonic()
             _events_loading = False
+            done = _events
         _bump()
+        if found:
+            _save_disk_events(done)
 
     threading.Thread(target=worker, name="pigeon-sports-list", daemon=True).start()
     return True
@@ -662,7 +751,9 @@ def _start_poller() -> None:
 
 def _reset_for_tests() -> None:
     global _events, _events_mono, _events_loading, _events_error, _selected, _final_since
-    global _blocked_until_mono, _last_request_mono
+    global _blocked_until_mono, _last_request_mono, _disk_loaded, _disk_enabled
+    _disk_loaded = True
+    _disk_enabled = False
     _blocked_until_mono = 0.0
     _last_request_mono = 0.0
     _day_cache.clear()

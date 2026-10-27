@@ -13,8 +13,10 @@ Focus ring::
     BACK → 7 leagues → AUTO SCORES → LIVE GAMES
 
 Activating a league opens its team list over the page: **BACK** first, then
-every team; activating a team follows / unfollows it. Each logo carries a
-badge with how many of its teams are followed.
+every team; activating a team follows / unfollows it. The NCAA leagues list
+hundreds of teams, so they open on an A–Z grid first and a letter lists only
+its teams (BACK returns to the grid). Each logo carries a badge with how many
+of its teams are followed; a letter tile gets a dot when it holds one.
 """
 
 from __future__ import annotations
@@ -33,6 +35,9 @@ FOCUS_AUTO = "sports_auto"
 FOCUS_GAMES = "sports_games"
 LEAGUE_PREFIX = "league:"
 TEAM_BACK = "back"
+LETTER_PREFIX = "letter:"
+# NCAA football, NCAA basketball.
+LETTER_LEAGUES = frozenset({"4479", "4607"})
 
 _COLOR_WHITE = "#FFFFFF"
 _COLOR_BLACK = "#000000"
@@ -47,6 +52,12 @@ _TEAMS_FONT_PX = 30
 _TEAMS_TITLE_PX = 34
 _TEAMS_PANEL_PAD = 22
 _TEAMS_RADIUS = 18
+_TEAMS_SCROLL_GUTTER = 22
+_SCROLL_W = 8
+# NCAA letter grid.
+_LETTER_COLS = 7
+_LETTER_H = 66
+_LETTER_FONT_PX = 40
 # Top of the panel: just under the header clock.
 _TEAMS_TOP = 160
 _CHECK_R = 15
@@ -85,28 +96,74 @@ def sports_focus_ring() -> tuple[str, ...]:
 # --- team list ------------------------------------------------------------------
 
 
-def team_list_entries(league_id: str) -> list[tuple[str, str]]:
-    """(payload, label): BACK, then the league's teams A→Z."""
+def uses_letters(league_id: str) -> bool:
+    """NCAA lists run to hundreds of teams: pick a letter first."""
+    return str(league_id) in LETTER_LEAGUES
+
+
+def team_letter(name: str) -> str:
+    """Index letter for a team name; digits and symbols file under ``#``."""
+    ch = next((c for c in str(name).upper() if c.isalnum()), "#")
+    return ch if "A" <= ch <= "Z" else "#"
+
+
+def letter_entries(league_id: str) -> list[tuple[str, str]]:
+    """(payload, label): BACK, then each letter that has teams."""
     from pigeon.sports_teams import teams
 
-    return [(TEAM_BACK, "BACK")] + [(t.team_id, t.name) for t in teams(league_id)]
+    letters = sorted({team_letter(t.name) for t in teams(league_id)}, key=lambda c: (c == "#", c))
+    return [(TEAM_BACK, "BACK")] + [(f"{LETTER_PREFIX}{c}", c) for c in letters]
 
 
-def team_list_rows(state) -> tuple[list[tuple[str, bool, bool]], int, int]:
-    """(rows on screen as (label, is_team, followed), first visible index, focused index)."""
+def team_list_entries(league_id: str, letter: str = "") -> list[tuple[str, str]]:
+    """(payload, label): BACK, then the league's teams A→Z (one letter's, if given)."""
+    from pigeon.sports_teams import teams
+
+    rows = [(t.team_id, t.name) for t in teams(league_id) if not letter or team_letter(t.name) == letter]
+    return [(TEAM_BACK, "BACK")] + rows
+
+
+def letter_mode(state) -> bool:
+    league_id = str(getattr(state, "sports_team_league", "") or "")
+    return uses_letters(league_id) and not getattr(state, "sports_team_letter", "")
+
+
+def current_entries(state) -> list[tuple[str, str]]:
+    """What the open team overlay lists: letters, or (one letter's) teams."""
+    league_id = str(getattr(state, "sports_team_league", "") or "")
+    if letter_mode(state):
+        return letter_entries(league_id)
+    return team_list_entries(league_id, str(getattr(state, "sports_team_letter", "") or ""))
+
+
+def list_window(focus: int, total: int, visible: int) -> int:
+    """First visible row that keeps ``focus`` near the middle."""
+    return max(0, min(focus - visible // 2, total - visible))
+
+
+def team_list_rows(state) -> tuple[list[tuple[str, bool, bool]], int, int, int]:
+    """(rows on screen as (label, is_team, followed), first visible, focused, total)."""
     from pigeon.sports_follow import followed
 
     league_id = str(getattr(state, "sports_team_league", "") or "")
-    entries = team_list_entries(league_id)
+    entries = current_entries(state)
     following = followed(league_id)
     focus = int(getattr(state, "sports_team_index", 0)) % len(entries)
     visible = min(_TEAMS_MAX_ROWS, len(entries))
-    first = max(0, min(focus - visible // 2, len(entries) - visible))
+    first = list_window(focus, len(entries), visible)
     rows = [
         (label, payload != TEAM_BACK, payload in following)
         for payload, label in entries[first : first + visible]
     ]
-    return rows, first, focus
+    return rows, first, focus, len(entries)
+
+
+def letters_with_follows(league_id: str) -> frozenset[str]:
+    from pigeon.sports_follow import followed
+    from pigeon.sports_teams import teams
+
+    ids = followed(league_id)
+    return frozenset(team_letter(t.name) for t in teams(league_id) if t.team_id in ids)
 
 
 def _ui_rgb(state) -> tuple[int, int, int]:
@@ -119,8 +176,93 @@ def _ui_rgb(state) -> tuple[int, int, int]:
         return (75, 158, 236)
 
 
+def _row_box(draw, box, *, selected: bool) -> tuple[tuple[int, int, int, int], tuple[int, int, int, int]]:
+    """Draw one white-outlined row; returns its (fill, ink)."""
+    fill = (255, 255, 255, 255) if selected else (0, 0, 0, 255)
+    ink = (0, 0, 0, 255) if selected else (255, 255, 255, 255)
+    draw.rounded_rectangle(box, radius=_TEAMS_RADIUS, fill=fill, outline=(255, 255, 255, 255), width=2)
+    return fill, ink
+
+
+def _draw_check(draw, cx: int, cy: int, *, on: bool, ink, ui) -> None:
+    r = _CHECK_R
+    if on:
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ui)
+        draw.line(
+            [(cx - 7, cy + 1), (cx - 2, cy + 6), (cx + 8, cy - 6)],
+            fill=(0, 0, 0, 255),
+            width=4,
+            joint="curve",
+        )
+    else:
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=ink, width=3)
+
+
+def _draw_team_rows(draw, state, *, top: int, font, ui) -> None:
+    from pigeon.widgets.pigeon_settings import draw_list_scrollbar
+
+    rows, first, focus, total = team_list_rows(state)
+    pad = 24
+    x0 = _TEAMS_PANEL_PAD
+    x1 = x0 + _TEAMS_ROW_W - 1
+    for i, (label, is_team, on) in enumerate(rows):
+        rtop = top + i * (_TEAMS_ROW_H + _TEAMS_ROW_GAP)
+        mid = rtop + _TEAMS_ROW_H // 2
+        _fill, ink = _row_box(draw, (x0, rtop, x1, rtop + _TEAMS_ROW_H - 1), selected=first + i == focus)
+        if not is_team:
+            draw.text(((x0 + x1) // 2, mid), label, font=font, fill=ink, anchor="mm")
+            continue
+        cx = x1 - pad - _CHECK_R
+        _draw_check(draw, cx, mid, on=on, ink=ink, ui=ui)
+        max_w = cx - _CHECK_R - 20 - (x0 + pad)
+        text = label.upper()
+        if draw.textlength(text, font=font) > max_w:
+            while len(text) > 1 and draw.textlength(text + "…", font=font) > max_w:
+                text = text[:-1].rstrip()
+            text += "…"
+        draw.text((x0 + pad, mid), text, font=font, fill=ink, anchor="lm")
+    list_h = len(rows) * (_TEAMS_ROW_H + _TEAMS_ROW_GAP) - _TEAMS_ROW_GAP
+    draw_list_scrollbar(
+        draw,
+        x=x1 + 1 + (_TEAMS_SCROLL_GUTTER - _SCROLL_W) // 2,
+        top=top,
+        height=list_h,
+        first=first,
+        visible=len(rows),
+        total=total,
+        thumb=ui,
+    )
+
+
+def _letter_grid_height(n_letters: int) -> int:
+    rows = (n_letters + _LETTER_COLS - 1) // _LETTER_COLS
+    return _TEAMS_ROW_H + _TEAMS_ROW_GAP + rows * (_LETTER_H + _TEAMS_ROW_GAP) - _TEAMS_ROW_GAP
+
+
+def _draw_letter_grid(draw, state, *, top: int, font, lfont, ui) -> None:
+    league_id = str(getattr(state, "sports_team_league", "") or "")
+    entries = letter_entries(league_id)
+    focus = int(getattr(state, "sports_team_index", 0)) % len(entries)
+    marked = letters_with_follows(league_id)
+    x0 = _TEAMS_PANEL_PAD
+    x1 = x0 + _TEAMS_ROW_W - 1
+    _fill, ink = _row_box(draw, (x0, top, x1, top + _TEAMS_ROW_H - 1), selected=focus == 0)
+    draw.text(((x0 + x1) // 2, top + _TEAMS_ROW_H // 2), "BACK", font=font, fill=ink, anchor="mm")
+    tile_w = (_TEAMS_ROW_W - (_LETTER_COLS - 1) * _TEAMS_ROW_GAP) / _LETTER_COLS
+    gtop = top + _TEAMS_ROW_H + _TEAMS_ROW_GAP
+    for i, (_payload, letter) in enumerate(entries[1:]):
+        r, c = divmod(i, _LETTER_COLS)
+        tx0 = int(round(x0 + c * (tile_w + _TEAMS_ROW_GAP)))
+        tx1 = int(round(x0 + c * (tile_w + _TEAMS_ROW_GAP) + tile_w)) - 1
+        ty0 = gtop + r * (_LETTER_H + _TEAMS_ROW_GAP)
+        _fill, ink = _row_box(draw, (tx0, ty0, tx1, ty0 + _LETTER_H - 1), selected=focus == i + 1)
+        draw.text(((tx0 + tx1) // 2, ty0 + _LETTER_H // 2), letter, font=lfont, fill=ink, anchor="mm")
+        if letter in marked:
+            draw.ellipse((tx1 - 22, ty0 + 8, tx1 - 8, ty0 + 22), fill=ui)
+
+
 def draw_team_list(frame: np.ndarray, state) -> None:
-    """Team list over the sports page (in place)."""
+    """Team list (or an NCAA league's letter grid) over the sports page, in place."""
     import cv2
     from PIL import Image, ImageDraw
 
@@ -132,66 +274,37 @@ def draw_team_list(frame: np.ndarray, state) -> None:
 
     league_id = str(getattr(state, "sports_team_league", "") or "")
     lg = league(league_id)
-    rows, first, focus = team_list_rows(state)
-    if lg is None or not rows:
+    if lg is None:
         return
     ui = (*_ui_rgb(state), 255)
     font_path = resolve_ui_font_bold()
     font = _load_font(font_path, _TEAMS_FONT_PX) if font_path else None
     tfont = _load_font(font_path, _TEAMS_TITLE_PX) if font_path else None
+    letters = letter_mode(state)
+    if letters:
+        body_h = _letter_grid_height(len(letter_entries(league_id)) - 1)
+    else:
+        rows = team_list_rows(state)[0]
+        body_h = len(rows) * (_TEAMS_ROW_H + _TEAMS_ROW_GAP) - _TEAMS_ROW_GAP
     title_h = _TEAMS_TITLE_PX + 26
-    list_h = len(rows) * (_TEAMS_ROW_H + _TEAMS_ROW_GAP) - _TEAMS_ROW_GAP
-    pw = _TEAMS_ROW_W + 2 * _TEAMS_PANEL_PAD
-    ph = title_h + list_h + 2 * _TEAMS_PANEL_PAD
+    pw = _TEAMS_ROW_W + 2 * _TEAMS_PANEL_PAD + _TEAMS_SCROLL_GUTTER
+    ph = title_h + body_h + 2 * _TEAMS_PANEL_PAD
     patch = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
     draw = ImageDraw.Draw(patch)
     draw.rounded_rectangle((0, 0, pw - 1, ph - 1), radius=_TEAMS_RADIUS + 8, fill=(0, 0, 0, 255), outline=ui, width=3)
+    letter = str(getattr(state, "sports_team_letter", "") or "")
+    title = f"{lg.name} · {letter}" if letter else lg.name
     n = followed_count(league_id)
-    draw.text((_TEAMS_PANEL_PAD + 8, _TEAMS_PANEL_PAD + title_h // 2 - 6), lg.name, font=tfont, fill=ui, anchor="lm")
-    draw.text(
-        (pw - _TEAMS_PANEL_PAD - 8, _TEAMS_PANEL_PAD + title_h // 2 - 6),
-        f"{n} FOLLOWING" if n else "PICK TEAMS",
-        font=font,
-        fill=(255, 255, 255, 255),
-        anchor="rm",
-    )
-    pad = 24
-    for i, (label, is_team, on) in enumerate(rows):
-        top = _TEAMS_PANEL_PAD + title_h + i * (_TEAMS_ROW_H + _TEAMS_ROW_GAP)
-        mid = top + _TEAMS_ROW_H // 2
-        x0 = _TEAMS_PANEL_PAD
-        x1 = x0 + _TEAMS_ROW_W - 1
-        selected = first + i == focus
-        fill = (255, 255, 255, 255) if selected else (0, 0, 0, 255)
-        ink = (0, 0, 0, 255) if selected else (255, 255, 255, 255)
-        draw.rounded_rectangle(
-            (x0, top, x1, top + _TEAMS_ROW_H - 1),
-            radius=_TEAMS_RADIUS,
-            fill=fill,
-            outline=(255, 255, 255, 255),
-            width=2,
-        )
-        if not is_team:
-            draw.text(((x0 + x1) // 2, mid), label, font=font, fill=ink, anchor="mm")
-            continue
-        cx = x1 - pad - _CHECK_R
-        if on:
-            draw.ellipse((cx - _CHECK_R, mid - _CHECK_R, cx + _CHECK_R, mid + _CHECK_R), fill=ui)
-            draw.line(
-                [(cx - 7, mid + 1), (cx - 2, mid + 6), (cx + 8, mid - 6)],
-                fill=(0, 0, 0, 255) if ui[:3] != (0, 0, 0) else (255, 255, 255, 255),
-                width=4,
-                joint="curve",
-            )
-        else:
-            draw.ellipse((cx - _CHECK_R, mid - _CHECK_R, cx + _CHECK_R, mid + _CHECK_R), outline=ink, width=3)
-        max_w = cx - _CHECK_R - 20 - (x0 + pad)
-        text = label.upper()
-        if draw.textlength(text, font=font) > max_w:
-            while len(text) > 1 and draw.textlength(text + "…", font=font) > max_w:
-                text = text[:-1].rstrip()
-            text += "…"
-        draw.text((x0 + pad, mid), text, font=font, fill=ink, anchor="lm")
+    title_y = _TEAMS_PANEL_PAD + title_h // 2 - 6
+    draw.text((_TEAMS_PANEL_PAD + 8, title_y), title, font=tfont, fill=ui, anchor="lm")
+    hint = f"{n} FOLLOWING" if n else ("PICK A LETTER" if letters else "PICK TEAMS")
+    draw.text((pw - _TEAMS_PANEL_PAD - 8, title_y), hint, font=font, fill=(255, 255, 255, 255), anchor="rm")
+    top = _TEAMS_PANEL_PAD + title_h
+    if letters:
+        lfont = _load_font(font_path, _LETTER_FONT_PX) if font_path else None
+        _draw_letter_grid(draw, state, top=top, font=font, lfont=lfont, ui=ui)
+    else:
+        _draw_team_rows(draw, state, top=top, font=font, ui=ui)
     bgra = cv2.cvtColor(np.asarray(patch), cv2.COLOR_RGBA2BGRA)
     x = (DESIGN_W - pw) // 2
     y = min(_TEAMS_TOP, max(0, DESIGN_H - ph))
@@ -374,6 +487,10 @@ __all__ = [
     "league_for_focus",
     "sports_focus_ring",
     "sports_page_token",
+    "current_entries",
+    "letter_entries",
+    "letter_mode",
+    "team_letter",
     "team_list_entries",
     "team_list_rows",
 ]
