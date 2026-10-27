@@ -15,6 +15,9 @@ events "home vs away")::
 The clock along the bottom is the digital clock saver's ``HH:MM:SS`` and
 60-cell seconds bar, in the UI color.
 
+With SCORES: HIDE the numbers are left out (the middle reads "VS"); teams,
+league, status and clock stay.
+
 Badges that have not downloaded yet are UI-colored discs with the team's
 initials. The board is cached on :func:`pigeon.sports_scores.board_token`;
 the clock is drawn over a copy of it once a second.
@@ -82,6 +85,15 @@ def _ui_rgb() -> tuple[int, int, int]:
         return (42, 127, 255)
 
 
+def _scores_shown() -> bool:
+    try:
+        from pigeon.sports_follow import scores_shown
+
+        return scores_shown()
+    except Exception:
+        return True
+
+
 def _font(role: str, px: int):
     from pigeon.font_cache import load_font
     from pigeon.font_paths import resolve_ui_font_bold, resolve_ui_font_extrabold, resolve_ui_font_semibold
@@ -124,6 +136,7 @@ def _paste_badge(canvas: Image.Image, bgra: np.ndarray | None, cx: int, cy: int,
 
 def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Image.Image:
     """Design-size RGBA board for ``ev`` without the clock."""
+    from pigeon.sports_names import fit_name
     from pigeon.sports_scores import LIVE, UPCOMING, badge_bgra, status_label
 
     def badge(url: str) -> np.ndarray | None:
@@ -159,15 +172,15 @@ def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Im
         _paste_badge(canvas, badge(url), cx, _BADGE_CY, _BADGE_BOX, name)
         draw.text(
             (cx, _NAME_Y),
-            _fit_text(draw, name.upper(), nfont, _NAME_MAX_W),
+            fit_name(name, lambda t: draw.textlength(t, font=nfont) <= _NAME_MAX_W),
             font=nfont,
             fill=_INK,
             anchor="mt",
         )
 
-    # Scores; "VS" until the game starts.
+    # Scores; "VS" until the game starts, and always with SCORES: HIDE.
     phase = ev.phase
-    if phase == UPCOMING:
+    if phase == UPCOMING or not _scores_shown():
         draw.text((DESIGN_W // 2, _BADGE_CY), "VS", font=_font("extrabold", _DASH_FONT_PX), fill=_DIM_INK, anchor="mm")
     else:
         sfont = _font("extrabold", _SCORE_FONT_PX)

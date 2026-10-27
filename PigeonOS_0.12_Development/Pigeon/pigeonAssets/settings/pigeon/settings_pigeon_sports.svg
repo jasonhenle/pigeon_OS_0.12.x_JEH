@@ -119,15 +119,19 @@
     <text id="zipcode_zip_text" transform="translate(859.62 830.09)" font-family="Digital-7, Digital-7" fill="#fff" font-size="60"><tspan x="0" y="0">zip:</tspan></text>
     <text id="zipcode_00000_text" transform="translate(965.03 829.64)" font-family="Digital-7, Digital-7" fill="#fff" font-size="60"><tspan x="0" y="0">21710</tspan></text>
   </g>
-  <g id="sports_auto_group">
-    <rect id="sports_auto_button" x="649.02" y="1300.72" width="484.54" height="110" rx="13.4" ry="13.4" stroke-miterlimit="10" fill="#231f20" stroke="#231f20" stroke-width="3" />
-    <text id="sports_auto_caption" transform="translate(891.29 1333.72)" font-family="SharpSans-Bold, 'Sharp Sans'" font-weight="700" font-size="20" text-anchor="middle" fill="#fff">AUTO SCORES</text>
-    <text id="sports_auto_value" transform="translate(891.29 1391.72)" font-family="Digital-7, Digital-7" font-size="46" text-anchor="middle" fill="#fff">ON</text>
+  <g id="sports_scores_group">
+    <rect id="sports_scores_button" x="649.02" y="1300.72" width="370.15" height="110" rx="13.4" ry="13.4" stroke-miterlimit="10" fill="#231f20" stroke="#231f20" stroke-width="3" />
+    <text id="sports_scores_caption" transform="translate(834.10 1333.72)" font-family="SharpSans-Bold, 'Sharp Sans'" font-weight="700" font-size="20" text-anchor="middle" fill="#fff">SCORES</text>
+    <text id="sports_scores_value" transform="translate(834.10 1391.72)" font-family="Digital-7, Digital-7" font-size="46" text-anchor="middle" fill="#fff">SHOW</text>
   </g>
-  <g id="sports_games_group">
-    <rect id="sports_games_button" x="1310.94" y="1300.72" width="484.54" height="110" rx="13.4" ry="13.4" stroke-miterlimit="10" fill="#231f20" stroke="#231f20" stroke-width="3" />
-    <text id="sports_games_caption" transform="translate(1553.21 1333.72)" font-family="SharpSans-Bold, 'Sharp Sans'" font-weight="700" font-size="20" text-anchor="middle" fill="#fff">LIVE GAMES</text>
-    <text id="sports_games_value" transform="translate(1553.21 1391.72)" font-family="Digital-7, Digital-7" font-size="46" text-anchor="middle" fill="#fff">OFF</text>
+  <g id="sports_followed_group">
+    <rect id="sports_followed_button" x="1037.17" y="1300.72" width="370.15" height="110" rx="13.4" ry="13.4" stroke-miterlimit="10" fill="#231f20" stroke="#231f20" stroke-width="3" />
+    <text id="sports_followed_caption" transform="translate(1222.25 1333.72)" font-family="SharpSans-Bold, 'Sharp Sans'" font-weight="700" font-size="20" text-anchor="middle" fill="#fff">FOLLOWED TEAMS</text>
+    <text id="sports_followed_value" transform="translate(1222.25 1391.72)" font-family="Digital-7, Digital-7" font-size="46" text-anchor="middle" fill="#fff">AUTO</text>
+  </g>
+  <g id="sports_today_group">
+    <rect id="sports_today_button" x="1425.33" y="1300.72" width="370.15" height="110" rx="13.4" ry="13.4" stroke-miterlimit="10" fill="#231f20" stroke="#231f20" stroke-width="3" />
+    <text id="sports_today_caption" transform="translate(1610.40 1365.12)" font-family="SharpSans-Bold, 'Sharp Sans'" font-weight="700" font-size="27" text-anchor="middle" fill="#fff">TODAY’S GAMES</text>
   </g>
   <g id="exit_group">
     <path id="exit_button" d="M739.17,844.89h-80.12c-8.45,0-15.29-6.85-15.29-15.29v-28.5c0-9.33,7.56-16.89,16.89-16.89h78.52c8.44,0,15.29,6.85,15.29,15.29v30.1c0,8.44-6.85,15.29-15.29,15.29" fill="#231f20" />

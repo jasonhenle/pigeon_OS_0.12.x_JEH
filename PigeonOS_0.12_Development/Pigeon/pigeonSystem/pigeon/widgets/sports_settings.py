@@ -5,12 +5,15 @@ Opened from settings_pigeon → **SPORTS** (shown as ``pigeon_view == "sports"``
 Seven league logos, left → right in the art: NFL, MLB, NBA, WNBA,
 NCAA football, NCAA basketball, NHL. Under them:
 
-* **AUTO SCORES** — on / off for :mod:`pigeon.sports_follow`'s watcher.
-* **LIVE GAMES** — the manual list of today's games (pick one to watch now).
+* **SCORES: SHOW / HIDE** — score numbers on the scoreboard; hidden, games
+  still come up spoiler-free.
+* **FOLLOWED TEAMS: AUTO / OFF** — followed teams' games come up on their own
+  (:mod:`pigeon.sports_follow`). Greyed out and skipped while scores are hidden.
+* **TODAY'S GAMES** — the list of today's games (pick one to watch now).
 
 Focus ring::
 
-    BACK → 7 leagues → AUTO SCORES → LIVE GAMES
+    BACK → 7 leagues → SCORES → FOLLOWED TEAMS → TODAY'S GAMES
 
 Activating a league opens its team list over the page: **BACK** first, then
 every team; activating a team follows / unfollows it. The NCAA leagues list
@@ -31,8 +34,9 @@ from pigeon.design import DESIGN_H, DESIGN_W
 from pigeon.settings_layout import SETTINGS_CANVAS_ORIGIN
 
 SPORTS_VIEW = "sports"
-FOCUS_AUTO = "sports_auto"
-FOCUS_GAMES = "sports_games"
+FOCUS_SCORES = "sports_scores"
+FOCUS_FOLLOWED = "sports_followed"
+FOCUS_TODAY = "sports_today"
 LEAGUE_PREFIX = "league:"
 TEAM_BACK = "back"
 LETTER_PREFIX = "letter:"
@@ -90,7 +94,17 @@ def league_for_focus(focus_id: str) -> str | None:
 def sports_focus_ring() -> tuple[str, ...]:
     from pigeon.sports_teams import FOLLOW_LEAGUES
 
-    return ("exit", *(league_focus_id(lg.league_id) for lg in FOLLOW_LEAGUES), FOCUS_AUTO, FOCUS_GAMES)
+    from pigeon.sports_follow import scores_shown
+
+    # FOLLOWED TEAMS is greyed out (skipped) while scores are hidden.
+    followed = (FOCUS_FOLLOWED,) if scores_shown() else ()
+    return (
+        "exit",
+        *(league_focus_id(lg.league_id) for lg in FOLLOW_LEAGUES),
+        FOCUS_SCORES,
+        *followed,
+        FOCUS_TODAY,
+    )
 
 
 # --- team list ------------------------------------------------------------------
@@ -199,6 +213,7 @@ def _draw_check(draw, cx: int, cy: int, *, on: bool, ink, ui) -> None:
 
 
 def _draw_team_rows(draw, state, *, top: int, font, ui) -> None:
+    from pigeon.sports_names import fit_name
     from pigeon.widgets.pigeon_settings import draw_list_scrollbar
 
     rows, first, focus, total = team_list_rows(state)
@@ -215,11 +230,7 @@ def _draw_team_rows(draw, state, *, top: int, font, ui) -> None:
         cx = x1 - pad - _CHECK_R
         _draw_check(draw, cx, mid, on=on, ink=ink, ui=ui)
         max_w = cx - _CHECK_R - 20 - (x0 + pad)
-        text = label.upper()
-        if draw.textlength(text, font=font) > max_w:
-            while len(text) > 1 and draw.textlength(text + "…", font=font) > max_w:
-                text = text[:-1].rstrip()
-            text += "…"
+        text = fit_name(label, lambda t, _w=max_w: draw.textlength(t, font=font) <= _w)
         draw.text((x0 + pad, mid), text, font=font, fill=ink, anchor="lm")
     list_h = len(rows) * (_TEAMS_ROW_H + _TEAMS_ROW_GAP) - _TEAMS_ROW_GAP
     draw_list_scrollbar(
@@ -337,20 +348,22 @@ def _style_tile(
     selected: bool,
     simple: bool,
     ui_hex: str,
+    dim: bool = False,
 ) -> None:
+    """Page tile look; ``dim`` greys it out like settings_pigeon's TBD tiles."""
     from pigeon.widgets.main_settings import _set_paint
-    from pigeon.widgets.pigeon_settings import _paint_text, _sync_stroke_button
+    from pigeon.widgets.pigeon_settings import _COLOR_TBD_INK, _paint_text, _simple_dim, _sync_stroke_button
 
     if tile is None:
         return
     if simple:
-        _set_paint(tile, fill=ui_hex if selected else _COLOR_BLACK, stroke=ui_hex)
+        _set_paint(tile, fill=ui_hex if selected else _COLOR_BLACK, stroke=_simple_dim(ui_hex) if dim else ui_hex)
         tile.set("stroke-width", "3")
-        ink = _COLOR_BLACK if selected else ui_hex
+        ink = _COLOR_BLACK if selected else (_simple_dim(ui_hex) if dim else ui_hex)
     else:
         _set_paint(tile, fill=_COLOR_BUTTON)
         _sync_stroke_button(tile, selected=selected)
-        ink = _COLOR_WHITE
+        ink = _COLOR_TBD_INK if dim else _COLOR_WHITE
     for t in texts:
         _paint_text(t, ink)
 
@@ -387,8 +400,7 @@ def _add_badge(parent: ET.Element, tile: ET.Element, count: int, *, ui_hex: str)
 
 
 def apply_sports_svg_state(root: ET.Element, state) -> None:
-    from pigeon.sports_follow import auto_enabled, followed_count
-    from pigeon.sports_scores import scoreboard_active
+    from pigeon.sports_follow import auto_enabled, followed_count, scores_shown
     from pigeon.sports_teams import FOLLOW_LEAGUES
     from pigeon.widgets.main_settings import _set_paint, _set_text_content, _set_visible
     from pigeon.widgets.options_settings import ui_is_simple
@@ -453,15 +465,17 @@ def apply_sports_svg_state(root: ET.Element, state) -> None:
         if group is not None:
             _add_badge(group, tile, followed_count(lg.league_id), ui_hex=ui_hex)
 
-    _set_value(_by_id(root, "sports_auto_value"), "ON" if auto_enabled() else "OFF")
-    _set_value(_by_id(root, "sports_games_value"), "LIVE" if scoreboard_active() else "OFF")
-    for name, fid in (("auto", FOCUS_AUTO), ("games", FOCUS_GAMES)):
+    shown = scores_shown()
+    _set_value(_by_id(root, "sports_scores_value"), "SHOW" if shown else "HIDE")
+    _set_value(_by_id(root, "sports_followed_value"), "AUTO" if shown and auto_enabled() else "OFF")
+    for name, fid in (("scores", FOCUS_SCORES), ("followed", FOCUS_FOLLOWED), ("today", FOCUS_TODAY)):
         _style_tile(
             _by_id(root, f"sports_{name}_button"),
             [_by_id(root, f"sports_{name}_caption"), _by_id(root, f"sports_{name}_value")],
             selected=focused == fid,
             simple=simple,
             ui_hex=ui_hex,
+            dim=fid == FOCUS_FOLLOWED and not shown,
         )
 
 
@@ -476,8 +490,9 @@ def sports_page_token() -> tuple[object, ...]:
 
 
 __all__ = [
-    "FOCUS_AUTO",
-    "FOCUS_GAMES",
+    "FOCUS_FOLLOWED",
+    "FOCUS_SCORES",
+    "FOCUS_TODAY",
     "SPORTS_VIEW",
     "TEAM_BACK",
     "apply_sports_svg_state",

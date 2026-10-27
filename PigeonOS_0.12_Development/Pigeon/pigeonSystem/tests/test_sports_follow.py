@@ -129,6 +129,12 @@ class AutoTests(_Reset):
             self.assertIsNone(sf.check_once(now=NOW, mono=0.0))
         fetch.assert_not_called()
 
+    def test_hidden_scores_stop_auto_games(self) -> None:
+        self._follow(_ev("1", start=NOW - timedelta(minutes=5)))
+        sf.toggle_scores()
+        self.assertIsNone(sf.check_once(now=NOW, mono=0.0))
+        self.assertIsNone(ss.selected_event())
+
     def test_finished_and_far_games_are_skipped(self) -> None:
         shown: set[str] = set()
         done = _ev("1", start=NOW - timedelta(hours=3), status="FT")
@@ -166,7 +172,13 @@ class SportsPageTests(_Reset):
         self.assertEqual(w.state.pigeon_focused_id, "league:4391")
         self.assertEqual(
             sps.sports_focus_ring(),
-            ("exit", *(f"league:{lg.league_id}" for lg in teams.FOLLOW_LEAGUES), "sports_auto", "sports_games"),
+            (
+                "exit",
+                *(f"league:{lg.league_id}" for lg in teams.FOLLOW_LEAGUES),
+                "sports_scores",
+                "sports_followed",
+                "sports_today",
+            ),
         )
 
     def test_back_returns_to_general_on_sports(self) -> None:
@@ -227,12 +239,35 @@ class SportsPageTests(_Reset):
         self.assertEqual(sps.team_letter("Ole Miss"), "O")
         self.assertEqual(sps.team_letter("49ers"), "#")
 
-    def test_auto_tile_toggles(self) -> None:
+    def test_followed_teams_tile_toggles(self) -> None:
         w = self._widget()
-        self._focus(w, "sports_auto")
-        self.assertEqual(w.activate(), "sports_auto:off")
+        self._focus(w, "sports_followed")
+        self.assertEqual(w.activate(), "sports_followed:off")
         self.assertFalse(sf.auto_enabled())
-        self.assertEqual(w.activate(), "sports_auto:on")
+        self.assertEqual(w.activate(), "sports_followed:auto")
+
+    def test_hiding_scores_greys_out_followed_teams(self) -> None:
+        w = self._widget()
+        self._focus(w, "sports_scores")
+        self.assertEqual(w.activate(), "sports_scores:hide")
+        self.assertFalse(sf.scores_shown())
+        self.assertNotIn("sports_followed", ps.pigeon_focus_ring(w.state.pigeon_view))
+        # Still on SCORES; the next stop skips FOLLOWED TEAMS.
+        self.assertEqual(w.state.pigeon_focused_id, "sports_scores")
+        w.navigate(forward=True)
+        self.assertEqual(w.state.pigeon_focused_id, "sports_today")
+        # The AUTO choice is kept, but nothing comes up on its own.
+        self.assertTrue(sf.auto_enabled())
+        self.assertFalse(sf.auto_active())
+        w.navigate(forward=False)
+        self.assertEqual(w.activate(), "sports_scores:show")
+        self.assertTrue(sf.auto_active())
+
+    def test_today_opens_the_game_list(self) -> None:
+        w = self._widget()
+        self._focus(w, "sports_today")
+        self.assertEqual(w.activate(), "sports_dropdown_open")
+        self.assertTrue(w.state.sports_dropdown_open)
 
     def test_page_and_list_render(self) -> None:
         st = MainSettingsState()
