@@ -466,19 +466,41 @@ def badge_bgra(url: str) -> np.ndarray | None:
         return _badges.get(url)
 
 
+_badge_inflight: set[str] = set()
+
+
 def _ensure_badges(*urls: str) -> None:
+    """Fetch missing badges on this thread (the board repaints as each lands)."""
     for url in urls:
         if not url:
             continue
-        with _badge_lock:
-            if url in _badges:
-                continue
-        img = _fetch_badge(url)
+        try:
+            with _badge_lock:
+                cached = url in _badges
+            img = None if cached else _fetch_badge(url)
+        finally:
+            with _badge_lock:
+                _badge_inflight.discard(url)
+        if cached:
+            continue
         with _badge_lock:
             _badges[url] = img
             if len(_badges) > 32:
                 _badges.pop(next(iter(_badges)))
         _bump()
+
+
+def _ensure_badges_async(*urls: str) -> threading.Thread | None:
+    """Fetch missing badges on their own thread so score polling never waits on
+    them (each can take two CDN requests). The board shows initials until then."""
+    with _badge_lock:
+        todo = [u for u in dict.fromkeys(urls) if u and u not in _badges and u not in _badge_inflight]
+        _badge_inflight.update(todo)
+    if not todo:
+        return None
+    t = threading.Thread(target=_ensure_badges, args=tuple(todo), name="pigeon-sports-badges", daemon=True)
+    t.start()
+    return t
 
 
 # --- state --------------------------------------------------------------------
@@ -488,7 +510,11 @@ _version = 0
 _events: tuple[SportsEvent, ...] = ()
 _events_mono = 0.0
 _events_loading = False
+# The last refresh failed outright (nothing answered).
 _events_error = False
+# Some rows on the list are older than the last refresh attempt: kept from an
+# earlier list (or the disk copy) because that attempt failed or was cut short.
+_events_stale = False
 _selected: SportsEvent | None = None
 # Last list on disk: shown at once on the next open (and after a restart)
 # while a fresh one loads behind it.
@@ -539,7 +565,7 @@ def _event_from_json(row: object) -> SportsEvent | None:
 
 
 def _save_disk_events(events: tuple[SportsEvent, ...]) -> None:
-    if not _disk_enabled or not events:
+    if not _disk_enabled:
         return
     import json
 
@@ -554,7 +580,7 @@ def _save_disk_events(events: tuple[SportsEvent, ...]) -> None:
 
 def _load_disk_events(*, now: datetime | None = None) -> None:
     """Seed an empty list from disk once (still marked stale, so it refreshes)."""
-    global _disk_loaded, _events
+    global _disk_loaded, _events, _events_stale
     with _lock:
         if _disk_loaded or not _disk_enabled:
             return
@@ -574,6 +600,7 @@ def _load_disk_events(*, now: datetime | None = None) -> None:
     with _lock:
         if not _events:
             _events = ranked
+            _events_stale = bool(ranked)
     _bump()
 
 
@@ -584,10 +611,19 @@ def _merge_lists(fresh: list[SportsEvent], old: tuple[SportsEvent, ...]) -> list
 
 
 def events_snapshot() -> tuple[tuple[SportsEvent, ...], bool, bool]:
-    """(events, loading, failed)."""
+    """(events, loading, failed). ``failed``: the last refresh got no answer at
+    all (rows may still be up from before; see :func:`events_stale`)."""
     _load_disk_events()
     with _lock:
         return _events, _events_loading, _events_error
+
+
+def events_stale() -> bool:
+    """True when the list still shows rows from before the last refresh attempt
+    (it failed, was cut short by a 429, or none has finished since a restart)."""
+    _load_disk_events()
+    with _lock:
+        return _events_stale
 
 
 def refresh_events(*, force: bool = False) -> bool:
@@ -601,7 +637,8 @@ def refresh_events(*, force: bool = False) -> bool:
     with _lock:
         if _events_loading:
             return False
-        if not force and _events and time.monotonic() - _events_mono < _LIST_TTL_S:
+        # Fresh (an empty "no games" answer counts): no need to ask again yet.
+        if not force and _events_mono and time.monotonic() - _events_mono < _LIST_TTL_S:
             return False
         _events_loading = True
         previous = _events
@@ -614,23 +651,30 @@ def refresh_events(*, force: bool = False) -> bool:
         _bump()
 
     def worker() -> None:
-        global _events, _events_mono, _events_loading, _events_error
+        global _events, _events_mono, _events_loading, _events_error, _events_stale
         try:
             found, err = fetch_available_events(on_progress=progress)
         except Exception:
             found, err = [], True
-        cut_short = backoff_remaining_s() > 0
+        complete = not err and backoff_remaining_s() <= 0
         with _lock:
-            # Complete: the fresh list alone. Cut short (429) or offline: keep
-            # what was already up for the leagues it did not reach.
-            _events = tuple(found if found and not cut_short else _merge_lists(found, previous))
-            _events_error = err and not _events
-            # A cut-short list is not fresh: ask again on the next open.
-            _events_mono = 0.0 if cut_short else time.monotonic()
+            if complete:
+                # Every league answered: this is today's list, even when empty.
+                _events = tuple(found)
+                _events_stale = False
+            else:
+                # Failed or cut short (429): keep the earlier rows for the
+                # leagues it did not reach, flagged stale, and ask again on
+                # the next open.
+                _events = tuple(_merge_lists(found, previous))
+                fresh_ids = {e.event_id for e in found}
+                _events_stale = any(e.event_id not in fresh_ids for e in _events)
+            _events_error = err
+            _events_mono = time.monotonic() if complete else 0.0
             _events_loading = False
             done = _events
         _bump()
-        if found:
+        if complete:
             _save_disk_events(done)
 
     threading.Thread(target=worker, name="pigeon-sports-list", daemon=True).start()
@@ -711,6 +755,21 @@ def apply_update(fresh: SportsEvent) -> bool:
     return True
 
 
+def _poll_once(ev: SportsEvent) -> float | None:
+    """One poll: badges start on their own thread, then the score is fetched
+    right away. Returns the wait before the next poll (None = game over)."""
+    _ensure_badges_async(ev.home_badge, ev.away_badge, ev.league_badge)
+    key = load_api_key()
+    try:
+        fresh = _fetch_update(ev, key)
+    except Exception:
+        fresh = None
+    if fresh is not None:
+        apply_update(fresh)
+        return poll_interval_s(selected_event(), premium=is_premium(key))
+    return max(_POLL_RETRY_S, backoff_remaining_s())
+
+
 def _poll_loop() -> None:
     while True:
         ev = selected_event()
@@ -718,18 +777,7 @@ def _poll_loop() -> None:
             _wake.wait()
             _wake.clear()
             continue
-        _ensure_badges(ev.home_badge, ev.away_badge, ev.league_badge)
-        key = load_api_key()
-        delay: float | None
-        try:
-            fresh = _fetch_update(ev, key)
-        except Exception:
-            fresh = None
-        if fresh is not None:
-            apply_update(fresh)
-            delay = poll_interval_s(selected_event(), premium=is_premium(key))
-        else:
-            delay = max(_POLL_RETRY_S, backoff_remaining_s())
+        delay = _poll_once(ev)
         if delay is None:
             # Over: sleep until the hold runs out (or a new pick wakes us).
             _wake.wait(timeout=30.0)
@@ -750,7 +798,7 @@ def _start_poller() -> None:
 
 
 def _reset_for_tests() -> None:
-    global _events, _events_mono, _events_loading, _events_error, _selected, _final_since
+    global _events, _events_mono, _events_loading, _events_error, _events_stale, _selected, _final_since
     global _blocked_until_mono, _last_request_mono, _disk_loaded, _disk_enabled
     _disk_loaded = True
     _disk_enabled = False
@@ -762,10 +810,12 @@ def _reset_for_tests() -> None:
         _events_mono = 0.0
         _events_loading = False
         _events_error = False
+        _events_stale = False
         _selected = None
         _final_since = None
     with _badge_lock:
         _badges.clear()
+        _badge_inflight.clear()
     _bump()
 
 
@@ -783,6 +833,7 @@ __all__ = [
     "clear_selection",
     "event_phase",
     "events_snapshot",
+    "events_stale",
     "fetch_available_events",
     "is_premium",
     "league_in_season",

@@ -1088,8 +1088,18 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None
 
 def sports_dropdown_entries() -> list[tuple[str, str, object]]:
     """(game, status, payload) rows. Payload is a ``SportsEvent``,
-    :data:`SPORTS_OFF` (turn the board off), or None (a message row)."""
-    from pigeon.sports_scores import backoff_remaining_s, events_snapshot, selected_event, status_label
+    :data:`SPORTS_OFF` (turn the board off), or None (a message row).
+
+    When the list still holds games from before the last refresh attempt, a
+    banner row on top says so (and why), so nothing old passes for current.
+    """
+    from pigeon.sports_scores import (
+        backoff_remaining_s,
+        events_snapshot,
+        events_stale,
+        selected_event,
+        status_label,
+    )
 
     tz = None
     try:
@@ -1103,6 +1113,14 @@ def sports_dropdown_entries() -> list[tuple[str, str, object]]:
         pass
     events, loading, failed = events_snapshot()
     rows: list[tuple[str, str, object]] = []
+    if events and events_stale():
+        if loading:
+            note = "EARLIER LIST · UPDATING…"
+        elif failed:
+            note = "EARLIER LIST · COULDN'T UPDATE"
+        else:
+            note = "EARLIER LIST · TRY AGAIN SOON"
+        rows.append((note, "", None))
     picked = selected_event()
     if picked is not None:
         rows.append(("SCORES OFF", "", SPORTS_OFF))
