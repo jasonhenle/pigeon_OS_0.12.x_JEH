@@ -211,6 +211,8 @@ class ControlService:
             return self._pigeon_settings(method, body)
         elif route == "/display":
             return self._display(method, body)
+        elif route == "/sports" or route.startswith("/sports/"):
+            return self._sports(method, route, body)
         elif route == "/controllers":
             if method == "GET":
                 return 200, {"controllers": self.auth.controllers()}
@@ -565,6 +567,57 @@ class ControlService:
             self._on_ui(self._apply_settings)
             self.hub.publish("settings", {"changed": ["display"]})
             return 200, ds.read_display()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    def _sports(self, method: str, route: str, body: Any) -> Response:
+        """settings_pigeon → SPORTS: scores / followed teams settings, follows, today's games."""
+        from pigeon.control_api import sports
+
+        if not profile.has_capability("sports"):
+            return _err(422, "unsupported", "sports not supported on this device.")
+        if route == "/sports":
+            if method == "GET":
+                return 200, sports.read_sports()
+            if method == "PATCH":
+                if not isinstance(body, dict):
+                    return _err(400, "bad_request", "JSON object required.")
+                try:
+                    sports.patch_sports(body)
+                except ValueError as exc:
+                    return _err(400, "bad_request", "Invalid value.", fields=str(exc).split(","))
+                self.hub.publish("sports", {"changed": sorted(body)})
+                return 200, sports.read_sports()
+        elif route == "/sports/games" and method == "GET":
+            return 200, sports.read_games()
+        elif route == "/sports/board":
+            if method == "PUT":
+                if not isinstance(body, dict) or not str(body.get("event_id") or ""):
+                    return _err(400, "bad_request", "Expected {\"event_id\": ...}.", fields=["event_id"])
+                try:
+                    sports.show_game(str(body["event_id"]))
+                except KeyError:
+                    return _err(404, "not_found", "That game is not in today's list.")
+                self.hub.publish("sports", {"changed": ["board"]})
+                return 200, sports.read_sports()
+            if method == "DELETE":
+                sports.clear_game()
+                self.hub.publish("sports", {"changed": ["board"]})
+                return 204, None
+        else:
+            m = re.fullmatch(r"/sports/leagues/([^/]+)/teams", route)
+            if m and method == "GET":
+                try:
+                    return 200, sports.read_teams(m.group(1))
+                except KeyError:
+                    return _err(404, "not_found", "Unknown league.")
+            m = re.fullmatch(r"/sports/leagues/([^/]+)/teams/([^/]+)/follow", route)
+            if m and method in ("PUT", "DELETE"):
+                try:
+                    sports.set_follow(m.group(1), m.group(2), method == "PUT")
+                except KeyError:
+                    return _err(404, "not_found", "Unknown league or team.")
+                self.hub.publish("sports", {"changed": ["followed"]})
+                return 204, None
         return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _pigeon_settings(self, method: str, body: Any) -> Response:

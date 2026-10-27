@@ -262,6 +262,31 @@ struct PigeonClient {
         try await send("PATCH", "/display", body: DisplayPatch(brightness: percent))
     }
 
+    // MARK: Sports
+
+    func sports() async throws -> SportsSettings { try await send("GET", "/sports") }
+
+    func patchSports(_ patch: SportsPatch) async throws -> SportsSettings {
+        try await send("PATCH", "/sports", body: patch)
+    }
+
+    func sportsTeams(league id: String) async throws -> SportsTeamsResponse {
+        try await send("GET", "/sports/leagues/\(id)/teams")
+    }
+
+    func setFollow(league: String, team: String, _ on: Bool) async throws {
+        try await sendNoContent(on ? "PUT" : "DELETE", "/sports/leagues/\(league)/teams/\(team)/follow")
+    }
+
+    func sportsGames() async throws -> SportsGamesResponse { try await send("GET", "/sports/games") }
+
+    /// Puts a game from today's list on the Pigeon's scoreboard.
+    func showGame(_ id: String) async throws -> SportsSettings {
+        try await send("PUT", "/sports/board", body: BoardRequest(eventId: id))
+    }
+
+    func clearGame() async throws { try await sendNoContent("DELETE", "/sports/board") }
+
     // MARK: Events (SSE)
 
     func events() -> AsyncThrowingStream<DeviceEvent, Error> {

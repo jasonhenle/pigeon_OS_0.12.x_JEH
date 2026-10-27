@@ -242,6 +242,22 @@ private struct PigeonClockSettingsPage: View {
             }
         }
 
+        if caps.contains("sports") {
+            NavigationLink { SportsView(client: client) } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        LCDLabel(text: "Sports", size: 18, color: Theme.accent)
+                        Text("Scores, followed teams and today's games")
+                            .font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).tile()
+            }
+            .buttonStyle(.plain)
+        }
+
         SettingsTile(title: "Status") {
             row("State", status?.state.capitalized ?? "—")
             row("Now playing", status?.nowPlaying?.title ?? "Nothing")

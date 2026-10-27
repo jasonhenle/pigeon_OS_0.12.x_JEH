@@ -254,3 +254,67 @@ struct StateReply: Codable, Equatable { var state: String }
 
 struct PairingRequest: Codable { var kind: String }
 
+
+// MARK: Sports (Settings > Pigeon > SPORTS)
+
+struct SportsLeague: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var teamCount: Int
+    var byLetter: Bool
+    var followed: [String]
+}
+
+/// A game from TODAY'S GAMES or on the scoreboard. Scores are nil before kickoff
+/// and whenever the device has SCORES set to HIDE.
+struct SportsGame: Codable, Equatable, Identifiable {
+    var id: String
+    var league: String
+    var leagueId: String?
+    var home: String
+    var away: String
+    var homeScore: String?
+    var awayScore: String?
+    var phase: String   // "live" | "upcoming" | "final"
+    var status: String  // "Q3 8:12" | "7:30 PM" | "FINAL"
+    var start: String?
+    var homeBadge: String?
+    var awayBadge: String?
+    var leagueBadge: String?
+}
+
+struct SportsSettings: Codable, Equatable {
+    var scoresShown: Bool
+    /// FOLLOWED TEAMS as set; `followedActive` is whether it runs (needs scores shown).
+    var followedAuto: Bool
+    var followedActive: Bool
+    var leagues: [SportsLeague]
+    var board: SportsGame?
+}
+
+struct SportsPatch: Codable {
+    var scoresShown: Bool?
+    var followedAuto: Bool?
+}
+
+struct SportsTeam: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var letter: String
+    var followed: Bool
+}
+
+struct SportsTeamsResponse: Codable, Equatable {
+    struct League: Codable, Equatable { var id: String; var name: String; var byLetter: Bool }
+    var league: League
+    var teams: [SportsTeam]
+}
+
+struct SportsGamesResponse: Codable, Equatable {
+    var games: [SportsGame]
+    var loading: Bool
+    var failed: Bool
+    var busy: Bool
+}
+
+struct BoardRequest: Codable { var eventId: String }
