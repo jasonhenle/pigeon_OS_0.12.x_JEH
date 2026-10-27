@@ -113,6 +113,7 @@ WIDGET_FILES: dict[str, tuple[str, ...]] = {
     "add_player": ("main", "widget_sm_03_add_player.svg"),
     "add_audio": ("main", "widget_sm_04_add_audio.svg"),
     "pigeon_page": ("pigeon", "settings_pigeon.svg"),
+    "sports_page": ("pigeon", "settings_pigeon_sports.svg"),
 }
 
 
