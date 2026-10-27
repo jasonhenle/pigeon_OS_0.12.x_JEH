@@ -164,6 +164,7 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 | `rooms` | ✓ | ✓ | `/rooms*` |
 | `pigeon_settings` | ✓ | – | `/pigeon-settings` |
 | `display_brightness` | ✓ | ✓ | `/display` |
+| `sports` | ✓ | – | `/sports*` |
 | `clock` | ✓ | – | `/clock` |
 | `locations` | ✓ | ✓ | `/locations`, `/location/room` |
 | `wifi` | ✓ | ✓ | `/wifi*` |
@@ -402,6 +403,37 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
 
 `mode` says how the dimming is done. `backlight` means the panel exposes `/sys/class/backlight/*` and the device writes the hardware level, which also saves power. `software` means a gain is applied to every frame before it reaches the screen (HDMI monitors). If a hardware write is refused the device falls back to `software` rather than failing. The floor is 10 % so a stray slider cannot leave the screen unreadable.
 
+### 6.3d Sports *(capability `sports`)* — implemented
+
+The device's Settings → Pigeon → SPORTS page. The device's screens read these values live, so changes show there right away.
+
+`GET /sports`:
+
+```json
+{
+  "scores_shown": true,
+  "followed_auto": true,
+  "followed_active": true,
+  "leagues": [ { "id": "4391", "name": "NFL", "team_count": 32, "by_letter": false, "followed": ["134936"] } ],
+  "board": null
+}
+```
+
+* `scores_shown` — SCORES: SHOW / HIDE. Hidden, games still come up on the scoreboard but without the numbers, and every game body here leaves `home_score` / `away_score` out (`null`) so the phone doesn't spoil them either.
+* `followed_auto` — FOLLOWED TEAMS: AUTO / OFF as set. `followed_active` is whether it runs: AUTO **and** scores shown. With it active, a followed team's game goes on the scoreboard at kickoff (once per game; a manual pick wins).
+* `leagues` — in the order of the device's logos. `by_letter` marks the NCAA leagues, which the device browses by first letter. `followed` lists followed team ids.
+* `board` — the game on the scoreboard now (a game body, below), or `null`.
+
+`PATCH /sports` takes `scores_shown` and/or `followed_auto` (booleans; `400` with `fields` otherwise) and returns the `GET` body.
+
+`GET /sports/leagues/{league_id}/teams` → `{ "league": {id, name, by_letter}, "teams": [ { "id", "name", "letter", "followed" } ] }`, A→Z. `PUT` / `DELETE /sports/leagues/{league_id}/teams/{team_id}/follow` follows / unfollows (idempotent, `204`; `404` for a team not in that league).
+
+`GET /sports/games` → `{ "games": [game, …], "loading": false, "failed": false, "busy": false }`: TODAY'S GAMES, live first, then upcoming, then recent finals. Asking starts a refresh when the list is stale, so poll while `loading`; `busy` means TheSportsDB is rate-limiting and the list is partial. A game body is `{ "id", "league", "league_id", "home", "away", "home_score", "away_score", "phase": "live"|"upcoming"|"final", "status": "Q3 8:12"|"7:30 PM"|"FINAL", "start", "home_badge", "away_badge", "league_badge" }`.
+
+`PUT /sports/board` with `{ "event_id": "…" }` puts a game from today's list on the scoreboard (`404` if it isn't listed) and returns the `GET /sports` body. `DELETE /sports/board` takes it off (`204`).
+
+Events: `sports` with `{ "changed": [...] }` after any change made through the API.
+
 ### 6.4 Wi-Fi *(capability `wifi`)*
 
 | Method & path | Purpose |
@@ -533,6 +565,11 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | PATCH | `/rooms/{id}` | token | `rooms` |
 | GET, PATCH | `/pigeon-settings` | token | `pigeon_settings` |
 | GET, PATCH | `/display` | token | `display_brightness` |
+| GET, PATCH | `/sports` | token | `sports` |
+| GET | `/sports/leagues/{id}/teams` | token | `sports` |
+| PUT, DELETE | `/sports/leagues/{id}/teams/{team_id}/follow` | token | `sports` |
+| GET | `/sports/games` | token | `sports` |
+| PUT, DELETE | `/sports/board` | token | `sports` |
 | GET, PATCH | `/clock` | token | `clock` |
 | GET, POST | `/locations` | token | `locations` |
 | PATCH, DELETE | `/locations/{id}` | token | `locations` |
