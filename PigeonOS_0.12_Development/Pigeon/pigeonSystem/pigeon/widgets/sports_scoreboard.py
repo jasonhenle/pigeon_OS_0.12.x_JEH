@@ -9,8 +9,15 @@ events "home vs away")::
                      (● Q3 8:12)
       HOME NAME                    AWAY NAME
 
+                     12:34:56
+     ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮
+
+The clock along the bottom is the digital clock saver's ``HH:MM:SS`` and
+60-cell seconds bar, in the UI color.
+
 Badges that have not downloaded yet are UI-colored discs with the team's
-initials. Frames are cached on :func:`pigeon.sports_scores.board_token`.
+initials. The board is cached on :func:`pigeon.sports_scores.board_token`;
+the clock is drawn over a copy of it once a second.
 """
 
 from __future__ import annotations
@@ -24,26 +31,35 @@ from PIL import Image, ImageDraw
 from pigeon.compositing import cv_resize_interp
 from pigeon.design import DESIGN_H, DESIGN_W
 
-_LEAGUE_Y = 92
-_LEAGUE_BADGE_H = 76
+_LEAGUE_Y = 64
+_LEAGUE_BADGE_H = 72
 _LEAGUE_FONT_PX = 40
-_BADGE_BOX = 290
+_BADGE_BOX = 270
 _BADGE_CX = (230, DESIGN_W - 230)
-_BADGE_CY = 360
-_NAME_Y = 560
+_BADGE_CY = 300
+_NAME_Y = 506
 _NAME_FONT_PX = 38
 _NAME_MAX_W = 420
 _SCORE_CX = (500, DESIGN_W - 500)
 _SCORE_FONT_PX = 170
 _DASH_FONT_PX = 110
-_PILL_Y = 520
+_PILL_Y = 468
 _PILL_FONT_PX = 34
 _PILL_H = 62
 _PILL_PAD_X = 30
 _LIVE_DOT_BGR = (0, 0, 255)
 _INK = (255, 255, 255)
 _DIM_INK = (150, 150, 150)
+# Bottom clock: same left/right inset as the clock saver's seconds track.
+_CLOCK_X = 113
+_CLOCK_W = DESIGN_W - 2 * _CLOCK_X
+# Digital-7 sits on the box middle (its baseline), so the digits hang above it.
+_CLOCK_TIME_Y = 620
+_CLOCK_TIME_H = 124
+_CLOCK_BAR_Y = 722
+_CLOCK_BAR_H = 40
 
+_board_cache: tuple[tuple, np.ndarray] | None = None
 _cache: tuple[tuple, np.ndarray] | None = None
 _ui_hex_cache: tuple[float, str] = (0.0, "")
 
@@ -106,8 +122,8 @@ def _paste_badge(canvas: Image.Image, bgra: np.ndarray | None, cx: int, cy: int,
     canvas.alpha_composite(img, (cx - nw // 2, cy - nh // 2))
 
 
-def render_scoreboard_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Image.Image:
-    """Design-size RGBA board for ``ev`` (a :class:`pigeon.sports_scores.SportsEvent`)."""
+def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Image.Image:
+    """Design-size RGBA board for ``ev`` without the clock."""
     from pigeon.sports_scores import LIVE, UPCOMING, badge_bgra, status_label
 
     def badge(url: str) -> np.ndarray | None:
@@ -184,9 +200,49 @@ def render_scoreboard_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = 
     return canvas
 
 
+def _clock_now():
+    from pigeon.widgets.clock_calendar import _resolve_display_time
+
+    return _resolve_display_time()
+
+
+def _draw_clock_bgra(bgra: np.ndarray, now) -> None:
+    """Digital ``HH:MM:SS`` and the 60 seconds cells along the bottom."""
+    from pigeon.widgets.clock_saver import _draw_face_hhmmss, _draw_face_seconds_bar, _time_label
+
+    r, g, b = _ui_rgb()
+    _draw_face_hhmmss(
+        bgra,
+        _time_label(now),
+        color=(r, g, b, 255),
+        box=(_CLOCK_X, _CLOCK_TIME_Y, _CLOCK_W, _CLOCK_TIME_H),
+    )
+    _draw_face_seconds_bar(
+        bgra,
+        now,
+        fill_bgr=(b, g, r),
+        box=(_CLOCK_X, _CLOCK_BAR_Y, _CLOCK_W, _CLOCK_BAR_H),
+    )
+
+
+def render_scoreboard_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None, now=None) -> Image.Image:
+    """Design-size RGBA board for ``ev`` (a :class:`pigeon.sports_scores.SportsEvent`)."""
+    bgra = cv2.cvtColor(np.asarray(_board_rgba(ev, badges=badges)), cv2.COLOR_RGBA2BGRA)
+    _draw_clock_bgra(bgra, now if now is not None else _clock_now())
+    return Image.fromarray(cv2.cvtColor(bgra, cv2.COLOR_BGRA2RGBA))
+
+
+def clock_key(now=None) -> tuple:
+    """Changes whenever the bottom clock needs a redraw (once a second)."""
+    from pigeon.widgets.clock_saver import _time_label
+
+    when = now if now is not None else _clock_now()
+    return (_time_label(when), int(getattr(when, "second", 0)))
+
+
 def scoreboard_frame_bgr(width: int, height: int) -> np.ndarray | None:
     """Board at ``width``×``height`` while an event is picked; None otherwise."""
-    global _cache
+    global _board_cache, _cache
     from pigeon.sports_scores import board_token, scoreboard_active, selected_event
 
     if not scoreboard_active():
@@ -195,14 +251,20 @@ def scoreboard_frame_bgr(width: int, height: int) -> np.ndarray | None:
     if ev is None:
         return None
     w, h = max(1, int(width)), max(1, int(height))
-    key = (board_token(), _ui_rgb(), w, h)
+    now = _clock_now()
+    board_key = (board_token(), _ui_rgb())
+    key = (board_key, clock_key(now), w, h)
     if _cache is not None and _cache[0] == key:
         return _cache[1]
-    bgr = cv2.cvtColor(np.asarray(render_scoreboard_rgba(ev)), cv2.COLOR_RGBA2BGR)
+    if _board_cache is None or _board_cache[0] != board_key:
+        _board_cache = (board_key, cv2.cvtColor(np.asarray(_board_rgba(ev)), cv2.COLOR_RGBA2BGRA))
+    bgra = _board_cache[1].copy()
+    _draw_clock_bgra(bgra, now)
+    bgr = cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
     if (w, h) != (DESIGN_W, DESIGN_H):
         bgr = cv2.resize(bgr, (w, h), interpolation=cv_resize_interp(DESIGN_W, DESIGN_H, w, h))
     _cache = (key, np.ascontiguousarray(bgr))
     return _cache[1]
 
 
-__all__ = ["render_scoreboard_rgba", "scoreboard_frame_bgr"]
+__all__ = ["clock_key", "render_scoreboard_rgba", "scoreboard_frame_bgr"]
