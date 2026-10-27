@@ -145,6 +145,19 @@ def _sports_board_token() -> int:
         return -1
 
 
+def _sports_board_key() -> tuple | None:
+    """Skip-cache key for the scoreboard; also ticks with its bottom clock."""
+    token = _sports_board_token()
+    if token < 0:
+        return None
+    try:
+        from pigeon.widgets.sports_scoreboard import clock_key
+
+        return (token, clock_key())
+    except Exception:
+        return (token,)
+
+
 def _live_pace_delay_ms(frame_t0: float, now: float, interval_ms: int) -> int:
     """Delay to the next slot on a fixed ``interval_ms`` grid.
 
@@ -1956,7 +1969,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 int(display_view_holder[0]),
                 _np_vol_sig,
             )
-            scene_off_key = (*scene_off_key, _sports_board_token())
+            scene_off_key = (*scene_off_key, _sports_board_key())
             if no_anim and skip_cache[0] == scene_off_key:
                 _schedule_next_render()
                 return
@@ -2053,7 +2066,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
         tick_key = int(now * 5)
     else:
         tick_key = int(time.time()) if _PIGEON_EXT else 0
-    tick_key = (tick_key, _sports_board_token())
+    tick_key = (tick_key, _sports_board_key())
     idle_s_here = (
         max(0.0, min(1.0, _compose_idle_strength_holder[0])) if _PIGEON_EXT else 0.0
     )

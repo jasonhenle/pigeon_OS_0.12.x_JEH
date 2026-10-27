@@ -254,6 +254,10 @@ class BoardRenderTests(_Reset):
 
     def test_live_board_draws_and_caches(self) -> None:
         ss.select_event(_ev("1", status="Q3", home="21", away="17"))
+        tick = datetime(2026, 10, 27, 20, 15, 30)
+        clock = mock.patch.object(board, "_clock_now", return_value=tick)
+        clock.start()
+        self.addCleanup(clock.stop)
         a = board.scoreboard_frame_bgr(1280, 800)
         self.assertEqual(a.shape, (800, 1280, 3))
         self.assertGreater(int(np.count_nonzero(a)), 1000)
@@ -261,6 +265,20 @@ class BoardRenderTests(_Reset):
         self.assertEqual(board.scoreboard_frame_bgr(640, 400).shape, (400, 640, 3))
         ss.apply_update(_ev("1", status="Q3", home="28", away="17"))
         self.assertIsNot(board.scoreboard_frame_bgr(1280, 800), a)
+
+    def test_bottom_clock_ticks_each_second(self) -> None:
+        ss.select_event(_ev("1", status="Q3"))
+        t0 = datetime(2026, 10, 27, 20, 15, 0)
+        with mock.patch.object(board, "_clock_now", return_value=t0):
+            a = board.scoreboard_frame_bgr(1280, 800).copy()
+        with mock.patch.object(board, "_clock_now", return_value=t0.replace(second=59)):
+            b = board.scoreboard_frame_bgr(1280, 800)
+        self.assertNotEqual(board.clock_key(t0), board.clock_key(t0.replace(second=59)))
+        bar = slice(board._CLOCK_BAR_Y, board._CLOCK_BAR_Y + board._CLOCK_BAR_H)
+        lit = lambda f: int(np.count_nonzero(f[bar].max(axis=2)))  # noqa: E731
+        # :00 lights one of the 60 cells; :59 lights all of them.
+        self.assertGreater(lit(b), 30 * lit(a))
+        self.assertGreater(lit(a), 0)
 
     def test_badge_is_pasted_when_loaded(self) -> None:
         ev = _ev("1", status="Q1")
