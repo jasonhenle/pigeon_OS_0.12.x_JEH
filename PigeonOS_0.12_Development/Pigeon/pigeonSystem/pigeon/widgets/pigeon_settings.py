@@ -853,14 +853,21 @@ def apply_pigeon_settings_svg_state(root: ET.Element, state: MainSettingsState) 
 
     _sync_sections(root, state, focused=focused, ui_hex=ui_hex, simple=simple)
     if simple:
+        # Same as the other section buttons: UI-color fill while focused. The
+        # face then flips to black with UI-color hands so the clock still shows.
+        clock_sel = focused == "section3"
         container = _by_id(root, "clock_container")
         if container is not None:
-            _set_paint(container, fill=_COLOR_BLACK, stroke=ui_hex)
+            _set_paint(container, fill=ui_hex if clock_sel else _COLOR_BLACK, stroke=ui_hex)
             container.set("stroke-width", "3")
-        for hid in ("clock_hand_minute", "clock_hand_hour", "clock_hand_second"):
+        face = _by_id(root, "clock_face")
+        if face is not None and clock_sel:
+            _set_paint(face, fill=_COLOR_BLACK)
+        hand_ink = ui_hex if clock_sel else _COLOR_BLACK
+        for hid in ("clock_hand_minute", "clock_hand_hour", "clock_hand_second", "clock_center"):
             hand = _by_id(root, hid)
             if hand is not None:
-                _set_paint(hand, fill=_COLOR_BLACK, stroke=_COLOR_BLACK)
+                _set_paint(hand, fill=hand_ink, stroke=hand_ink)
 
 
 # --- clip-path (PyMuPDF ignores it) -----------------------------------------

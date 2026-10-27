@@ -424,6 +424,25 @@ class NavigationTests(_IsolatedStateTest):
         std = ps.render_pigeon_settings_bgra(w.state, assets_dir=None)
         self.assertFalse((std[200:210, 640:660, :3] == 0).all())
 
+    def test_simple_style_highlights_the_focused_clock_button(self) -> None:
+        from pigeon.widgets.options_settings import set_option_value
+
+        def fills(focus: str) -> tuple[str, str]:
+            st = MainSettingsState()
+            st.options_values = set_option_value("ui_style", "simple", None)
+            ring = ps.pigeon_focus_ring("general")
+            st.pigeon_focus_index = ring.index(focus)
+            root = self._root(st)
+            return (
+                ps._by_id(root, "clock_container").get("fill").upper(),
+                ps._by_id(root, "clock_hand_hour").get("fill").upper(),
+            )
+
+        ui = ps._ui_hex(MainSettingsState()).upper()
+        # Focused: UI-color fill like section2, hands flipped to the UI color.
+        self.assertEqual(fills("section3"), (ui, ui))
+        self.assertEqual(fills("section2"), ("#000000", "#000000"))
+
     def test_color_tiles_preview_in_full_color_while_in_dark_mode(self) -> None:
         from pigeon.widgets.options_settings import set_mono_preview_off, ui_is_monochrome
 
