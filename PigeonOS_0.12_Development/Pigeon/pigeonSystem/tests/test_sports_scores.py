@@ -14,6 +14,7 @@ _SYS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SYS_ROOT not in sys.path:
     sys.path.insert(0, _SYS_ROOT)
 
+from pigeon import sports_follow as sf  # noqa: E402
 from pigeon import sports_scores as ss  # noqa: E402
 from pigeon.widgets import pigeon_settings as ps  # noqa: E402
 from pigeon.widgets import sports_scoreboard as board  # noqa: E402
@@ -55,6 +56,11 @@ class _Reset(unittest.TestCase):
         p = mock.patch.object(ss, "_start_poller")
         p.start()
         self.addCleanup(p.stop)
+        sf._reset_for_tests()
+        self.addCleanup(sf._reset_for_tests)
+        w = mock.patch("pigeon.app_state.write_app_state")
+        w.start()
+        self.addCleanup(w.stop)
 
 
 class ParseTests(unittest.TestCase):
@@ -297,6 +303,9 @@ class SettingsListTests(_Reset):
             w.state.enter_pigeon_settings()
         ring = ps.pigeon_focus_ring(w.state.pigeon_view)
         w.state.pigeon_focus_index = ring.index("sports")
+        self.assertEqual(w.activate(), "sports_page_open")
+        ring = ps.pigeon_focus_ring(w.state.pigeon_view)
+        w.state.pigeon_focus_index = ring.index("sports_games")
         return w
 
     def _with_events(self, *events: ss.SportsEvent) -> None:

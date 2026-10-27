@@ -15,7 +15,9 @@ into the way back to ``general``. Focus order::
 
     EXIT → the focusable tiles of the open menu → section2 → section3
 
-Tiles that are "TBD" are drawn dim and skipped by focus. The clock, version,
+Tiles that are "TBD" are drawn dim and skipped by focus. **SPORTS** opens the
+sports page (``pigeon_view == "sports"``, its own SVG; see
+:mod:`pigeon.widgets.sports_settings`). The clock, version,
 and the wifi / metadata / audio lights are not selectable. Moving focus across
 the theme tiles previews that color live; activating one commits it, and
 leaving the menu falls back to the committed color.
@@ -176,15 +178,21 @@ def default_pigeon_settings_svg_path(assets_dir: Path | str | None = None) -> Pa
 
 
 def normalize_view(view: object) -> str:
+    from pigeon.widgets.sports_settings import SPORTS_VIEW
+
     v = str(view or "").strip().lower()
-    return v if v in VIEWS else DEFAULT_VIEW
+    return v if v in VIEWS or v == SPORTS_VIEW else DEFAULT_VIEW
 
 
 def view_slots(view: object) -> tuple[Slot, ...]:
-    return _SLOTS[normalize_view(view)]
+    return _SLOTS.get(normalize_view(view), ())
 
 
 def pigeon_focus_ring(view: object = DEFAULT_VIEW) -> tuple[str, ...]:
+    from pigeon.widgets.sports_settings import SPORTS_VIEW, sports_focus_ring
+
+    if normalize_view(view) == SPORTS_VIEW:
+        return sports_focus_ring()
     tiles = tuple(s.focus_id for s in view_slots(view) if s.focus_id)
     return ("exit", *tiles, "section2", "section3")
 
@@ -545,12 +553,17 @@ def _sync_slot(
             group, _zipcode_text(state), cx=cx, y=cy + 36, size=_VALUE_PX, digital=True, color=text_ink
         )
     elif slot.focus_id == "sports":
+        from pigeon.sports_follow import all_followed, auto_enabled
         from pigeon.sports_scores import scoreboard_active
 
+        if scoreboard_active():
+            value = "LIVE"
+        else:
+            value = "AUTO" if auto_enabled() and all_followed() else "OFF"
         _add_text(group, slot.label, cx=cx, y=cy - 22, size=_CAPTION_PX, color=text_ink)
         _add_text(
             group,
-            "LIVE" if scoreboard_active() else "OFF",
+            value,
             cx=cx,
             y=cy + 36,
             size=_VALUE_PX,
@@ -1135,12 +1148,28 @@ def render_pigeon_settings_bgra(
     clock: bool = False,
 ) -> np.ndarray:
     """Render the page. ``clock=True`` also paints the live HH:MM:SS."""
-    path = Path(svg_path) if svg_path is not None else default_pigeon_settings_svg_path(assets_dir)
+    from pigeon.widgets.sports_settings import (
+        SPORTS_VIEW,
+        apply_sports_svg_state,
+        default_sports_settings_svg_path,
+        draw_team_list,
+    )
+
+    st = state if state is not None else MainSettingsState()
+    sports = normalize_view(getattr(st, "pigeon_view", DEFAULT_VIEW)) == SPORTS_VIEW
+    if svg_path is not None:
+        path = Path(svg_path)
+    elif sports:
+        path = default_sports_settings_svg_path(assets_dir)
+    else:
+        path = default_pigeon_settings_svg_path(assets_dir)
     if not path.is_file():
         raise FileNotFoundError(f"pigeon settings SVG not found: {path}")
-    st = state if state is not None else MainSettingsState()
     root = _svg_tree_from_path(path)
-    apply_pigeon_settings_svg_state(root, st)
+    if sports:
+        apply_sports_svg_state(root, st)
+    else:
+        apply_pigeon_settings_svg_state(root, st)
     # The export bakes clipped stripes into ``background``; hide them before
     # the clip pass, which would otherwise lift them on top of the page.
     _set_visible(_by_id(root, "background"), False)
@@ -1173,6 +1202,8 @@ def render_pigeon_settings_bgra(
         frame = bg.copy()
     if getattr(st, "tz_dropdown_open", False):
         _draw_timezone_dropdown(frame, st)
+    if sports and getattr(st, "sports_team_league", ""):
+        draw_team_list(frame, st)
     if getattr(st, "sports_dropdown_open", False):
         _draw_sports_dropdown(frame, st)
     if clock:

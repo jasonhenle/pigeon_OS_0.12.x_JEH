@@ -194,6 +194,9 @@ class MainSettingsState:
     # Live-games list over the page (general menu's SPORTS tile).
     sports_dropdown_open: bool = False
     sports_dropdown_index: int = 0
+    # Sports page team list: league id while open ("" = closed), focused row.
+    sports_team_league: str = ""
+    sports_team_index: int = 0
     show_preferences: bool = False
     # Metadata inspector ([4]): pages 0=player, 1=hdmi, 2=pigeon.
     show_metadata_debug: bool = False
@@ -738,6 +741,7 @@ class MainSettingsState:
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
+        self.close_sports_teams()
         self.close_metadata_debug()
         load_persisted_theme_into_state(self)
         self.ui_color_committed_key = str(self.ui_color_ui_key or "blue")
@@ -775,6 +779,7 @@ class MainSettingsState:
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
+        self.close_sports_teams()
         self.show_metadata_debug = True
         self.metadata_debug_page = 0
         try:
@@ -798,6 +803,7 @@ class MainSettingsState:
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
+        self.close_sports_teams()
         self.close_metadata_debug()
         self._restore_committed_ui_color()
         self.show_pigeon_settings = False
@@ -924,6 +930,47 @@ class MainSettingsState:
             self.exit_pigeon_settings()
             return "exit" if self.exit_enabled else "pigeon_settings_back"
         return "sports_dropdown_close"
+
+    def open_sports_page(self) -> None:
+        from pigeon.sports_teams import FOLLOW_LEAGUES
+        from pigeon.widgets.sports_settings import SPORTS_VIEW, league_focus_id
+
+        self.close_sports_teams()
+        self.set_pigeon_view(SPORTS_VIEW, focus=league_focus_id(FOLLOW_LEAGUES[0].league_id))
+
+    def close_sports_page(self) -> None:
+        self.close_sports_teams()
+        self.close_sports_dropdown()
+        self.set_pigeon_view("general", focus="sports")
+
+    def open_sports_teams(self, league_id: str) -> None:
+        self.sports_team_league = str(league_id)
+        self.sports_team_index = 0
+
+    def close_sports_teams(self) -> None:
+        self.sports_team_league = ""
+        self.sports_team_index = 0
+
+    def navigate_sports_teams(self, *, forward: bool = True) -> None:
+        from pigeon.widgets.sports_settings import team_list_entries
+
+        n = len(team_list_entries(self.sports_team_league))
+        step = 1 if forward else -1
+        self.sports_team_index = (int(self.sports_team_index) + step) % max(1, n)
+
+    def activate_sports_teams(self) -> str:
+        """BACK closes the list; a team is followed / unfollowed in place."""
+        from pigeon.sports_follow import toggle_follow
+        from pigeon.widgets.sports_settings import TEAM_BACK, team_list_entries
+
+        league_id = self.sports_team_league
+        entries = team_list_entries(league_id)
+        payload = entries[int(self.sports_team_index) % len(entries)][0]
+        if payload == TEAM_BACK:
+            self.close_sports_teams()
+            return "sports_teams_back"
+        on = toggle_follow(league_id, payload)
+        return f"sports_follow:{league_id}:{payload}:{'on' if on else 'off'}"
 
     def open_tz_dropdown(self) -> None:
         from pigeon.pigeon_locale import current_timezone_choice_index
@@ -1152,6 +1199,9 @@ class MainSettingsState:
             return
         if self.sports_dropdown_open:
             self.navigate_sports_dropdown(forward=forward)
+            return
+        if self.sports_team_league:
+            self.navigate_sports_teams(forward=forward)
             return
         if self.show_preferences:
             self.navigate_preferences(forward=forward)

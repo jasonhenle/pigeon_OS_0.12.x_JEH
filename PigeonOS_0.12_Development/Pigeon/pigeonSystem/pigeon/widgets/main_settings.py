@@ -601,6 +601,16 @@ def _sports_board_token() -> int:
         return 0
 
 
+def _sports_page_token() -> tuple[object, ...]:
+    """Followed teams / AUTO SCORES: the sports page repaints on it."""
+    try:
+        from pigeon.widgets.sports_settings import sports_page_token
+
+        return sports_page_token()
+    except Exception:
+        return ()
+
+
 class MainSettingsWidget:
     """Cached main-settings compositor (similar to ``NowPlayingScreenWidget``)."""
 
@@ -1014,6 +1024,9 @@ class MainSettingsWidget:
             bool(st.sports_dropdown_open),
             int(st.sports_dropdown_index) if st.sports_dropdown_open else -1,
             _sports_board_token(),
+            str(st.sports_team_league or ""),
+            int(st.sports_team_index) if st.sports_team_league else -1,
+            _sports_page_token(),
         )
 
     def _main_state_sig(self) -> tuple[object, ...]:
@@ -1478,6 +1491,7 @@ class MainSettingsWidget:
             if (
                 st.tz_dropdown_open
                 or st.sports_dropdown_open
+                or st.sports_team_league
                 or st.show_update_popup
                 or st.show_metadata_debug
             ):
@@ -1698,6 +1712,7 @@ class MainSettingsWidget:
             if (
                 st.tz_dropdown_open
                 or st.sports_dropdown_open
+                or st.sports_team_league
                 or st.show_update_popup
                 or st.show_metadata_debug
             ):
@@ -2703,6 +2718,10 @@ class MainSettingsWidget:
                 action = st.activate_sports_dropdown()
                 self.invalidate()
                 return action
+            if st.sports_team_league:
+                action = st.activate_sports_teams()
+                self.invalidate()
+                return action
             if st.show_preferences:
                 action = st.activate_preferences()
                 # Soft invalidate: keep neighbor focus bitmaps; drop current paste only.
@@ -2742,6 +2761,34 @@ class MainSettingsWidget:
             )
 
             focused = st.pigeon_focused_id
+            from pigeon.widgets.sports_settings import (
+                FOCUS_AUTO,
+                FOCUS_GAMES,
+                SPORTS_VIEW,
+                league_for_focus,
+            )
+
+            if st.pigeon_view == SPORTS_VIEW:
+                league_id = league_for_focus(focused)
+                if focused == "exit":
+                    st.close_sports_page()
+                    self.invalidate()
+                    return "sports_page_back"
+                if league_id is not None:
+                    st.open_sports_teams(league_id)
+                    self.invalidate()
+                    return f"sports_teams_open:{league_id}"
+                if focused == FOCUS_AUTO:
+                    from pigeon.sports_follow import toggle_auto
+
+                    on = toggle_auto()
+                    self.invalidate()
+                    return f"sports_auto:{'on' if on else 'off'}"
+                if focused == FOCUS_GAMES:
+                    st.open_sports_dropdown()
+                    self.invalidate()
+                    return "sports_dropdown_open"
+                return f"pigeon_activate:{focused}"
             if focused == "exit":
                 st.exit_pigeon_settings()
                 self.invalidate()
@@ -2762,9 +2809,9 @@ class MainSettingsWidget:
                 self.invalidate()
                 return "timezone_dropdown_open"
             if focused == "sports":
-                st.open_sports_dropdown()
+                st.open_sports_page()
                 self.invalidate()
-                return "sports_dropdown_open"
+                return "sports_page_open"
             from pigeon.widgets.options_settings import set_option_value
 
             color = color_key_for_focus(focused)

@@ -44,6 +44,12 @@ def run(ctx) -> None:
     render_once()
     _log_view_one_startup_phase(f"first-render ({(time.monotonic() - t_render0) * 1000.0:.0f} ms)")
     root.after(600, _receiver_poll_tick)
+    try:
+        from pigeon.sports_follow import start_auto_watch
+
+        start_auto_watch()
+    except Exception:
+        pass
     root.after(700, _receiver_volume_poll_tick)
 
     if _PIGEON_EXT:
