@@ -197,6 +197,8 @@ class MainSettingsState:
     # Sports page team list: league id while open ("" = closed), focused row.
     sports_team_league: str = ""
     sports_team_index: int = 0
+    # NCAA lists: the letter picked on the A–Z grid ("" = showing the grid).
+    sports_team_letter: str = ""
     show_preferences: bool = False
     # Metadata inspector ([4]): pages 0=player, 1=hdmi, 2=pigeon.
     show_metadata_debug: bool = False
@@ -937,6 +939,13 @@ class MainSettingsState:
 
         self.close_sports_teams()
         self.set_pigeon_view(SPORTS_VIEW, focus=league_focus_id(FOLLOW_LEAGUES[0].league_id))
+        # Warm LIVE GAMES while the page is up.
+        try:
+            from pigeon.sports_scores import refresh_events
+
+            refresh_events()
+        except Exception:
+            pass
 
     def close_sports_page(self) -> None:
         self.close_sports_teams()
@@ -945,28 +954,48 @@ class MainSettingsState:
 
     def open_sports_teams(self, league_id: str) -> None:
         self.sports_team_league = str(league_id)
+        self.sports_team_letter = ""
         self.sports_team_index = 0
 
     def close_sports_teams(self) -> None:
         self.sports_team_league = ""
+        self.sports_team_letter = ""
         self.sports_team_index = 0
 
     def navigate_sports_teams(self, *, forward: bool = True) -> None:
-        from pigeon.widgets.sports_settings import team_list_entries
+        from pigeon.widgets.sports_settings import current_entries
 
-        n = len(team_list_entries(self.sports_team_league))
+        n = len(current_entries(self))
         step = 1 if forward else -1
         self.sports_team_index = (int(self.sports_team_index) + step) % max(1, n)
 
     def activate_sports_teams(self) -> str:
-        """BACK closes the list; a team is followed / unfollowed in place."""
+        """BACK steps out (teams → letter grid → page); a letter opens its
+        teams; a team is followed / unfollowed in place."""
         from pigeon.sports_follow import toggle_follow
-        from pigeon.widgets.sports_settings import TEAM_BACK, team_list_entries
+        from pigeon.widgets.sports_settings import (
+            LETTER_PREFIX,
+            TEAM_BACK,
+            current_entries,
+            letter_entries,
+            uses_letters,
+        )
 
         league_id = self.sports_team_league
-        entries = team_list_entries(league_id)
+        entries = current_entries(self)
         payload = entries[int(self.sports_team_index) % len(entries)][0]
+        if payload.startswith(LETTER_PREFIX):
+            self.sports_team_letter = payload[len(LETTER_PREFIX) :]
+            self.sports_team_index = 0
+            return f"sports_letter:{self.sports_team_letter}"
         if payload == TEAM_BACK:
+            letter = self.sports_team_letter
+            if letter and uses_letters(league_id):
+                self.sports_team_letter = ""
+                keys = [p for p, _label in letter_entries(league_id)]
+                want = f"{LETTER_PREFIX}{letter}"
+                self.sports_team_index = keys.index(want) if want in keys else 0
+                return "sports_letters_back"
             self.close_sports_teams()
             return "sports_teams_back"
         on = toggle_follow(league_id, payload)

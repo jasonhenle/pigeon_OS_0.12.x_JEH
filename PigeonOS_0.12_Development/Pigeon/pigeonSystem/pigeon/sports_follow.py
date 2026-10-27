@@ -215,6 +215,13 @@ def check_once(*, now: datetime | None = None, mono: float | None = None) -> Spo
 
 
 def _watch_loop() -> None:
+    # Warm the LIVE GAMES list once after boot (it is also saved to disk).
+    try:
+        from pigeon.sports_scores import refresh_events
+
+        refresh_events()
+    except Exception:
+        pass
     while True:
         try:
             check_once()

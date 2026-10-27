@@ -1025,6 +1025,7 @@ class MainSettingsWidget:
             int(st.sports_dropdown_index) if st.sports_dropdown_open else -1,
             _sports_board_token(),
             str(st.sports_team_league or ""),
+            str(st.sports_team_letter or ""),
             int(st.sports_team_index) if st.sports_team_league else -1,
             _sports_page_token(),
         )

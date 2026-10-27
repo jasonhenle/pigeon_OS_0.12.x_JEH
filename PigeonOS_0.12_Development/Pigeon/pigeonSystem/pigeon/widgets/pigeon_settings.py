@@ -987,6 +987,47 @@ def timezone_dropdown_rows(state: MainSettingsState) -> tuple[list[str], int, in
     return labels, first, focus
 
 
+# Scroll indicator beside a list: a dim track and a thumb sized to the window.
+_SCROLL_W = 8
+_SCROLL_GUTTER = 22
+_SCROLL_MIN_THUMB = 28
+_SCROLL_TRACK_RGBA = (70, 70, 70, 255)
+
+
+def scroll_thumb(
+    *, first: int, visible: int, total: int, height: int
+) -> tuple[int, int] | None:
+    """(top, length) of the thumb inside a ``height`` track; None when all fits."""
+    if total <= visible or visible <= 0 or height <= 0:
+        return None
+    length = max(_SCROLL_MIN_THUMB, int(round(height * visible / total)))
+    length = min(length, height)
+    span = max(1, total - visible)
+    top = int(round((height - length) * min(first, span) / span))
+    return top, length
+
+
+def draw_list_scrollbar(
+    draw,
+    *,
+    x: int,
+    top: int,
+    height: int,
+    first: int,
+    visible: int,
+    total: int,
+    thumb: tuple[int, int, int, int] = (255, 255, 255, 255),
+) -> None:
+    """Paint the indicator with its left edge at ``x`` (nothing when all rows fit)."""
+    pos = scroll_thumb(first=first, visible=visible, total=total, height=height)
+    if pos is None:
+        return
+    r = _SCROLL_W // 2
+    draw.rounded_rectangle((x, top, x + _SCROLL_W - 1, top + height - 1), radius=r, fill=_SCROLL_TRACK_RGBA)
+    t0, length = pos
+    draw.rounded_rectangle((x, top + t0, x + _SCROLL_W - 1, top + t0 + length - 1), radius=r, fill=thumb)
+
+
 def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
     from PIL import Image, ImageDraw
 
@@ -1001,7 +1042,7 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None
     x0 = int(round(x0))
     y0 = int(round(y0))
     h = len(labels) * (_DROPDOWN_ROW_H + _DROPDOWN_ROW_GAP) - _DROPDOWN_ROW_GAP
-    patch = Image.new("RGBA", (_DROPDOWN_ROW_W, h), (0, 0, 0, 0))
+    patch = Image.new("RGBA", (_DROPDOWN_ROW_W + _SCROLL_GUTTER, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(patch)
     font_path = resolve_digital7_font() or resolve_ui_font_bold()
     font = _load_font(font_path, _DROPDOWN_FONT_PX) if font_path else None
@@ -1024,6 +1065,17 @@ def _draw_timezone_dropdown(frame: np.ndarray, state: MainSettingsState) -> None
             fill=ink,
             anchor="mm",
         )
+    from pigeon.pigeon_locale import timezone_choices
+
+    draw_list_scrollbar(
+        draw,
+        x=_DROPDOWN_ROW_W + (_SCROLL_GUTTER - _SCROLL_W) // 2,
+        top=0,
+        height=h,
+        first=first,
+        visible=len(labels),
+        total=len(timezone_choices()),
+    )
     import cv2
 
     bgra = cv2.cvtColor(np.asarray(patch), cv2.COLOR_RGBA2BGRA)
@@ -1091,11 +1143,14 @@ def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
     rows, first, focus = sports_dropdown_rows(state)
     if not rows:
         return
+    total = len(sports_dropdown_entries())
     h = len(rows) * (_SPORTS_ROW_H + _SPORTS_ROW_GAP) - _SPORTS_ROW_GAP
     x0 = (DESIGN_W - _SPORTS_ROW_W) // 2
     y0 = max(0, (DESIGN_H - h) // 2)
-    patch = Image.new("RGBA", (_SPORTS_ROW_W, h), (0, 0, 0, 0))
+    patch = Image.new("RGBA", (_SPORTS_ROW_W + _SCROLL_GUTTER, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(patch)
+    # Solid behind the gaps so the page does not show between rows.
+    draw.rounded_rectangle((0, 0, _SPORTS_ROW_W + _SCROLL_GUTTER - 1, h - 1), radius=_DROPDOWN_RADIUS, fill=(0, 0, 0, 255))
     font_path = resolve_ui_font_bold()
     font = _load_font(font_path, _SPORTS_FONT_PX) if font_path else None
     pad = 24
@@ -1130,6 +1185,15 @@ def _draw_sports_dropdown(frame: np.ndarray, state: MainSettingsState) -> None:
             draw.text((pad, mid), text, font=font, fill=ink, anchor="lm")
         else:
             draw.text((_SPORTS_ROW_W // 2, mid), text, font=font, fill=ink, anchor="mm")
+    draw_list_scrollbar(
+        draw,
+        x=_SPORTS_ROW_W + (_SCROLL_GUTTER - _SCROLL_W) // 2,
+        top=0,
+        height=h,
+        first=first,
+        visible=len(rows),
+        total=total,
+    )
     import cv2
 
     bgra = cv2.cvtColor(np.asarray(patch), cv2.COLOR_RGBA2BGRA)
@@ -1436,6 +1500,7 @@ __all__ = [
     "default_pigeon_settings_svg_path",
     "draw_pigeon_settings_clock",
     "draw_companion_code",
+    "draw_list_scrollbar",
     "page_ink_rgb",
     "factory_reset_pigeon_persisted_state",
     "normalize_pigeon_focus_id",
@@ -1444,6 +1509,7 @@ __all__ = [
     "pigeon_clock_label",
     "pigeon_focus_ring",
     "render_pigeon_settings_bgra",
+    "scroll_thumb",
     "section_targets",
     "sports_dropdown_entries",
     "sports_dropdown_rows",

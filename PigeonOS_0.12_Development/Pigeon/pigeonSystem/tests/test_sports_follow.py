@@ -55,6 +55,10 @@ class _Reset(unittest.TestCase):
         p = mock.patch.object(ss, "_start_poller")
         p.start()
         self.addCleanup(p.stop)
+        # Opening the page warms LIVE GAMES: keep that off the network.
+        p = mock.patch.object(ss, "fetch_available_events", return_value=([], False))
+        p.start()
+        self.addCleanup(p.stop)
 
 
 class CatalogTests(unittest.TestCase):
@@ -187,6 +191,42 @@ class SportsPageTests(_Reset):
         self.assertEqual(w.state.sports_team_league, "")
         self.assertEqual(w.state.pigeon_view, sps.SPORTS_VIEW)
 
+    def test_ncaa_opens_on_letters(self) -> None:
+        ncaab = "4607"
+        w = self._widget()
+        self._focus(w, f"league:{ncaab}")
+        self.assertEqual(w.activate(), f"sports_teams_open:{ncaab}")
+        self.assertTrue(sps.letter_mode(w.state))
+        letters = sps.letter_entries(ncaab)
+        self.assertEqual(letters[0][0], sps.TEAM_BACK)
+        m = [p for p, label in letters].index("letter:M")
+        w.state.sports_team_index = m
+        self.assertEqual(w.activate(), "sports_letter:M")
+        names = [label for _p, label in sps.current_entries(w.state)[1:]]
+        self.assertIn("Michigan", names)
+        self.assertTrue(all(n.upper().startswith("M") for n in names))
+        w.navigate(forward=True)
+        team = sps.current_entries(w.state)[1][0]
+        self.assertTrue(w.activate().endswith(f":{team}:on"))
+        # BACK → the grid, on M; BACK again → the page.
+        w.navigate(forward=False)
+        self.assertEqual(w.activate(), "sports_letters_back")
+        self.assertEqual(w.state.sports_team_index, m)
+        self.assertEqual(sps.letters_with_follows(ncaab), frozenset({"M"}))
+        w.state.sports_team_index = 0
+        self.assertEqual(w.activate(), "sports_teams_back")
+        self.assertEqual(w.state.sports_team_league, "")
+
+    def test_pro_leagues_skip_letters(self) -> None:
+        w = self._widget()
+        w.activate()
+        self.assertFalse(sps.letter_mode(w.state))
+        self.assertEqual(len(sps.current_entries(w.state)), 33)
+
+    def test_team_letter(self) -> None:
+        self.assertEqual(sps.team_letter("Ole Miss"), "O")
+        self.assertEqual(sps.team_letter("49ers"), "#")
+
     def test_auto_tile_toggles(self) -> None:
         w = self._widget()
         self._focus(w, "sports_auto")
@@ -203,7 +243,63 @@ class SportsPageTests(_Reset):
         badged = ps.render_pigeon_settings_bgra(st)
         self.assertFalse(np.array_equal(page, badged))
         st.sports_team_league = NFL
-        self.assertFalse(np.array_equal(badged, ps.render_pigeon_settings_bgra(st)))
+        listed = ps.render_pigeon_settings_bgra(st)
+        self.assertFalse(np.array_equal(badged, listed))
+        st.sports_team_league = "4479"
+        self.assertFalse(np.array_equal(listed, ps.render_pigeon_settings_bgra(st)))
+
+
+class ScrollTests(unittest.TestCase):
+    def test_thumb_tracks_the_window(self) -> None:
+        self.assertIsNone(ps.scroll_thumb(first=0, visible=8, total=8, height=400))
+        top, length = ps.scroll_thumb(first=0, visible=8, total=32, height=400)
+        self.assertEqual((top, length), (0, 100))
+        top, length = ps.scroll_thumb(first=24, visible=8, total=32, height=400)
+        self.assertEqual(top + length, 400)
+        mid, _ = ps.scroll_thumb(first=12, visible=8, total=32, height=400)
+        self.assertEqual(mid, 150)
+        # Long lists keep a grabbable thumb.
+        self.assertEqual(ps.scroll_thumb(first=0, visible=8, total=1000, height=400)[1], 28)
+
+
+class ListCacheTests(_Reset):
+    def setUp(self) -> None:
+        super().setUp()
+        import tempfile
+        from pathlib import Path
+
+        self.dir = Path(tempfile.mkdtemp())
+        p = mock.patch.object(ss, "_events_path", return_value=self.dir / "sports_events.json")
+        p.start()
+        self.addCleanup(p.stop)
+        ss._disk_enabled = True
+        ss._disk_loaded = False
+
+    def test_saved_list_shows_before_the_fetch(self) -> None:
+        now = datetime.now(timezone.utc)
+        game = _ev("1", start=now + timedelta(hours=1))
+        ss._save_disk_events((game,))
+        events, loading, _failed = ss.events_snapshot()
+        self.assertEqual([e.event_id for e in events], ["1"])
+        self.assertEqual(events[0].start_utc, game.start_utc)
+        self.assertFalse(loading)
+
+    def test_cut_short_refresh_keeps_old_rows(self) -> None:
+        now = datetime.now(timezone.utc)
+        ss._events = (_ev("old", start=now + timedelta(hours=2)),)
+        fresh = _ev("new", start=now + timedelta(hours=1))
+
+        def fetch(**_kw):
+            ss._blocked_until_mono = ss.time.monotonic() + 60
+            return [fresh], False
+
+        threads = []
+        with mock.patch.object(ss, "fetch_available_events", side_effect=fetch), mock.patch.object(
+            ss.threading, "Thread", side_effect=lambda **kw: threads.append(kw) or mock.Mock()
+        ):
+            self.assertTrue(ss.refresh_events(force=True))
+            threads[0]["target"]()
+        self.assertEqual(sorted(e.event_id for e in ss.events_snapshot()[0]), ["new", "old"])
 
 
 if __name__ == "__main__":
