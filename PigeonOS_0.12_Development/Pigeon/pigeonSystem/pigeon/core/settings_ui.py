@@ -590,7 +590,7 @@ def _handle_main_settings_action(action: str, *, _apply_persisted_location_to_ru
         threading.Thread(target=worker_ms_update_check, daemon=True).start()
         return
 
-    if action in ("update_popup:back", "update_popup:stay", "update_popup:busy"):
+    if action in ("update_popup:back", "update_popup:stay", "update_popup:busy", "reset_confirm:open", "reset_confirm:cancel"):
         main_settings_widget.invalidate()
         skip_cache[0] = None
         return

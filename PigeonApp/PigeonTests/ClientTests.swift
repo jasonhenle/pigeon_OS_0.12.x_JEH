@@ -182,7 +182,9 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(r.rooms.first(where: \.current)?.id, "loc-1")
         _ = try await c.switchRoom("loc-2")
         _ = try await c.renameRoom("loc-2", to: "Den")
-        XCTAssertEqual(seen, ["GET /api/v1/rooms", "PUT /api/v1/rooms/current", "PATCH /api/v1/rooms/loc-2"])
+        _ = try await c.resetRoom("loc-2")
+        XCTAssertEqual(seen, ["GET /api/v1/rooms", "PUT /api/v1/rooms/current", "PATCH /api/v1/rooms/loc-2",
+                              "POST /api/v1/rooms/loc-2/reset"])
     }
 
     func testPigeonSettingsDecodeAndPatchOmitsNil() async throws {

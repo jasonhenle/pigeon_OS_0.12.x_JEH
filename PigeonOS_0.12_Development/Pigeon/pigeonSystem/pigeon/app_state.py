@@ -1002,6 +1002,41 @@ def delete_location_v2(loc_id: str) -> bool:
     return True
 
 
+def reset_location_v2(loc_id: str, new_name: str) -> bool:
+    """
+    Empty one room: unpair its players and receivers, clear its Advanced delegation and
+    give it *new_name*. Keeps its id, slot and Wi-Fi. Resetting the current room also
+    forgets the last player / receiver targets.
+    """
+    migrate_device_slots_from_legacy_if_needed()
+    _ensure_locations_v2_migrated()
+    cur = read_app_state()
+    locs = _v2_copy_locations_from_state(cur)
+    tl = str(loc_id or "").strip()
+    idx = next((i for i, L in enumerate(locs) if str(L.get("id") or "").strip() == tl), None)
+    if not tl or idx is None:
+        return False
+    fresh = _new_empty_location(tl, new_name)
+    wifi = _normalize_wifi_dict(locs[idx].get("wifi"))
+    if wifi is not None:
+        fresh["wifi"] = wifi
+    locs[idx] = fresh
+    cur["locations_v2"] = [_loc_serializable(L) for L in locs]
+    eff = _v2_resolve_effective_location_id(locs, cur)
+    _mirror_primary_devices_to_legacy_slots(cur, locs, eff)
+    fd = _load_feature_delegation(cur)
+    for fd_key in ("overrides", "log", "active"):
+        sub = fd.get(fd_key)
+        if isinstance(sub, dict) and tl in sub:
+            del sub[tl]
+    cur["feature_delegation_v1"] = fd
+    _atomic_write_state(cur)
+    if eff == tl:
+        clear_last_apple_tv()
+        clear_last_receiver()
+    return True
+
+
 def rename_location_v2(loc_id: str, new_name: str) -> bool:
     migrate_device_slots_from_legacy_if_needed()
     _ensure_locations_v2_migrated()

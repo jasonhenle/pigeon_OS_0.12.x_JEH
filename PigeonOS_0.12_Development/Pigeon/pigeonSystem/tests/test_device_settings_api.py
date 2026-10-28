@@ -77,6 +77,34 @@ class RoomTests(_Base):
         self.assertEqual(self.call("PUT", "/rooms/current", {})[0], 400)
 
 
+    def test_reset_room_unpairs_and_restores_name(self) -> None:
+        rooms = self.call("GET", "/rooms")[1]["rooms"]
+        cur = next(r for r in rooms if r["current"])
+        other = next(r for r in rooms if not r["current"])
+        tv = {"identifier": "tv-1", "address": "10.0.0.5", "name": "Den TV"}
+        for r in (cur, other):
+            app_state.append_device_to_location_slot("streaming", tv, for_location_id=r["id"], new_location_name=None)
+        app_state.write_location_wifi("Skynet", "pw", for_location_id=cur["id"])
+        self.call("PATCH", f"/rooms/{cur['id']}", {"name": "Theater"})
+        self.applied.clear()
+
+        st, d = self.call("POST", f"/rooms/{cur['id']}/reset")
+        self.assertEqual(st, 200)
+        self.assertEqual(next(r for r in d["rooms"] if r["id"] == cur["id"])["name"], f"ROOM {cur['slot']}")
+        self.assertEqual(d["current"], cur["id"])  # still the current room, same slot
+        locs = {L["id"]: L for L in app_state.read_all_locations_v2()}
+        self.assertEqual(locs[cur["id"]]["streaming"], [])
+        self.assertEqual(len(locs[other["id"]]["streaming"]), 1)  # other rooms untouched
+        self.assertEqual(app_state.read_location_wifi(for_location_id=cur["id"])["ssid"], "Skynet")
+        self.assertEqual(self.applied, ["location"])
+
+    def test_reset_room_unknown_and_unsupported(self) -> None:
+        self.assertEqual(self.call("POST", "/rooms/nope/reset")[0], 404)
+        rid = self.call("GET", "/rooms")[1]["current"]
+        with mock.patch("pigeon.control_api.profile.has_capability", lambda c: c != "room_reset"):
+            self.assertEqual(self.call("POST", f"/rooms/{rid}/reset")[0], 422)
+        self.assertEqual(self.applied, [])
+
 class PigeonSettingsTests(_Base):
     def test_read_shape(self) -> None:
         st, d = self.call("GET", "/pigeon-settings")

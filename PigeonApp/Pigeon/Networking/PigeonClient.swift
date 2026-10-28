@@ -243,6 +243,11 @@ struct PigeonClient {
         try await send("PATCH", "/rooms/\(id)", body: RoomNameRequest(name: name))
     }
 
+    /// Unpairs the room's player and receiver and puts its name back to ROOM n.
+    func resetRoom(_ id: String) async throws -> RoomsResponse {
+        try await send("POST", "/rooms/\(id)/reset")
+    }
+
     /// Starts the on-screen player / audio search for a room; the device finishes pairing.
     func startPairing(room id: String, kind: String) async throws {
         let _: StateReply = try await send("POST", "/rooms/\(id)/pairing", body: PairingRequest(kind: kind))

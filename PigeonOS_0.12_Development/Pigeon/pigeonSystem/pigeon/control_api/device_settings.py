@@ -84,6 +84,16 @@ def rename_room(room_id: str, name: Any) -> str:
     return nm
 
 
+def reset_room(room_id: str) -> None:
+    """Unpair the room's players and receivers and put its name back to ``ROOM n``."""
+    from pigeon.app_state import reset_location_v2
+
+    rid = str(room_id or "").strip()
+    room = next((r for r in read_rooms()["rooms"] if r["id"] == rid), None)
+    if room is None or not reset_location_v2(rid, f"ROOM {room['slot']}"):
+        raise KeyError("unknown room")
+
+
 # ---------------------------------------------------------- pigeon settings
 
 def read_pigeon_settings() -> dict[str, Any]:

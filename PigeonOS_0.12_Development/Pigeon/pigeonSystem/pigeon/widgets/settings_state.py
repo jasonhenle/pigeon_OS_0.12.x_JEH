@@ -242,6 +242,9 @@ class MainSettingsState:
     options_values: dict[str, object] = field(default_factory=dict)
     show_update_popup: bool = False
     update_popup_focus_index: int = 0
+    # FACTORY RESET warning over the Pigeon page: 0 = CANCEL, 1 = RESET.
+    show_reset_confirm: bool = False
+    reset_confirm_focus_index: int = 0
     update_available: bool = False
     update_checking: bool = False
     update_applying: bool = False
@@ -505,6 +508,7 @@ class MainSettingsState:
     def enter_location_picker(self) -> None:
         self.show_network_picker = False
         self.close_update_popup()
+        self.close_reset_confirm()
         self.close_preferences()
         self.show_pigeon_settings = False
         self._set_mono_preview_off(False)
@@ -740,6 +744,7 @@ class MainSettingsState:
         self.pigeon_view = "general"
         self.show_box1_panel = False
         self.close_update_popup()
+        self.close_reset_confirm()
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
@@ -778,6 +783,7 @@ class MainSettingsState:
         if not self.show_pigeon_settings:
             self.enter_pigeon_settings()
         self.close_update_popup()
+        self.close_reset_confirm()
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
@@ -802,6 +808,7 @@ class MainSettingsState:
 
     def exit_pigeon_settings(self) -> None:
         self.close_update_popup()
+        self.close_reset_confirm()
         self.close_preferences()
         self.close_tz_dropdown()
         self.close_sports_dropdown()
@@ -1185,6 +1192,15 @@ class MainSettingsState:
         self.update_progress = 0.0
         self.update_popup_focus_index = 0
 
+    def open_reset_confirm(self) -> None:
+        """Show the FACTORY RESET warning with CANCEL focused."""
+        self.show_reset_confirm = True
+        self.reset_confirm_focus_index = 0
+
+    def close_reset_confirm(self) -> None:
+        self.show_reset_confirm = False
+        self.reset_confirm_focus_index = 0
+
     def _update_popup_ring(self) -> tuple[str, ...]:
         from pigeon.widgets.update_popup import update_popup_focus_ring
 
@@ -1237,6 +1253,9 @@ class MainSettingsState:
             return
         if self.show_update_popup:
             self.navigate_update_popup(forward=forward)
+            return
+        if self.show_reset_confirm:
+            self.reset_confirm_focus_index = 1 - int(self.reset_confirm_focus_index)
             return
         ring = pigeon_focus_ring(self.pigeon_view)
         step = 1 if forward else -1
