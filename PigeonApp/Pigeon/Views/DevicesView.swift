@@ -473,6 +473,7 @@ struct RoomsCard: View {
     @StateObject private var model: RoomsModel
     @State private var renaming: Room?
     @State private var resetting: Room?
+    @State private var switching: Room?
     @State private var newName = ""
     /// The device can empty a single room (trash icon).
     let canReset: Bool
@@ -493,7 +494,8 @@ struct RoomsCard: View {
                 .font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
             ForEach(model.data?.rooms ?? []) { r in
                 HStack {
-                    Button { Task { await model.choose(r) } } label: {
+                    // Ask first: a stray tap while scrolling would switch players.
+                    Button { if !r.current { switching = r } } label: {
                         HStack(spacing: 10) {
                             Image(systemName: r.current ? "largecircle.fill.circle" : "circle")
                                 .foregroundStyle(r.current ? Theme.accent : Theme.inactive)
@@ -541,6 +543,13 @@ struct RoomsCard: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let p = model.data?.presets, !p.isEmpty { Text("e.g. " + p.prefix(4).joined(separator: ", ")) }
+        }
+        .alert("Switch to \(switching?.name.uppercased() ?? "room")?",
+               isPresented: Binding(get: { switching != nil }, set: { if !$0 { switching = nil } })) {
+            Button("Switch") { if let r = switching { Task { await model.choose(r) } } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Pigeon will use this room's player and audio receiver instead.")
         }
         .alert("Reset \(resetting?.name.uppercased() ?? "room")?",
                isPresented: Binding(get: { resetting != nil }, set: { if !$0 { resetting = nil } })) {
