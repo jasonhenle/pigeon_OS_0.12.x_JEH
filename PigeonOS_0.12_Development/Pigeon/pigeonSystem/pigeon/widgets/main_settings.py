@@ -895,6 +895,8 @@ class MainSettingsWidget:
             str(st.update_changelog or ""),
             str(st.update_error or ""),
             int(st.update_popup_focus_index),
+            bool(st.show_reset_confirm),
+            int(st.reset_confirm_focus_index),
             bool(st.keyboard_open),
             str(self._svg_path or ""),
             str(self._assets_dir or ""),
@@ -1132,6 +1134,8 @@ class MainSettingsWidget:
             str(st.update_changelog or ""),
             str(st.update_error or ""),
             int(st.update_popup_focus_index),
+            bool(st.show_reset_confirm),
+            int(st.reset_confirm_focus_index),
             bool(st.keyboard_open),
             str(self._svg_path or ""),
             str(self._assets_dir or ""),
@@ -1239,6 +1243,7 @@ class MainSettingsWidget:
             str(st.update_remote_version or ""),
             str(st.update_changelog or ""),
             str(st.update_error or ""),
+            bool(st.show_reset_confirm),
             bool(st.keyboard_open),
             str(self._svg_path or ""),
             str(self._assets_dir or ""),
@@ -1326,6 +1331,7 @@ class MainSettingsWidget:
             str(st.theme.ui),
             int(st.update_popup_focus_index) if st.show_update_popup else -1,
             bool(st.show_update_popup),
+            int(st.reset_confirm_focus_index) if st.show_reset_confirm else -1,
         )
 
     def navigate(self, forward: bool = True) -> None:
@@ -1494,6 +1500,7 @@ class MainSettingsWidget:
                 or st.sports_dropdown_open
                 or st.sports_team_league
                 or st.show_update_popup
+                or st.show_reset_confirm
                 or st.show_metadata_debug
             ):
                 return
@@ -1715,6 +1722,7 @@ class MainSettingsWidget:
                 or st.sports_dropdown_open
                 or st.sports_team_league
                 or st.show_update_popup
+                or st.show_reset_confirm
                 or st.show_metadata_debug
             ):
                 return
@@ -2733,6 +2741,13 @@ class MainSettingsWidget:
                 self._paste_fully_opaque = None
                 self._want_prewarm_after_paint = True
                 return action
+            if st.show_reset_confirm:
+                from pigeon.widgets.reset_confirm import FOCUS_RESET, reset_confirm_focused
+
+                go = reset_confirm_focused(st) == FOCUS_RESET
+                st.close_reset_confirm()
+                self.invalidate()
+                return "pigeon_factory_reset" if go else "reset_confirm:cancel"
             if st.show_update_popup:
                 if st.update_applying:
                     return "update_popup:busy"
@@ -2840,8 +2855,9 @@ class MainSettingsWidget:
                 self.invalidate()
                 return "update_popup:open"
             if focused == "reset":
+                st.open_reset_confirm()
                 self.invalidate()
-                return "pigeon_factory_reset"
+                return "reset_confirm:open"
             if focused == "restart":
                 self.invalidate()
                 return "pigeon_restart"
@@ -3005,7 +3021,7 @@ class MainSettingsWidget:
 
         st = self._state
         kb_sig = self._keyboard_overlay_sig()
-        key = (int(time.time()), kb_sig, bool(st.show_update_popup))
+        key = (int(time.time()), kb_sig, bool(st.show_update_popup), bool(st.show_reset_confirm))
         hit = self._pigeon_overlay_cache
         if hit is not None and hit[0] == key and hit[1] is base:
             return hit[2]
@@ -3014,6 +3030,8 @@ class MainSettingsWidget:
             from pigeon.widgets.update_popup import draw_update_status_bar_bgra
 
             frame = draw_update_status_bar_bgra(frame, st)
+        elif st.show_reset_confirm:
+            pass  # the warning card covers the clock and app code
         else:
             ink = page_ink_rgb(st)
             frame = draw_pigeon_settings_clock(frame, ink=ink)
@@ -3101,6 +3119,10 @@ class MainSettingsWidget:
                             st,
                             assets_dir=self._assets_dir,
                         )
+                    if st.show_reset_confirm:
+                        from pigeon.widgets.reset_confirm import composite_reset_confirm_over_bgra
+
+                        frame = composite_reset_confirm_over_bgra(frame, st)
                     self._cached_main_bgra = frame
                     self._cached_main_sig = main_sig
                     if not st.keyboard_open:

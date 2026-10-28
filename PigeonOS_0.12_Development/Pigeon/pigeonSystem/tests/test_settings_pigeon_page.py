@@ -500,12 +500,29 @@ class NavigationTests(_IsolatedStateTest):
 
     def test_general_buttons_report_their_actions(self) -> None:
         w = self._widget()
-        self._focus(w, "reset")
-        self.assertEqual(w.activate(), "pigeon_factory_reset")
         self._focus(w, "restart")
         self.assertEqual(w.activate(), "pigeon_restart")
         self._focus(w, "update")
         self.assertEqual(w.activate(), "update_popup:open")
+
+    def test_reset_asks_before_wiping(self) -> None:
+        w = self._widget()
+        self._focus(w, "reset")
+        self.assertEqual(w.activate(), "reset_confirm:open")
+        self.assertTrue(w.state.show_reset_confirm)
+        frame = w.bgra_frame()
+        self.assertEqual(frame.shape[:2], (800, 1280))
+        # The page behind the card is dimmed.
+        self.assertLess(int(frame[20:60, 20:200, :3].max()), 120)
+        # CANCEL is focused first: pressing again closes without resetting.
+        self.assertEqual(w.activate(), "reset_confirm:cancel")
+        self.assertFalse(w.state.show_reset_confirm)
+        self.assertEqual(w.state.pigeon_focused_id, "reset")
+        # The knob moves to RESET; pressing that resets.
+        w.activate()
+        w.navigate(forward=True)
+        self.assertEqual(w.activate(), "pigeon_factory_reset")
+        self.assertFalse(w.state.show_reset_confirm)
 
     def test_tbd_tiles_are_skipped_by_focus(self) -> None:
         w = self._widget()

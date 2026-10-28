@@ -162,6 +162,7 @@ If the join fails, the device **re-enters setup mode** rather than going silent,
 | `manual_search` | ✓ | ✓ | `/search/*` |
 | `now_playing_override` | ✓ | ✓ | `/now-playing/*` |
 | `rooms` | ✓ | ✓ | `/rooms*` |
+| `room_reset` | ✓ | ✓ | `POST /rooms/{id}/reset` |
 | `pigeon_settings` | ✓ | – | `/pigeon-settings` |
 | `display_brightness` | ✓ | ✓ | `/display` |
 | `sports` | ✓ | – | `/sports*` |
@@ -364,7 +365,11 @@ These mirror what `settings_main` and `settings_pigeon` offer on the device. A *
 
 `PUT /rooms/current` with `{ "id": "..." }` switches room. The device reloads that room's players, receivers and Wi-Fi exactly as the on-screen switch does. `404` for an unknown id.
 
-`PATCH /rooms/{id}` with `{ "name": "Theater" }` renames (1–24 characters). Both return the `GET /rooms` body.
+`PATCH /rooms/{id}` with `{ "name": "Theater" }` renames (1–24 characters).
+
+`POST /rooms/{id}/reset` *(capability `room_reset`)* empties one room: its players and receivers are unpaired and its name goes back to `ROOM n`. Its slot, id and Wi-Fi are kept, and other rooms are untouched. `404` for an unknown id.
+
+All three return the `GET /rooms` body.
 
 `GET /pigeon-settings`
 
@@ -563,6 +568,7 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | GET | `/rooms` | token | `rooms` |
 | PUT | `/rooms/current` | token | `rooms` |
 | PATCH | `/rooms/{id}` | token | `rooms` |
+| POST | `/rooms/{id}/reset` | token | `room_reset` |
 | GET, PATCH | `/pigeon-settings` | token | `pigeon_settings` |
 | GET, PATCH | `/display` | token | `display_brightness` |
 | GET, PATCH | `/sports` | token | `sports` |

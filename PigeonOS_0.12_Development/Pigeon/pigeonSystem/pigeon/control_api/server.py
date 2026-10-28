@@ -535,6 +535,17 @@ class ControlService:
         mp = re.fullmatch(r"/rooms/([^/]+)/pairing", route)
         if mp and method == "POST":
             return self._rooms_pairing(mp.group(1), body)
+        mr = re.fullmatch(r"/rooms/([^/]+)/reset", route)
+        if mr and method == "POST":
+            if not profile.has_capability("room_reset"):
+                return _err(422, "unsupported", "room_reset not supported on this device.")
+            try:
+                ds.reset_room(mr.group(1))
+            except KeyError:
+                return _err(404, "not_found", "Unknown room.")
+            self._on_ui(self._apply_location)
+            self.hub.publish("settings", {"changed": ["rooms"]})
+            return 200, ds.read_rooms()
         m = re.fullmatch(r"/rooms/([^/]+)", route)
         if m and method == "PATCH":
             if not isinstance(body, dict) or "name" not in body:
