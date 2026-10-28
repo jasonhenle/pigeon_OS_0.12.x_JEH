@@ -45,6 +45,14 @@ _NAME_FONT_PX = 38
 _NAME_MAX_W = 420
 _SCORE_CX = (500, DESIGN_W - 500)
 _SCORE_FONT_PX = 170
+# Big scores ("128") shrink only as far as needed to clear the logos and the
+# dash, never below the floor. At full size a score needs _SCORE_KEEP_CLEARANCE
+# to spare (sliding toward the gap's middle if that is what it takes); once it
+# has to shrink it gets the roomier _SCORE_CLEARANCE on each side.
+_SCORE_MIN_PX = 64
+_SCORE_STEP_PX = 2
+_SCORE_KEEP_CLEARANCE = 10
+_SCORE_CLEARANCE = 28
 _DASH_FONT_PX = 110
 _PILL_Y = 468
 _PILL_FONT_PX = 34
@@ -119,19 +127,68 @@ def _initials(name: str) -> str:
     return "".join(w[0] for w in words[:3]).upper() or "?"
 
 
-def _paste_badge(canvas: Image.Image, bgra: np.ndarray | None, cx: int, cy: int, box: int, name: str) -> None:
+def _paste_badge(canvas: Image.Image, bgra: np.ndarray | None, cx: int, cy: int, box: int, name: str) -> tuple[int, int]:
+    """Draw a badge (or the initials disc); returns the x-span of what shows."""
     if bgra is None:
         draw = ImageDraw.Draw(canvas)
         r = box // 2 - 10
         draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(*_ui_rgb(), 255))
         draw.text((cx, cy), _initials(name), font=_font("extrabold", box // 4), fill=_INK, anchor="mm")
-        return
+        return cx - r, cx + r
     h, w = bgra.shape[:2]
     s = box / float(max(h, w))
     nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
     small = cv2.resize(bgra, (nw, nh), interpolation=cv_resize_interp(w, h, nw, nh))
     img = Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGRA2RGBA))
-    canvas.alpha_composite(img, (cx - nw // 2, cy - nh // 2))
+    x0 = cx - nw // 2
+    canvas.alpha_composite(img, (x0, cy - nh // 2))
+    cols = np.flatnonzero(small[:, :, 3].max(axis=0) > 0) if small.shape[2] == 4 else np.arange(nw)
+    if cols.size == 0:
+        return cx, cx
+    return x0 + int(cols[0]), x0 + int(cols[-1]) + 1
+
+
+def fit_scores(
+    draw: ImageDraw.ImageDraw,
+    home: str,
+    away: str,
+    *,
+    home_edge: int,
+    away_edge: int,
+    dash: tuple[int, int],
+) -> tuple[int, int, int]:
+    """(font px, home center x, away center x) for the two scores.
+
+    ``home_edge`` / ``away_edge`` are the inner edges of the logos and ``dash``
+    the x-span of the center dash. Scores keep the full size and their usual
+    spot when they fit there; otherwise they slide to the middle of the gap,
+    and only if they would still touch a logo or the dash do both shrink
+    together (with more air around them).
+    """
+    spans = (
+        (_SCORE_CX[0], home_edge, dash[0], home),
+        (_SCORE_CX[1], dash[1], away_edge, away),
+    )
+    keep, room = _SCORE_KEEP_CLEARANCE, _SCORE_CLEARANCE
+    px = _SCORE_FONT_PX
+    while True:
+        font = _font("extrabold", px)
+        centers: list[int] = []
+        for cx, left, right, text in spans:
+            l, _t, r, _b = draw.textbbox((0, 0), text, font=font, anchor="mm")
+            pad = keep if px == _SCORE_FONT_PX else room
+            lo, hi = left + pad, right - pad
+            if cx + l >= lo and cx + r <= hi:
+                centers.append(cx)
+            elif r - l <= hi - lo:
+                centers.append(int(round((lo + hi) / 2 - (l + r) / 2)))
+            else:
+                break
+        if len(centers) == 2 or px <= _SCORE_MIN_PX:
+            if len(centers) < 2:  # floor reached: center what is left
+                centers = [int(round((left + right) / 2)) for _cx, left, right, _text in spans]
+            return px, centers[0], centers[1]
+        px = max(_SCORE_MIN_PX, px - _SCORE_STEP_PX)
 
 
 def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Image.Image:
@@ -165,11 +222,12 @@ def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Im
 
     # Teams.
     nfont = _font("bold", _NAME_FONT_PX)
+    spans = []
     for cx, name, url in (
         (_BADGE_CX[0], ev.home, ev.home_badge),
         (_BADGE_CX[1], ev.away, ev.away_badge),
     ):
-        _paste_badge(canvas, badge(url), cx, _BADGE_CY, _BADGE_BOX, name)
+        spans.append(_paste_badge(canvas, badge(url), cx, _BADGE_CY, _BADGE_BOX, name))
         draw.text(
             (cx, _NAME_Y),
             fit_name(name, lambda t: draw.textlength(t, font=nfont) <= _NAME_MAX_W),
@@ -183,10 +241,16 @@ def _board_rgba(ev, *, badges: dict[str, np.ndarray | None] | None = None) -> Im
     if phase == UPCOMING or not _scores_shown():
         draw.text((DESIGN_W // 2, _BADGE_CY), "VS", font=_font("extrabold", _DASH_FONT_PX), fill=_DIM_INK, anchor="mm")
     else:
-        sfont = _font("extrabold", _SCORE_FONT_PX)
-        for cx, score in ((_SCORE_CX[0], ev.home_score), (_SCORE_CX[1], ev.away_score)):
-            draw.text((cx, _BADGE_CY), score or "0", font=sfont, fill=_INK, anchor="mm")
-        draw.text((DESIGN_W // 2, _BADGE_CY), "–", font=_font("bold", _DASH_FONT_PX), fill=_DIM_INK, anchor="mm")
+        dfont = _font("bold", _DASH_FONT_PX)
+        dash = draw.textbbox((DESIGN_W // 2, _BADGE_CY), "–", font=dfont, anchor="mm")
+        home_s, away_s = ev.home_score or "0", ev.away_score or "0"
+        px, home_cx, away_cx = fit_scores(
+            draw, home_s, away_s, home_edge=spans[0][1], away_edge=spans[1][0], dash=(dash[0], dash[2])
+        )
+        sfont = _font("extrabold", px)
+        for cx, score in ((home_cx, home_s), (away_cx, away_s)):
+            draw.text((cx, _BADGE_CY), score, font=sfont, fill=_INK, anchor="mm")
+        draw.text((DESIGN_W // 2, _BADGE_CY), "–", font=dfont, fill=_DIM_INK, anchor="mm")
 
     # Status pill.
     pfont = _font("bold", _PILL_FONT_PX)
@@ -280,4 +344,4 @@ def scoreboard_frame_bgr(width: int, height: int) -> np.ndarray | None:
     return _cache[1]
 
 
-__all__ = ["clock_key", "render_scoreboard_rgba", "scoreboard_frame_bgr"]
+__all__ = ["clock_key", "fit_scores", "render_scoreboard_rgba", "scoreboard_frame_bgr"]

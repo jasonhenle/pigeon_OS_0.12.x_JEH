@@ -297,6 +297,52 @@ class BoardRenderTests(_Reset):
         self.assertGreater(int(np.count_nonzero(shown[band][:, :, :3])), 0)
         self.assertEqual(int(np.count_nonzero(hidden[band][:, :, :3])), 0)
 
+    def _fit(self, home: str, away: str):
+        from PIL import Image, ImageDraw
+
+        draw = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+        edges = dict(home_edge=board._BADGE_CX[0] + 125, away_edge=board._BADGE_CX[1] - 125, dash=(612, 668))
+        return draw, edges, board.fit_scores(draw, home, away, **edges)
+
+    def test_regular_scores_keep_full_size_and_place(self) -> None:
+        for home, away in (("0", "0"), ("21", "17"), ("7", "3")):
+            _d, _e, fit = self._fit(home, away)
+            self.assertEqual(fit, (board._SCORE_FONT_PX, *board._SCORE_CX), (home, away))
+
+    def test_wide_two_digit_scores_slide_before_shrinking(self) -> None:
+        _d, _e, (px, home_cx, _away_cx) = self._fit("48", "35")
+        self.assertEqual(px, board._SCORE_FONT_PX)
+        self.assertNotEqual(home_cx, board._SCORE_CX[0])
+
+    def test_big_scores_shrink_to_clear_logos_and_dash(self) -> None:
+        for home, away in (("112", "108"), ("128", "1888"), ("7", "142")):
+            draw, e, (px, home_cx, away_cx) = self._fit(home, away)
+            self.assertLess(px, board._SCORE_FONT_PX, (home, away))
+            self.assertGreaterEqual(px, board._SCORE_MIN_PX)
+            font = board._font("extrabold", px)
+            room = board._SCORE_CLEARANCE
+            hl, _t, hr, _b = draw.textbbox((home_cx, 0), home, font=font, anchor="mm")
+            al, _t, ar, _b = draw.textbbox((away_cx, 0), away, font=font, anchor="mm")
+            self.assertGreaterEqual(hl, e["home_edge"] + room)
+            self.assertLessEqual(hr, e["dash"][0] - room)
+            self.assertGreaterEqual(al, e["dash"][1] + room)
+            self.assertLessEqual(ar, e["away_edge"] - room)
+
+    def test_rendered_big_score_stays_off_the_logos(self) -> None:
+        ev = _ev("1", status="Q4", home="1888", away="1888")
+        red = np.zeros((100, 100, 4), dtype=np.uint8)
+        red[:, :, 2] = 255
+        red[:, :, 3] = 255
+        img = np.asarray(board.render_scoreboard_rgba(ev, badges={ev.home_badge: red, ev.away_badge: red}))
+        cy, half = board._BADGE_CY, board._BADGE_BOX // 2
+        rows = slice(cy - half, cy + half)
+        white = (img[rows, :, :3] > 200).all(axis=2)
+        # No score ink inside either logo or the clearance strip beside it.
+        home_right = board._BADGE_CX[0] + half
+        away_left = board._BADGE_CX[1] - half
+        self.assertFalse(white[:, home_right - half : home_right + board._SCORE_CLEARANCE].any())
+        self.assertFalse(white[:, away_left - board._SCORE_CLEARANCE : away_left + half].any())
+
     def test_badge_is_pasted_when_loaded(self) -> None:
         ev = _ev("1", status="Q1")
         red = np.zeros((100, 100, 4), dtype=np.uint8)
