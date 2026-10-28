@@ -980,6 +980,7 @@ def _auto_widget_signals(*, _apple_tv_is_off, _clock_saver_receiver_off, _paused
         pausesaver_art=pausesaver_art,
         visualizer_mode=_visualizer_mode_active(),
         zone11=_zone11_selected(),
+        zone11_alt=_zone11_alt_selected(),
     )
 
 
@@ -990,6 +991,15 @@ def _zone11_selected() -> bool:
         return bool(zone11_selected())
     except Exception:
         return True
+
+
+def _zone11_alt_selected() -> bool:
+    try:
+        from pigeon.widgets.options_settings import zone11_alt_selected
+
+        return bool(zone11_alt_selected())
+    except Exception:
+        return False
 
 
 def _visualizer_mode_active() -> bool:

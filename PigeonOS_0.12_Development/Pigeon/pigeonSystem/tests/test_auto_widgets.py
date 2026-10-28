@@ -370,6 +370,10 @@ class Zone11Tests(unittest.TestCase):
         plan = resolve_auto_widgets(self._sig(zone11=True))
         self.assertEqual(plan.assignments, ("tt_zone11", "", "", "zone11_info", "status_bar"))
 
+    def test_zone11_alt_swaps_only_the_tt(self) -> None:
+        plan = resolve_auto_widgets(self._sig(zone11=True, zone11_alt=True))
+        self.assertEqual(plan.assignments, ("tt_zone11_alt", "", "", "zone11_info", "status_bar"))
+
     def test_zone6_is_the_default(self) -> None:
         plan = resolve_auto_widgets(self._sig())
         self.assertEqual(plan.assignments[0], "tt_countdown_16x9")

@@ -37,6 +37,8 @@ VISUALIZER_Z6 = "visualizer_zone6"
 CLOCK = "clock"  # zone 3 shows the analog face in the visualizer layout
 # option5 = zone11: TT across zones 1-3 (zone 11), input / volume / TRT in zone 4.
 TT_ZONE11 = "tt_zone11"
+# option8 = alt: same zones, no input id / clock / volume; the TT fills the header.
+TT_ZONE11_ALT = "tt_zone11_alt"
 INFO_ZONE11 = "zone11_info"
 
 DEFAULT_NP_ASSIGNMENTS: tuple[str, str, str, str, str] = (
@@ -68,6 +70,7 @@ class AutoWidgetSignals:
     pausesaver_art: bool = False
     visualizer_mode: bool = False
     zone11: bool = False
+    zone11_alt: bool = False
 
 
 @dataclass(frozen=True)
@@ -298,7 +301,13 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
             if sig.zone11:
                 return _plan(
                     layout=LAYOUT_NP,
-                    assignments=(TT_ZONE11, "", "", INFO_ZONE11, STATUS),
+                    assignments=(
+                        TT_ZONE11_ALT if sig.zone11_alt else TT_ZONE11,
+                        "",
+                        "",
+                        INFO_ZONE11,
+                        STATUS,
+                    ),
                     sig=sig,
                 )
             z3 = _zone3_widget(sig) or VOLUME
