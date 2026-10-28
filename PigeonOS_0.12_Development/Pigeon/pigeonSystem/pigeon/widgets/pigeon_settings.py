@@ -100,7 +100,7 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "update", "UPDATE"),
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
-    Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
+    Slot("tbd_button", label="TBD"),
     Slot("toggle", f"option:{OPT_NP_LAYOUT}", choices=("ZONE 11", "ZONE 6,3")),
     Slot("button", "sports", "SPORTS"),
 )
@@ -112,7 +112,7 @@ _CLOCK_SLOTS: tuple[Slot, ...] = (
     Slot("button", "zipcode", "ZIP"),
     Slot("button", "timezone", "TIME ZONE"),
     Slot("toggle", f"option:{OPT_CLOCK_FORMAT}", choices=("DIGITAL", "ANALOG")),
-    Slot("tbd_button", label="TBD"),
+    Slot("toggle", f"option:{OPT_TEMP}", choices=("°F", "°C")),
     Slot("tbd_button", label="TBD"),
 )
 _SLOTS: dict[str, tuple[Slot, ...]] = {

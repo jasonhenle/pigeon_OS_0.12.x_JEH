@@ -230,8 +230,6 @@ private struct PigeonClockSettingsPage: View {
         }
         if hasSettings, let d = settings.data {
             SettingsTile(title: "Display") {
-                OptionRow(model: settings, data: d, key: "temp_format", title: "Temperature",
-                          labels: ["f": "°F", "c": "°C"])
                 OptionRow(model: settings, data: d, key: "np_layout", title: "Now playing layout",
                           labels: ["zone11": "Zone 11", "zone63": "Zone 6,3"],
                           note: d.options["np_layout"] == "zone63"
@@ -291,7 +289,7 @@ private struct PigeonClockSettingsPage: View {
         }
     }
 
-    // MARK: Clock: 12 / 24 hour, face, zip and timezone
+    // MARK: Clock: 12 / 24 hour, face, °F / °C, zip and timezone
 
     @ViewBuilder private var clock: some View {
         if hasSettings, let d = settings.data {
@@ -300,6 +298,8 @@ private struct PigeonClockSettingsPage: View {
                           labels: ["12": "12 hr", "24": "24 hr"])
                 OptionRow(model: settings, data: d, key: "clock_format", title: "Clock face",
                           labels: ["digital": "Digital", "analog": "Analog"])
+                OptionRow(model: settings, data: d, key: "temp_format", title: "Temperature",
+                          labels: ["f": "°F", "c": "°C"])
             }
             SettingsTile(title: "Location") {
                 LocationFields(model: settings, data: d)
