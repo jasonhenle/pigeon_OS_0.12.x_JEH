@@ -18,6 +18,7 @@ from pigeon.widgets import view_circles as vc  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parents[2] / "pigeonAssets"
 _ZONE11 = ("tt_zone11", "", "", "zone11_info", "status_bar")
+_ZONE11_ALT = ("tt_zone11_alt", "", "", "zone11_info", "status_bar")
 
 
 class Zone11LayoutTests(unittest.TestCase):
@@ -29,12 +30,13 @@ class Zone11LayoutTests(unittest.TestCase):
     def tearDown(self) -> None:
         vc._default_zone_widget_assignments, vc._header_clock_enabled = self._saved  # type: ignore[assignment]
 
-    def _widget(self) -> vc.ViewCirclesWidget:
+    def _widget(self, tt: np.ndarray | None = None) -> vc.ViewCirclesWidget:
         import cv2
 
         w = vc.ViewCirclesWidget(assets_dir=ASSETS)
-        tt = np.zeros((160, 900, 4), np.uint8)
-        cv2.putText(tt, "TITLE", (10, 120), cv2.FONT_HERSHEY_DUPLEX, 4, (255, 255, 255, 255), 8)
+        if tt is None:
+            tt = np.zeros((160, 900, 4), np.uint8)
+            cv2.putText(tt, "TITLE", (10, 120), cv2.FONT_HERSHEY_DUPLEX, 4, (255, 255, 255, 255), 8)
         w.update_state(
             progress=0.4,
             elapsed_text="0:41:12",
@@ -332,6 +334,43 @@ class LayoutOptionTests(unittest.TestCase):
         self.assertFalse(opts.zone11_selected(state))
         self.assertTrue(opts.option_is_b(5, flipped))
         self.assertEqual(opts.toggle_option(5, flipped, persist=False)["np_layout"], "zone11")
+
+
+
+class Zone11AltLayoutTests(unittest.TestCase):
+    """Alt: no input id / clock / volume; the TT grows into the header row."""
+
+    setUp = Zone11LayoutTests.setUp
+    tearDown = Zone11LayoutTests.tearDown
+    _widget = Zone11LayoutTests._widget
+    _frame = Zone11LayoutTests._frame
+    _ink = staticmethod(Zone11LayoutTests._ink)
+
+    def _use(self, assignments: tuple[str, ...]) -> None:
+        vc._default_zone_widget_assignments = lambda *a, **k: assignments  # type: ignore[assignment]
+
+    def test_no_header_row(self) -> None:
+        self._use(_ZONE11_ALT)
+        frame = self._frame(self._widget())
+        self.assertFalse(self._ink(frame, 0, 0, DESIGN_W, 30).any(), "alt draws nothing above the TT")
+
+    def test_status_strip_still_drawn(self) -> None:
+        self._use(_ZONE11_ALT)
+        frame = self._frame(self._widget())
+        self.assertTrue(self._ink(frame, 0, 520, DESIGN_W, DESIGN_H).any())
+
+    def test_tt_is_taller_than_standard(self) -> None:
+        import cv2
+
+        def tt_rows(assignments: tuple[str, ...]) -> int:
+            self._use(assignments)
+            tall = np.zeros((400, 700, 4), np.uint8)
+            cv2.rectangle(tall, (0, 0), (699, 399), (255, 255, 255, 255), -1)
+            w = self._widget(tall)
+            frame = self._frame(w)
+            return int((frame[:, 400:880] > 240).all(axis=2).any(axis=1).sum())
+
+        self.assertGreater(tt_rows(_ZONE11_ALT), tt_rows(_ZONE11) + 60)
 
 
 if __name__ == "__main__":

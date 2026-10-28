@@ -64,6 +64,21 @@ class _IsolatedStateTest(unittest.TestCase):
 
 
 class FocusRingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from pigeon.widgets import options_settings
+
+        p = mock.patch.object(options_settings, "read_options", lambda: options_settings._normalize({}))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_zone11_style_tile_only_under_zone11(self) -> None:
+        from pigeon.widgets import options_settings
+
+        with mock.patch.object(
+            options_settings, "read_options", lambda: options_settings._normalize({"np_layout": "zone63"})
+        ):
+            self.assertNotIn("option:8", ps.pigeon_focus_ring("general"))
+
     def test_navigation_order_per_menu(self) -> None:
         self.assertEqual(
             ps.pigeon_focus_ring("general"),
@@ -72,6 +87,7 @@ class FocusRingTests(unittest.TestCase):
                 "update",
                 "reset",
                 "restart",
+                "option:8",
                 "option:5",
                 "sports",
                 "section2",
@@ -254,7 +270,7 @@ class PageStateTests(_IsolatedStateTest):
     def test_general_tiles(self) -> None:
         root = self._root(self._state("general"))
         texts = self._texts(root)
-        for label in ("RESET", "RESTART", "UPDATE", "TBD", "ZONE 11", "SPORTS", "OFF"):
+        for label in ("RESET", "RESTART", "UPDATE", "11 ALT", "ZONE 11", "SPORTS", "OFF"):
             self.assertIn(label, texts, label)
         self.assertNotIn("°F", texts)  # moved to the clock menu
 
@@ -362,6 +378,19 @@ class NavigationTests(_IsolatedStateTest):
         self.assertEqual(w.activate(), "pigeon_view:clock")
         self.assertEqual(w.state.pigeon_focused_id, "section3")
         self.assertEqual(w.activate(), "pigeon_view:general")
+
+    def test_layout_toggle_keeps_focus_and_drops_zone11_style(self) -> None:
+        w = self._widget()
+        self._focus(w, "option:8")
+        self.assertEqual(w.activate(), "options_toggle:8")
+        self.assertEqual(w.state.options_values["zone11_style"], "alt")
+        self._focus(w, "option:5")
+        self.assertEqual(w.activate(), "options_toggle:5")
+        self.assertEqual(w.state.pigeon_focused_id, "option:5")
+        self.assertNotIn("option:8", ps.pigeon_focus_ring("general"))
+        self.assertEqual(w.activate(), "options_toggle:5")
+        self.assertEqual(w.state.pigeon_focused_id, "option:5")
+        self.assertIn("option:8", ps.pigeon_focus_ring("general"))
 
     def test_clock_menu_hands_section2_back_to_theme(self) -> None:
         w = self._widget()

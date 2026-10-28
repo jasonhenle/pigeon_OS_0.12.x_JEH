@@ -84,6 +84,7 @@ OPT_TEMP = 2
 OPT_NP_LAYOUT = 5
 OPT_CLOCK_FORMAT = 6
 OPT_UI_STYLE = 7
+OPT_ZONE11_STYLE = 8
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,8 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "update", "UPDATE"),
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
-    Slot("tbd_button", label="TBD"),
+    # Only means something under ZONE 11: dimmed and skipped by focus otherwise.
+    Slot("toggle", f"option:{OPT_ZONE11_STYLE}", choices=("ZONE 11", "11 ALT")),
     Slot("toggle", f"option:{OPT_NP_LAYOUT}", choices=("ZONE 11", "ZONE 6,3")),
     Slot("button", "sports", "SPORTS"),
 )
@@ -193,8 +195,17 @@ def pigeon_focus_ring(view: object = DEFAULT_VIEW) -> tuple[str, ...]:
 
     if normalize_view(view) == SPORTS_VIEW:
         return sports_focus_ring()
-    tiles = tuple(s.focus_id for s in view_slots(view) if s.focus_id)
+    tiles = tuple(s.focus_id for s in view_slots(view) if s.focus_id and slot_enabled(s))
     return ("exit", *tiles, "section2", "section3")
+
+
+def slot_enabled(slot: Slot, state: MainSettingsState | None = None) -> bool:
+    """False for a tile that is drawn dim and skipped by focus right now."""
+    if slot.focus_id == f"option:{OPT_ZONE11_STYLE}":
+        from pigeon.widgets.options_settings import zone11_selected
+
+        return zone11_selected(state)
+    return True
 
 
 def section_targets(view: object) -> tuple[str, str]:
@@ -511,7 +522,7 @@ def _sync_slot(
         return
     x0, y0, x1, y1 = _bbox(button)
     cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
-    dim = slot.kind.startswith("tbd")
+    dim = slot.kind.startswith("tbd") or not slot_enabled(slot, state)
     if simple:
         # Selected: UI-color fill, black text. Otherwise black fill, UI stroke + text.
         _set_paint(button, fill=ui_hex if selected else _COLOR_BLACK, stroke=ui_hex)
@@ -1526,6 +1537,7 @@ __all__ = [
     "OPT_NP_LAYOUT",
     "OPT_TEMP",
     "OPT_TIME",
+    "OPT_ZONE11_STYLE",
     "Slot",
     "THEME_KEYS",
     "VIEWS",
@@ -1543,6 +1555,7 @@ __all__ = [
     "option_for_focus",
     "pigeon_clock_label",
     "pigeon_focus_ring",
+    "slot_enabled",
     "render_pigeon_settings_bgra",
     "scroll_thumb",
     "section_targets",

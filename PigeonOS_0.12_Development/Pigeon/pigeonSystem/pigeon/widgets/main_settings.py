@@ -2848,6 +2848,9 @@ class MainSettingsWidget:
                 from pigeon.widgets.options_settings import toggle_option
 
                 st.options_values = toggle_option(option, st.options_values or None)
+                # The layout toggle adds / drops the zone 11 style tile from the
+                # ring; keep focus on the tile that was pressed.
+                st.set_pigeon_view(st.pigeon_view, focus=focused)
                 self.invalidate()
                 return f"options_toggle:{option}"
             if focused == "update":

@@ -2388,6 +2388,8 @@ class ViewCirclesWidget:
                         ch + 8,
                     )
                 )
+            elif self._zone11_alt_on(assignments):
+                pass  # no header clock; the TT covers that row
             elif self._zone11_on(assignments):
                 rects.append((0, 0, int(DESIGN_W), int(self._zone11_volume_bottom()) + 4))
             else:
@@ -2936,6 +2938,8 @@ class ViewCirclesWidget:
         if _zone_clock_hides_header(self._assignments()):
             return
         if self._header_slot_ticks():
+            if self._zone11_alt_on():
+                return  # zone 11 alt: no clock; the TT fills the header row
             if self._zone11_on():
                 # Zone 11: clock top-center at the volume's size (volume top-right,
                 # app / input labels top-left).
@@ -3789,12 +3793,21 @@ class ViewCirclesWidget:
     def _zone11_on(self, assignments: tuple[str, ...] | list[str] | None = None) -> bool:
         """option5 = zone11 layout: TT across zones 1-3, input / volume / TRT in zone 4."""
         zones = self._assignments() if assignments is None else assignments
-        return bool(zones) and str(zones[0] or "") == "tt_zone11"
+        return bool(zones) and str(zones[0] or "") in ("tt_zone11", "tt_zone11_alt")
+
+    def _zone11_alt_on(self, assignments: tuple[str, ...] | list[str] | None = None) -> bool:
+        """option8 = alt: zone 11 without the input id / clock / volume header row."""
+        zones = self._assignments() if assignments is None else assignments
+        return bool(zones) and str(zones[0] or "") == "tt_zone11_alt"
 
     def _zone11_art_box(self) -> tuple[int, int, int, int]:
         zx, zy, zw, zh = ZONE11.xywh
-        # Top padding clears the header clock that sits above zones 1-3.
-        pad_top = max(36, int(round(float(header_clock_baseline_y()) + 10.0 - zy)))
+        if self._zone11_alt_on():
+            # Alt: no header row, so the art takes the whole zone.
+            pad_top = self._ZONE11_ALT_PAD_TOP_PX
+        else:
+            # Top padding clears the header clock that sits above zones 1-3.
+            pad_top = max(36, int(round(float(header_clock_baseline_y()) + 10.0 - zy)))
         pad_side, pad_bottom = 40, 8
         return (
             zx + pad_side,
@@ -3802,6 +3815,9 @@ class ViewCirclesWidget:
             max(1, zw - 2 * pad_side),
             max(1, zh - pad_top - pad_bottom),
         )
+
+    # Zone 11 alt: art inset from the top of the zone (no header row to clear).
+    _ZONE11_ALT_PAD_TOP_PX = 8
 
     # How far the art may reach up into the enlarged volume readout (design px); 0 = none.
     _ZONE11_ART_VOLUME_OVERLAP_PX = 0
@@ -3821,7 +3837,7 @@ class ViewCirclesWidget:
         """
         z = ZONE11
         bx, by, bw, bh = self._zone11_art_box()
-        new_top = max(
+        new_top = by if self._zone11_alt_on() else max(
             by,
             int(round(self._zone11_volume_bottom() - self._ZONE11_ART_VOLUME_OVERLAP_PX)),
         )
@@ -3972,15 +3988,19 @@ class ViewCirclesWidget:
         vol = re.sub(r"\s*dB\s*$", "", vol)
 
         # Top-left: input id at the header size (same as the clock / volume). It is
-        # shrunk only as far as needed to clear the centered clock.
+        # shrunk only as far as needed to clear the centered clock. Alt has no header
+        # row: no input id, no volume (the clock is skipped in _draw_header_clock).
         z = ZONE11
+        alt = self._zone11_alt_on()
         max_w = int(
             float(z.w) * 0.5
             - self._zone11_clock_half_width()
             - float(self._ZONE11_STACK_CLOCK_GAP_PX)
         )
         size = int(round(_header_digital7_size_px() * float(self._ZONE11_VOLUME_SCALE)))
-        pt = _cast_line_patch(self._receiver_readout(), size_px=size, max_width_px=max(80, max_w))
+        pt = None if alt else _cast_line_patch(
+            self._receiver_readout(), size_px=size, max_width_px=max(80, max_w)
+        )
         if pt is not None:
             px, py = int(round(float(z.x))), int(round(self._zone11_header_top()))
             _paste_patch_bgra(out, pt, px, py)
@@ -4002,7 +4022,7 @@ class ViewCirclesWidget:
         # Top-right: volume.
         rect = self._paste_zone11_corner_text(
             out,
-            vol,
+            "" if alt else vol,
             align="right",
             fill_rgb=_look_chrome_rgb(),
             scale=self._ZONE11_VOLUME_SCALE,
