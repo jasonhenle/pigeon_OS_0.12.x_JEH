@@ -23,7 +23,7 @@
       <path d="M648.66,882.51h1143.85c17.46,0,31.64,14.18,31.64,31.64v441.41c0,17.46-14.18,31.64-31.64,31.64H648.67c-17.46,0-31.64-14.18-31.64-31.64v-441.41c0-17.46,14.18-31.64,31.64-31.64Z" fill="none"/>
     </clipPath>
     <clipPath id="clippath-7">
-      <rect x="1182.53" y="1003.55" width="244.34" height="242.72" rx="121.36" ry="121.36" fill="none"/>
+      <path d="M1303.91,1003.51h1.62c67.03,0,121.36,54.33,121.36,121.36s-54.33,121.36-121.36,121.36h-1.62c-67.03,0-121.36-54.33-121.36-121.36s54.33-121.36,121.36-121.36Z" fill="none"/>
     </clipPath>
     <clipPath id="clippath-9">
       <polygon id="settings_input_wifi_clipping_mask" points="1672.93 727.78 1690.2 727.65 1681.45 742.54 1672.93 757.56 1664.41 742.54 1655.66 727.65 1672.93 727.78" fill="none"/>
@@ -70,13 +70,12 @@
     <g id="menu1_themne">
       <rect x="1143.36" y="964.95" width="323.16" height="319.91" rx="14.23" ry="14.23" fill="#231f20"/>
       <g clip-path="url(#clippath-7)">
-        <rect x="1177.94" y="1176.98" width="479.23" height="78.85" transform="translate(-423.5484 1531.7262) rotate(-50.3515)" fill="#590000"/>
-        <rect x="1127.65" y="1148.87" width="479.23" height="52.1" transform="translate(-409.8101 1477.9809) rotate(-50.3513)" fill="#720000"/>
-        <rect x="1084.92" y="1109.75" width="479.23" height="59.12" transform="translate(-397.8612 1432.2013) rotate(-50.3514)" fill="#890000"/>
-        <rect x="1046.9" y="1081.55" width="478.93" height="52.65" transform="translate(-387.4689 1391.4334) rotate(-50.3515)" fill="#a30000"/>
-        <rect x="1005.4" y="1044.09" width="478.63" height="58.16" transform="translate(-375.8183 1346.7962) rotate(-50.3513)" fill="#bc0606"/>
-        <rect x="953.43" y="990.23" width="479.23" height="80.24" transform="translate(-361.5507 1291.5192) rotate(-50.3513)" fill="#d60000"/>
-        <rect x="1182.53" y="1003.55" width="244.34" height="242.72" rx="121.36" ry="121.36" fill="none"/>
+        <rect x="1153.82" y="1186.58" width="568.76" height="93.58" transform="translate(-429.1452 1553.7601) rotate(-50.3515)" fill="#590000"/>
+        <rect x="1094.13" y="1153.22" width="568.76" height="61.83" transform="translate(-412.8365 1489.976) rotate(-50.3513)" fill="#720000"/>
+        <rect x="1043.41" y="1106.8" width="568.76" height="70.16" transform="translate(-398.657 1435.634) rotate(-50.3514)" fill="#890000"/>
+        <rect x="998.29" y="1073.32" width="568.4" height="62.49" transform="translate(-386.3214 1387.2547) rotate(-50.3515)" fill="#a30000"/>
+        <rect x="949.04" y="1028.86" width="568.04" height="69.03" transform="translate(-372.4957 1334.2844) rotate(-50.3513)" fill="#bc0606"/>
+        <rect x="887.36" y="964.95" width="568.76" height="95.23" transform="translate(-355.5656 1268.6753) rotate(-50.3513)" fill="#d60000"/>
       </g>
       <text transform="translate(1243.5937 1329.8291)" fill="#fff" font-family="SharpSans-BoldItalic, &apos;Sharp Sans&apos;" font-size="36" font-style="italic" font-weight="700"><tspan x="0" y="0" letter-spacing="0em">t</tspan><tspan x="14.94" y="0" letter-spacing="0em">h</tspan><tspan x="36.61" y="0">e</tspan><tspan x="59.25" y="0" letter-spacing="0em">m</tspan><tspan x="92.95" y="0" letter-spacing="0em">e</tspan></text>
     </g>
