@@ -72,7 +72,6 @@ class FocusRingTests(unittest.TestCase):
                 "update",
                 "reset",
                 "restart",
-                "option:2",
                 "option:5",
                 "sports",
                 "section2",
@@ -95,7 +94,7 @@ class FocusRingTests(unittest.TestCase):
         )
         self.assertEqual(
             ps.pigeon_focus_ring("clock"),
-            ("exit", "option:1", "zipcode", "timezone", "option:6", "section2", "section3"),
+            ("exit", "option:1", "zipcode", "timezone", "option:6", "option:2", "section2", "section3"),
         )
 
     def test_default_menu_is_general(self) -> None:
@@ -255,21 +254,22 @@ class PageStateTests(_IsolatedStateTest):
     def test_general_tiles(self) -> None:
         root = self._root(self._state("general"))
         texts = self._texts(root)
-        for label in ("°F", "°C", "RESET", "RESTART", "UPDATE", "SPORTS", "OFF"):
+        for label in ("RESET", "RESTART", "UPDATE", "TBD", "ZONE 11", "SPORTS", "OFF"):
             self.assertIn(label, texts, label)
+        self.assertNotIn("°F", texts)  # moved to the clock menu
 
     def test_clock_tiles(self) -> None:
         root = self._root(self._state("clock"))
         texts = self._texts(root)
-        for label in ("12 HR", "24 HR", "ZIP", "TIME ZONE", "DIGITAL", "ANALOG", "TBD"):
+        for label in ("12 HR", "24 HR", "ZIP", "TIME ZONE", "DIGITAL", "ANALOG", "°F", "°C", "TBD"):
             self.assertIn(label, texts, label)
 
     def test_toggle_knob_follows_the_option(self) -> None:
         for values, slot_n, top in (
-            ({}, 4, True),
-            ({"temp_format": "c"}, 4, False),
+            ({}, 5, True),
+            ({"temp_format": "c"}, 5, False),
         ):
-            root = self._root(self._state("general", options_values=values))
+            root = self._root(self._state("clock", options_values=values))
             group = ps._by_id(root, f"toggle_0{slot_n}_group")
             graphics = next(c for c in group if ps._local(c) == "g")
             _c, knobs, _l = ps._toggle_parts(graphics)
@@ -288,7 +288,7 @@ class PageStateTests(_IsolatedStateTest):
         for key, well in (("white", "#777777"), ("grey", "#777777"), ("blue", "#4B9EEC")):
             theme = ucs.theme_from_color_keys({"accent": "white", "ui": key, "button": "black"})
             root = self._root(self._state("general", theme=theme))
-            group = ps._by_id(root, "toggle_04_group")
+            group = ps._by_id(root, "toggle_05_group")  # ZONE 11 / ZONE 6,3
             container, _k, _l = ps._toggle_parts(next(c for c in group if ps._local(c) == "g"))
             self.assertEqual(container.get("fill", "").upper(), well, key)
 
@@ -468,6 +468,7 @@ class NavigationTests(_IsolatedStateTest):
 
     def test_temp_toggle_persists(self) -> None:
         w = self._widget()
+        self._open_menu(w, "clock")  # °F / °C lives with the clock settings
         self._focus(w, "option:2")
         self.assertEqual(w.activate(), "options_toggle:2")
         from pigeon.widgets.options_settings import read_options
