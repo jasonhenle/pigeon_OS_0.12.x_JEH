@@ -11,8 +11,8 @@ settings:
     # separately). Info.plist reads these. Every iOS change bumps both together:
     # MARKETING_VERSION 0.1.N and CURRENT_PROJECT_VERSION N (a test checks they agree).
     # Then run tools/sync-pigeon-ios.sh.
-    MARKETING_VERSION: "0.1.10"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "0.1.11"
+    CURRENT_PROJECT_VERSION: "11"
 targets:
   Pigeon:
     type: application

@@ -246,6 +246,14 @@ private struct PigeonClockSettingsPage: View {
                           note: d.options["np_layout"] == "zone63"
                               ? "Wide title, with the volume beside it."
                               : "Title across the top, with input, volume and running time below it.")
+                // Zone 11's own look; Pigeon only offers it while the layout is Zone 11.
+                if d.options["np_layout"] != "zone63" {
+                    OptionRow(model: settings, data: d, key: "zone11_style", title: "Zone 11 style",
+                              labels: ["standard": "Zone 11", "alt": "11 Alt"],
+                              note: d.options["zone11_style"] == "alt"
+                                  ? "No input, clock or volume; the title grows to fill the top."
+                                  : "Input, clock and volume along the top.")
+                }
                 OptionRow(model: settings, data: d, key: "zone4_mode", title: "Playback bar",
                           labels: ["info": "Info", "visualizer": "Visualizer"])
             } else {
