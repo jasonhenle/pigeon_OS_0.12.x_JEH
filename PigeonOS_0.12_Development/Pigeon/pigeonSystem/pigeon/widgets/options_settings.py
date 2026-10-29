@@ -296,20 +296,70 @@ def apply_ui_bright_bgr(frame_bgr: np.ndarray) -> np.ndarray:
     return frame_bgr
 
 
+# The display's corners are rounded off to black at this radius (design px).
+DISPLAY_CORNER_RADIUS_PX = 32
+_CORNER_ALPHA: dict[int, np.ndarray] = {}
+
+
+def _corner_alpha(r: int) -> np.ndarray:
+    """``r``×``r`` float32 coverage for the top-left corner (1 inside, 0 outside),
+    anti-aliased by 4× supersampling."""
+    cached = _CORNER_ALPHA.get(r)
+    if cached is not None:
+        return cached
+    ss = 4
+    c = (np.arange(r * ss, dtype=np.float32) + 0.5) / ss
+    dx = float(r) - c[None, :]
+    dy = float(r) - c[:, None]
+    inside = (dx * dx + dy * dy <= float(r * r)).astype(np.float32)
+    alpha = inside.reshape(r, ss, r, ss).mean(axis=(1, 3)).astype(np.float32)
+    _CORNER_ALPHA[r] = alpha
+    return alpha
+
+
+def apply_display_corners_bgr(
+    frame_bgr: np.ndarray, radius: int = DISPLAY_CORNER_RADIUS_PX
+) -> np.ndarray:
+    """Round the frame's four corners to black. Returns a new array; the caller's
+    frame (often a cached page) is never touched."""
+    r = int(radius)
+    if frame_bgr is None or getattr(frame_bgr, "ndim", 0) != 3 or r <= 0:
+        return frame_bgr
+    h, w = int(frame_bgr.shape[0]), int(frame_bgr.shape[1])
+    if h < 2 * r or w < 2 * r:
+        return frame_bgr
+    a = _corner_alpha(r)
+    out = frame_bgr.copy()
+    for ys, xs, aa in (
+        (slice(0, r), slice(0, r), a),
+        (slice(0, r), slice(w - r, w), a[:, ::-1]),
+        (slice(h - r, h), slice(0, r), a[::-1, :]),
+        (slice(h - r, h), slice(w - r, w), a[::-1, ::-1]),
+    ):
+        out[ys, xs] = (out[ys, xs].astype(np.float32) * aa[:, :, None] + 0.5).astype(np.uint8)
+    return out
+
+
 def apply_ui_look_bgr(frame_bgr: np.ndarray) -> np.ndarray:
     """Apply the picker look (red-mono dark; light mode is assigned at paint time),
-    then the user's display brightness. Every displayed frame passes through here."""
+    the user's display brightness, then the rounded display corners. Every
+    displayed frame passes through here."""
     frame_bgr = apply_ui_mono_bgr(frame_bgr)
     try:
         from pigeon.display_brightness import apply as _apply_brightness
 
-        return _apply_brightness(frame_bgr)
+        frame_bgr = _apply_brightness(frame_bgr)
+    except Exception:
+        pass
+    try:
+        return apply_display_corners_bgr(frame_bgr)
     except Exception:
         return frame_bgr
 
 
 __all__ = [
     "auto_update_enabled",
+    "apply_display_corners_bgr",
     "apply_ui_bright_bgr",
     "apply_ui_look_bgr",
     "apply_ui_mono_bgr",
