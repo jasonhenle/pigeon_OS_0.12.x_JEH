@@ -372,6 +372,30 @@ class Zone11AltLayoutTests(unittest.TestCase):
 
         self.assertGreater(tt_rows(_ZONE11_ALT), tt_rows(_ZONE11) + 60)
 
+    def test_volume_change_replaces_tt_for_two_seconds(self) -> None:
+        from unittest import mock
+
+        self._use(_ZONE11_ALT)
+        w = self._widget()
+        before = self._frame(w)
+        t0 = vc.time.monotonic()
+        w.note_volume_adjustment(now=t0)
+        with mock.patch.object(vc.time, "monotonic", return_value=t0 + 1.0):
+            self.assertTrue(w._zone11_alt_volume_showing())
+            during = self._frame(w)
+        self.assertFalse(np.array_equal(before, during), "volume readout replaces the TT")
+        with mock.patch.object(vc.time, "monotonic", return_value=t0 + vc.ZONE11_ALT_VOLUME_S + 0.1):
+            self.assertFalse(w._zone11_alt_volume_showing())
+            after = self._frame(w)
+        top = slice(0, 520)
+        self.assertTrue(np.array_equal(before[top], after[top]), "TT returns after 2 s")
+
+    def test_volume_readout_only_in_alt(self) -> None:
+        self._use(_ZONE11)
+        w = self._widget()
+        w.note_volume_adjustment()
+        self.assertFalse(w._zone11_alt_volume_showing())
+
 
 if __name__ == "__main__":
     unittest.main()
