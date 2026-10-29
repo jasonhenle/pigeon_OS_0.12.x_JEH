@@ -501,6 +501,8 @@ _ZONE0_DATE_CENTER_X: dict[str, float] = {
 # Zone 3 shows the volume widget this long after each adjustment, then
 # returns to the saved assignment. Each new tweak restarts the hold.
 ZONE3_VOLUME_TAKEOVER_S = 7.0
+# Zone 11 alt: a volume change swaps the TT for the big volume readout this long.
+ZONE11_ALT_VOLUME_S = 2.0
 
 
 def default_view_circles_svg_path(
@@ -1456,6 +1458,7 @@ class ViewCirclesWidget:
         self._ticking_base_key: tuple[object, ...] | None = None
         self._volume_line_changed_mono = 0.0
         self._volume_takeover_until = 0.0
+        self._zone11_volume_until = 0.0
 
     @property
     def chrome_visible(self) -> bool:
@@ -1515,6 +1518,7 @@ class ViewCirclesWidget:
         """Show the volume widget in zone 3 and restart the hold timer."""
         t = time.monotonic() if now is None else float(now)
         self._volume_takeover_until = t + float(ZONE3_VOLUME_TAKEOVER_S)
+        self._zone11_volume_until = t + float(ZONE11_ALT_VOLUME_S)
         self.clear_cache(keep_base=True)
 
     def volume_takeover_active(self, now: float | None = None) -> bool:
@@ -2259,6 +2263,7 @@ class ViewCirclesWidget:
             1 if self._volume_line_opacity() > 0.05 else 0,
             self._zone3_clock_is_analog_fallback(),
             self.volume_takeover_active(),
+            self._zone11_alt_volume_showing(zone_widgets),
             self._state.zone4_overlay_text,
             # Service ↔ elapsed fade: rebuild until it settles, or a static
             # bar (LIVE) freezes mid-handoff with both labels drawn.
@@ -3800,6 +3805,47 @@ class ViewCirclesWidget:
         zones = self._assignments() if assignments is None else assignments
         return bool(zones) and str(zones[0] or "") == "tt_zone11_alt"
 
+    def _zone11_alt_volume_line(self) -> str:
+        """Receiver volume for the zone 11 alt readout, without the dB unit."""
+        if not self._has_receiver_connection():
+            return ""
+        vol = _receiver_volume_display_line(self._state.volume)
+        return re.sub(r"\s*dB\s*$", "", vol)
+
+    def _zone11_alt_volume_showing(
+        self,
+        assignments: tuple[str, ...] | list[str] | None = None,
+        now: float | None = None,
+    ) -> bool:
+        """True for ``ZONE11_ALT_VOLUME_S`` after a volume change, in zone 11 alt only."""
+        t = time.monotonic() if now is None else float(now)
+        return (
+            t < float(self._zone11_volume_until or 0.0)
+            and self._zone11_alt_on(assignments)
+            and bool(self._zone11_alt_volume_line())
+        )
+
+    def _draw_zone11_alt_volume(self, out: np.ndarray) -> None:
+        """Big volume readout centered where the TT sits (zone 11 alt)."""
+        bx, by, bw, bh = self._zone11_art_box()
+        label = self._zone11_alt_volume_line()
+        size = int(round(bh * self._ZONE11_ALT_VOLUME_HEIGHT))
+        patch, _tw, _th = _text_patch_digital7(label.upper(), size_px=size, fill_rgb=_look_chrome_rgb())
+        a = patch[:, :, 3] > 8
+        rows, cols = np.where(a.any(axis=1))[0], np.where(a.any(axis=0))[0]
+        if rows.size == 0:
+            return
+        patch = patch[int(rows.min()) : int(rows.max()) + 1, int(cols.min()) : int(cols.max()) + 1]
+        ph, pw = patch.shape[:2]
+        if pw > bw:
+            # Long readouts (MUTE, +10.5) shrink to the box width.
+            scale = float(bw) / float(pw)
+            patch = cv2.resize(
+                patch, (bw, max(1, int(round(ph * scale)))), interpolation=cv2.INTER_AREA
+            )
+            ph, pw = patch.shape[:2]
+        _paste_patch_bgra(out, patch, bx + (bw - pw) // 2, by + (bh - ph) // 2)
+
     def _zone11_art_box(self) -> tuple[int, int, int, int]:
         zx, zy, zw, zh = ZONE11.xywh
         if self._zone11_alt_on():
@@ -3818,6 +3864,8 @@ class ViewCirclesWidget:
 
     # Zone 11 alt: art inset from the top of the zone (no header row to clear).
     _ZONE11_ALT_PAD_TOP_PX = 8
+    # Volume readout glyph size as a share of the art box height.
+    _ZONE11_ALT_VOLUME_HEIGHT = 0.55
 
     # How far the art may reach up into the enlarged volume readout (design px); 0 = none.
     _ZONE11_ART_VOLUME_OVERLAP_PX = 0
@@ -3835,6 +3883,9 @@ class ViewCirclesWidget:
         box) and only its top edge is pulled down, to the volume's bottom less a small
         overlap allowance.
         """
+        if self._zone11_alt_volume_showing():
+            self._draw_zone11_alt_volume(out)
+            return
         z = ZONE11
         bx, by, bw, bh = self._zone11_art_box()
         new_top = by if self._zone11_alt_on() else max(
