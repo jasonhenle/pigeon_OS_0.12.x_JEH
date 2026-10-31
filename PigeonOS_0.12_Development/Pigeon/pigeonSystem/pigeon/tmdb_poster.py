@@ -1793,7 +1793,12 @@ def _logo_path_from_images(images: dict) -> str | None:
     if not en:
         return None
     best = max(en, key=lambda l: float((l or {}).get("vote_average") or 0.0))
-    return (best or {}).get("file_path")  # type: ignore[return-value]
+    fp = (best or {}).get("file_path")
+    if isinstance(fp, str) and fp.lower().endswith(".svg"):
+        # TMDb serves a PNG rendition at the same path; the Pi (no cairosvg)
+        # and the iOS app can't draw SVG, and the cache saved it as .jpg.
+        fp = fp[:-4] + ".png"
+    return fp  # type: ignore[return-value]
 
 
 def _backdrop_is_no_language(item: dict) -> bool:
