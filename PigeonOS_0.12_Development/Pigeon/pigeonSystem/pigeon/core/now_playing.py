@@ -662,6 +662,16 @@ def _apply_playback_clock_from_poll(metadata: dict[str, object], *, _content_key
         clk["latched_total"] = reported_total
         clk["display_played_sec"] = None
         clk["trt_next_fire_mono"] = None
+    elif reported_total is not None and reported_total > 0:
+        # Same title, new duration: Tubi plays ads under the movie's title, so
+        # the ad's length must not stay latched once the movie resumes.
+        lt_prev = clk.get("latched_total")
+        try:
+            stale = lt_prev is None or abs(float(lt_prev) - reported_total) > 2.0
+        except (TypeError, ValueError):
+            stale = True
+        if stale:
+            clk["latched_total"] = reported_total
 
     if pos_f is not None:
         clk["sync_mono"] = now_m
