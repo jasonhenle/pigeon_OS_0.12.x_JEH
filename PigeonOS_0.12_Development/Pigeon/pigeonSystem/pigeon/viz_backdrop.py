@@ -3,7 +3,7 @@
 The clocksaver (analog or digital, per the clock option) stays the screen;
 when the meter capture hears program audio, the active
 :mod:`pigeon.fullscreen_viz` preset fills the frame underneath it, dimmed to
-:data:`DIM` so the clock still reads. A long encoder press forces the
+:data:`DIM` so the clock still reads, with its unlit cells off (flat black). A long encoder press forces the
 clocksaver (see :mod:`pigeon.visualizer_mode`), so it is also the way into the
 visualizer while a player is showing Now Playing.
 
@@ -26,7 +26,9 @@ import numpy as np
 
 from pigeon.design import DESIGN_H, DESIGN_W
 
-DIM = 0.45
+DIM = 0.30
+# The backdrop draws only what is lit: unlit cells / slots go to the page black.
+_FLAT = {"unlit": 0.0, "showSlots": False}
 # Brightest channel below this is the digital face's page, not clock ink
 # (the page is ~#0F0F10; see clock_saver._CLOCK_INK_MIN_CHANNEL).
 _PAGE_MAX = 32
@@ -52,17 +54,18 @@ def wanted() -> bool:
         return False
 
 
-def _instance(w: int = 1280, h: int = 800):
+def _instance():
     global _viz
     if _viz is None:
         from pigeon.fullscreen_viz import FullscreenViz
 
-        _viz = FullscreenViz(remember=True)
-        # Build every preset's static art now, so the first turn to each
-        # preset does not stall a frame on the Pi.
-        threading.Thread(
-            target=_viz.prewarm, args=(int(w), int(h)), name="pigeon-viz-backdrop-prewarm", daemon=True
-        ).start()
+        class _Flat(FullscreenViz):
+            def preset(self) -> dict[str, object]:
+                p = dict(super().preset())
+                p.update({k: v for k, v in _FLAT.items() if k in p})
+                return p
+
+        _viz = _Flat(remember=True)
     return _viz
 
 
@@ -75,7 +78,7 @@ def paint(canvas: np.ndarray) -> bool:
     if _buf is None or _buf.shape[:2] != (h, w):
         _buf = np.zeros((h, w, 3), np.uint8)
     try:
-        _instance(w, h).render(_buf)
+        _instance().render(_buf)
     except Exception:
         return False
     if canvas.ndim == 3 and canvas.shape[2] == 3 and canvas.flags.c_contiguous:
