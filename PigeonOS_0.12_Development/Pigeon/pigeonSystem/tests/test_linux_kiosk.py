@@ -178,6 +178,15 @@ class LinuxKioskTests(unittest.TestCase):
         )
         self.assertEqual(quiet_panel_ini(out, self._SYSTEM_PANEL), out)
 
+    def test_labwc_env_gets_blank_cursor_and_keeps_other_lines(self) -> None:
+        from pigeon.linux_kiosk import labwc_env_with_blank_cursor
+
+        env = "XKB_DEFAULT_LAYOUT=us\nXCURSOR_THEME=Adwaita\nXCURSOR_THEME=dup\n"
+        out = labwc_env_with_blank_cursor(env)
+        self.assertEqual(out, "XKB_DEFAULT_LAYOUT=us\nXCURSOR_THEME=PigeonBlank\nXCURSOR_SIZE=24\n")
+        self.assertEqual(labwc_env_with_blank_cursor(out), out)
+        self.assertEqual(labwc_env_with_blank_cursor(""), "XCURSOR_THEME=PigeonBlank\nXCURSOR_SIZE=24\n")
+
     def test_quiet_panel_writes_user_ini(self) -> None:
         from pigeon import linux_kiosk
 

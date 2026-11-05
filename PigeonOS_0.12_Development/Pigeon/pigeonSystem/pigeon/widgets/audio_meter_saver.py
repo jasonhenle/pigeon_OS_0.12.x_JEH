@@ -1798,7 +1798,7 @@ def _capture_loop_body(
         # Mains hum + subsonic rumble off the analog input before anything reads it.
         hum_hz = _hum_filter.hum_hz_from_env()
         hum = _hum_filter.HumCanceller(SAMPLE_RATE, CHANNELS, hum_hz=hum_hz)
-        rumble = _hum_filter.RumbleFilter(SAMPLE_RATE, CHANNELS, frames=FRAMES_PER_CHUNK) if hum_hz else None
+        rumble = _hum_filter.RumbleFilter(SAMPLE_RATE, CHANNELS) if hum_hz else None
         profiler = _noise_floor.NoiseProfiler(SAMPLE_RATE, CHANNELS)
         got_pcm = False
         while _still_this_capture(gen):

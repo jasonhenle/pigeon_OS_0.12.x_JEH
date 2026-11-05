@@ -44,6 +44,26 @@ class HumCancellerTests(unittest.TestCase):
         settled = out[int(RATE * hf.WINDOW_S):]
         self.assertLess(_db(settled), _db(_stereo(hum)) - 40)
 
+    def test_removes_50_hz_mains(self) -> None:
+        hum = _tone(50, 0.03, phase=0.7) + _tone(150, 0.01, phase=0.2)
+        h = hf.HumCanceller(RATE, 2, hum_hz=50)
+        self.assertEqual(h.n % (RATE // 50), 0)
+        out = _run(h, _stereo(hum))
+        self.assertLess(_db(out[h.n:]), _db(_stereo(hum)) - 40)
+
+    def test_chunks_straddling_the_window_edge(self) -> None:
+        hum = _stereo(_tone(60, 0.03, seconds=2.0, phase=0.4))
+        h = hf.HumCanceller(RATE, 2)
+        sizes = [500, 333, 1000, 47] * 60
+        out, i = [], 0
+        for k in sizes:
+            if i + k > hum.shape[0]:
+                break
+            out.append(h.process(hum[i:i + k]))
+            i += k
+        y = np.concatenate(out)
+        self.assertLess(_db(y[RATE:]), _db(hum) - 40)
+
     def test_keeps_program_off_the_hum_lines(self) -> None:
         tone = _tone(440, 0.3)
         out = _run(hf.HumCanceller(RATE, 2), _stereo(tone + _tone(60, 0.03)))

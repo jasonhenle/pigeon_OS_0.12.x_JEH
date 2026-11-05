@@ -11,6 +11,8 @@ While Pigeon is running this module also:
 - hides the pointer (Tk + X11 + a blank cursor theme)
 - turns off the panel's update checker and notification popups, which can
   stay on screen after the panel is stopped
+- starts labwc itself with the blank cursor theme, so no pointer shows at
+  login or across Pigeon restarts (labwc reads its theme only at startup)
 """
 
 from __future__ import annotations
@@ -414,6 +416,39 @@ def _quiet_panel() -> None:
         return
 
 
+def labwc_env_with_blank_cursor(text: str) -> str:
+    """labwc ``environment`` text with ``XCURSOR_THEME`` / ``XCURSOR_SIZE`` set to the blank theme."""
+    want = {"XCURSOR_THEME": _BLANK_THEME, "XCURSOR_SIZE": "24"}
+    out: list[str] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        key = line.split("=", 1)[0].strip()
+        if key in want:
+            if key in seen:
+                continue
+            line = f"{key}={want[key]}"
+            seen.add(key)
+        out.append(line)
+    out.extend(f"{k}={v}" for k, v in want.items() if k not in seen)
+    return "\n".join(out) + "\n"
+
+
+def _blank_cursor_at_login() -> None:
+    path = Path.home() / ".config" / "labwc" / "environment"
+    try:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return
+    new = labwc_env_with_blank_cursor(text)
+    if new == text:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(new, encoding="utf-8")
+    except OSError:
+        return
+
+
 def install_user_kiosk_session() -> None:
     """User-writable kiosk files (cursor theme + hide PiOS autostart)."""
     global _session_installed
@@ -424,6 +459,7 @@ def install_user_kiosk_session() -> None:
         _set_default_cursor_theme(_BLANK_THEME)
         _hide_xdg_autostart()
         _quiet_panel()
+        _blank_cursor_at_login()
         os.environ["XCURSOR_THEME"] = _BLANK_THEME
         os.environ.setdefault("XCURSOR_SIZE", "24")
         _session_installed = True

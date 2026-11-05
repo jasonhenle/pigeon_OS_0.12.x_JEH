@@ -28,6 +28,9 @@ HARMONICS = 5  # 60 … 300 Hz
 WINDOW_S = 0.25
 REFIT_CHUNKS = 4  # hum is stationary: refit every ~32 ms of 8 ms chunks
 RUMBLE_HZ = 25.0
+# Matrix block: three per 8 ms chunk. Smaller blocks do less math than one
+# 384×384 matmul (11 vs 31 ms of CPU per second of audio on a Pi 5).
+RUMBLE_BLOCK = 128
 
 
 def hum_hz_from_env() -> int:
@@ -52,16 +55,17 @@ class HumCanceller:
         refit_chunks: int = REFIT_CHUNKS,
     ) -> None:
         self.rate = int(rate)
-        self.hum_hz = int(hum_hz)
-        self.n = int(round(self.rate * float(window_s)))
+        self.hum_hz = int(hum_hz) if int(hum_hz) > 0 and self.rate % int(hum_hz) == 0 else 0
+        period = self.rate // self.hum_hz if self.hum_hz else 1
+        # A whole number of mains cycles: the sin / cos pairs stay orthogonal and
+        # the table repeats every window, so the buffer is indexed by time mod n.
+        self.n = max(1, int(round(float(window_s) * self.hum_hz))) * period
         freqs = self.hum_hz * np.arange(1, int(harmonics) + 1, dtype=np.float64)
-        # Integer frequencies repeat every second, so one second of table covers all time.
-        t = np.arange(self.rate, dtype=np.float64) / self.rate
-        ph = 2.0 * np.pi * np.outer(t, freqs)
-        self._basis = np.concatenate([np.sin(ph), np.cos(ph)], axis=1)  # (rate, 2H)
+        ph = 2.0 * np.pi * np.outer(np.arange(self.n, dtype=np.float64) / self.rate, freqs)
+        self._basis = np.concatenate([np.sin(ph), np.cos(ph)], axis=1)  # (n, 2H)
         self._buf = np.zeros((self.n, int(channels)), dtype=np.float64)
         self._filled = 0
-        self._pos = 0  # sample time of the next frame, mod rate
+        self._pos = 0  # sample time of the next frame, mod n
         self._coef = np.zeros((self._basis.shape[1], int(channels)), dtype=np.float64)
         self._fitted = False
         self._refit = max(1, int(refit_chunks))
@@ -71,6 +75,17 @@ class HumCanceller:
     def enabled(self) -> bool:
         return self.hum_hz > 0
 
+    def _slots(self, start: int, m: int) -> list[tuple[int, int, int]]:
+        """``(slot, chunk offset, length)`` runs covering ``m`` frames from time ``start``."""
+        out = []
+        off = 0
+        while off < m:
+            slot = (start + off) % self.n
+            k = min(m - off, self.n - slot)
+            out.append((slot, off, k))
+            off += k
+        return out
+
     def process(self, x: np.ndarray) -> np.ndarray:
         """``x`` minus the hum fit; unchanged until the first full window."""
         if not self.enabled:
@@ -78,25 +93,23 @@ class HumCanceller:
         m = int(x.shape[0])
         if m == 0:
             return x
-        if m >= self.n:
-            self._buf[:] = x[-self.n:]
-        else:
-            self._buf[:-m] = self._buf[m:]
-            self._buf[-m:] = x
-        self._filled = min(self.n, self._filled + m)
         start = self._pos
-        self._pos = (self._pos + m) % self.rate
+        runs = self._slots(start, m)
+        for slot, off, k in runs:
+            self._buf[slot:slot + k] = x[off:off + k]
+        self._pos = (start + m) % self.n
+        self._filled = min(self.n, self._filled + m)
         if self._filled < self.n:
             return x
         self._since_fit += 1
         if not self._fitted or self._since_fit >= self._refit:
-            idx = (self._pos - self.n + np.arange(self.n)) % self.rate
-            self._coef = (2.0 / self.n) * (self._basis[idx].T @ self._buf)
+            self._coef = (2.0 / self.n) * (self._basis.T @ self._buf)
             self._fitted = True
             self._since_fit = 0
-        idx = (start + np.arange(m)) % self.rate
-        return x - self._basis[idx] @ self._coef
-
+        out = np.empty_like(x, dtype=np.float64)
+        for slot, off, k in runs:
+            out[off:off + k] = x[off:off + k] - self._basis[slot:slot + k] @ self._coef
+        return out
 
 
 def _butter_hp_sections(cutoff_hz: float, rate: float) -> list[tuple[tuple[float, float, float], tuple[float, float]]]:
@@ -131,13 +144,13 @@ def _run_sections(sections, x: np.ndarray, state: np.ndarray) -> tuple[np.ndarra
 class RumbleFilter:
     """Subsonic highpass (4th-order Butterworth, 25 Hz) for ``(frames, channels)`` chunks.
 
-    The cascade is linear, so for a fixed chunk length its output is
+    The cascade is linear, so for a fixed block length its output is
     ``T @ x + O @ state`` and the next state ``P @ x + Q @ state``. Those
-    matrices are worked out once, which turns each chunk into two small
+    matrices are worked out once, which turns each block into two small
     matmuls instead of a per-sample Python loop.
     """
 
-    def __init__(self, rate: int, channels: int, *, cutoff_hz: float = RUMBLE_HZ, frames: int = 384) -> None:
+    def __init__(self, rate: int, channels: int, *, cutoff_hz: float = RUMBLE_HZ, frames: int = RUMBLE_BLOCK) -> None:
         self._sections = _butter_hp_sections(cutoff_hz, rate)
         n_state = 2 * len(self._sections)
         self.frames = int(frames)
@@ -163,12 +176,22 @@ class RumbleFilter:
         self._Q = np.stack(cols_s, axis=1)  # (n_state, n_state)
         self._state = np.zeros((n_state, int(channels)), dtype=np.float64)
 
+    def _loop(self, x: np.ndarray) -> np.ndarray:
+        out = np.empty_like(x, dtype=np.float64)
+        for c in range(x.shape[1]):
+            out[:, c], self._state[:, c] = _run_sections(self._sections, x[:, c], self._state[:, c])
+        return out
+
     def process(self, x: np.ndarray) -> np.ndarray:
-        if int(x.shape[0]) != self.frames:
-            out = np.empty_like(x, dtype=np.float64)
-            for c in range(x.shape[1]):
-                out[:, c], self._state[:, c] = _run_sections(self._sections, x[:, c], self._state[:, c])
-            return out
-        y = self._T @ x + self._O @ self._state
-        self._state = self._P @ x + self._Q @ self._state
-        return y
+        """Whole blocks of :attr:`frames` go through the matrices; a remainder runs per sample."""
+        m = int(x.shape[0])
+        b = self.frames
+        out = np.empty_like(x, dtype=np.float64)
+        whole = (m // b) * b
+        for i in range(0, whole, b):
+            blk = x[i:i + b]
+            out[i:i + b] = self._T @ blk + self._O @ self._state
+            self._state = self._P @ blk + self._Q @ self._state
+        if whole < m:
+            out[whole:] = self._loop(x[whole:])
+        return out
