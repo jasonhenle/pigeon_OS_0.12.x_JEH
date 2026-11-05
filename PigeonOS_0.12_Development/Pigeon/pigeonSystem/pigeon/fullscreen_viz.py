@@ -348,17 +348,16 @@ STYLES: dict[str, dict[str, object]] = {
 DEFAULT_PRESETS: list[dict[str, object]] = [
     {"name": "Pixel VU", "style": "pixel_vu"},
     {"name": "Sweep VU", "style": "sweep_vu"},
-    {"name": "Spectrum", "style": "bars"},
+    {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
+     "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
     {"name": "Meter Bridge", "style": "led_ladder"},
     {"name": "RTA 31", "style": "rta", "fftSize": 8192, "floorDb": -84.0, "ceilDb": -12.0,
      "attackMs": 20.0, "releaseMs": 320.0, "peakHoldMs": 900.0, "peakFall": 0.4,
      "segments": 10.0, "segGap": 10.0, "colGapPct": 7.0, "zoneColors": True, "showScale": False},
-    {"name": "Dot Matrix", "style": "dots", "cols": 14.0, "rows": 8.0, "dotScale": 0.99, "shape": "square",
-     "colorMode": "band hue"},
     {"name": "Bounce", "style": "bounce"},
     {"name": "Fireflies", "style": "fireflies", "dim": 0.8, "count": 239.0, "size": 20.0, "grow": 30.0,
      "drift": 58.0, "speed": 1.25, "seed": 0.0},
-    # Not in the default rotation, still selectable in the lab's tuner: arc_vu (digital VU), skyline.
+    # Not in the default rotation, still selectable in the lab's tuner: arc_vu (digital VU), skyline, bars.
 ]
 
 
