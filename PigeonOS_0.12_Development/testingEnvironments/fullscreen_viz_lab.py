@@ -314,6 +314,12 @@ def _feed_frame(buf: np.ndarray, pos: int, n: int) -> int:
     return (pos + n) % buf.shape[0]
 
 
+def _wheel_delta(flags: int) -> int:
+    """cv2.getMouseWheelDelta isn't in the Python bindings: the signed delta is the high 16 bits."""
+    d = (flags >> 16) & 0xFFFF
+    return d - 0x10000 if d & 0x8000 else d
+
+
 def _no_mic() -> None:
     zone4_eq.want_mic_capture = lambda: None  # headless: never open the mic
 
@@ -517,7 +523,7 @@ class Viewer:
             now = time.monotonic()
             if now - self.wheel_t > 0.15:  # a trackpad swipe sends many events: one detent each
                 self.wheel_t = now
-                self.turn(1 if cv2.getMouseWheelDelta(flags) < 0 else -1)
+                self.turn(1 if _wheel_delta(flags) < 0 else -1)
 
     def _check_long(self) -> None:
         if self.press_t is not None and not self.long_fired and time.monotonic() - self.press_t >= LONG_PRESS_S:
