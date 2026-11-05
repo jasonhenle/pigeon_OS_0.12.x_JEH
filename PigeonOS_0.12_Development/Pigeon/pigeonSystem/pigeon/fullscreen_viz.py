@@ -55,7 +55,9 @@ _ONE = float(1 << SHIFT)
 TOAST_S = 1.6
 _CONFIG_POLL_S = 0.5
 _LAYER_CACHE = 24
-STATE_KEY = "fullscreen_viz_preset"  # app state: preset last picked with the encoder
+# App state: preset last picked with the encoder. Renamed when Spectrum moved
+# to the front, so every device starts on it once instead of an old index.
+STATE_KEY = "fullscreen_viz_preset_v2"
 REMEMBER_AFTER_S = 2.0
 
 # Set on a preset copy while building alpha-matted layers (``render(clear=True)``).
@@ -347,10 +349,10 @@ STYLES: dict[str, dict[str, object]] = {
 }
 
 DEFAULT_PRESETS: list[dict[str, object]] = [
-    {"name": "Pixel VU", "style": "pixel_vu"},
-    {"name": "Sweep VU", "style": "sweep_vu"},
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
      "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
+    {"name": "Pixel VU", "style": "pixel_vu"},
+    {"name": "Sweep VU", "style": "sweep_vu"},
     {"name": "Meter Bridge", "style": "led_ladder"},
     {"name": "RTA 31", "style": "rta", "fftSize": 8192, "floorDb": -84.0, "ceilDb": -12.0,
      "attackMs": 20.0, "releaseMs": 320.0, "peakHoldMs": 900.0, "peakFall": 0.4,

@@ -586,7 +586,10 @@ def _np_drawing_live_audio(*, _clock_saver_for_compose, _view_one_uses_now_playi
         return False
     try:
         if _clock_saver_for_compose(time.monotonic()):
-            return False
+            # Visualizer behind the clocksaver: live cadence while it plays.
+            from pigeon import viz_backdrop
+
+            return viz_backdrop.wanted()
     except Exception:
         pass
     try:
@@ -1656,7 +1659,9 @@ def _np_wants_live_audio(*, _clock_saver_for_compose, _view_one_uses_now_playing
         return False
     try:
         if _clock_saver_for_compose(time.monotonic()):
-            return False
+            from pigeon import viz_backdrop
+
+            return viz_backdrop.wanted()
     except Exception:
         pass
     try:

@@ -522,6 +522,10 @@ def on_arrow_remote(event: tk.Event, *, DevPhase, _PIGEON_EXT, _nav_request, _wi
     if ks in ("Left", "Right") and not (st & (0x0001 | 0x0008 | 0x20000 | 0x080000 | 0x100000)):
         # HID encoder boards turn as Left / Right: pick the visualizer preset.
         try:
+            from pigeon import viz_backdrop
+
+            if viz_backdrop.rotate(1 if ks == "Right" else -1):
+                return "break"
             vc = view_circles_widget_holder[0] if view_circles_widget_holder else None
             if vc is not None and vc.rotate_zone6_visualizer(1 if ks == "Right" else -1):
                 return "break"
@@ -647,6 +651,10 @@ def _on_rotary_action(action: str, *, DevPhase, _bump_pigeon_user_activity, _ent
     if action in ("forward", "backward") and not was_main:
         # Visualizer showing: turns pick the preset instead of opening settings.
         try:
+            from pigeon import viz_backdrop
+
+            if viz_backdrop.rotate(1 if action == "forward" else -1):
+                return
             vc = view_circles_widget_holder[0] if view_circles_widget_holder else None
             if vc is not None and vc.rotate_zone6_visualizer(1 if action == "forward" else -1):
                 return

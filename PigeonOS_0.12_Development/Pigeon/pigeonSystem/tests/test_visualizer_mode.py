@@ -138,10 +138,20 @@ class NowPlayingZone6Tests(unittest.TestCase):
     def _widget(self, *, metadata: bool):
         from pigeon.widgets.view_circles import ViewCirclesWidget
 
-        plan = self.aw.resolve_auto_widgets(self.aw.AutoWidgetSignals(
+        # The policy no longer picks the zone-6 layout (the visualizer now sits
+        # behind the clocksaver, see viz_backdrop); its drawing is still tested here.
+        aw = self.aw
+        sig = aw.AutoWidgetSignals(
             wan_ok=True, wan_ok_at_startup=True, lan_ok=True, reliable_clock=True, receiver_ok=True,
-            player_metadata=self.aw.METADATA_OK if metadata else self.aw.METADATA_ABSENT, audio_levels=True))
-        self.aw.set_live_plan(plan)
+            player_metadata=aw.METADATA_OK if metadata else aw.METADATA_ABSENT, audio_levels=True)
+        if metadata:
+            plan = aw._plan(layout=aw.LAYOUT_ZONE6_VISUALIZER,
+                            assignments=(aw.VISUALIZER_Z6, "", aw.CLOCK, aw.INFO, aw.STATUS), sig=sig)
+        else:
+            plan = aw._plan(layout=aw.LAYOUT_ZONE6_VISUALIZER,
+                            assignments=(aw.VISUALIZER_Z6, "", aw.CLOCK, "", aw.SECONDS), sig=sig,
+                            zone4_receiver=True)
+        aw.set_live_plan(plan)
         w = ViewCirclesWidget(assets_dir=Path(__file__).resolve().parents[2] / "pigeonAssets")
         w.update_state(progress=0.3, elapsed_text="1:00", remaining_text="-2:00", volume_text="-32.5 dB",
                        has_now_playing=True, has_position=metadata, content_active=metadata,
@@ -186,12 +196,6 @@ class NowPlayingZone6Tests(unittest.TestCase):
     def test_zone4_eq_stays_off_beside_the_zone6_visualizer(self) -> None:
         with mock.patch.object(zone4_eq, "enabled", return_value=True):
             w = self._widget(metadata=True)
-            vm.set_active(True)
-            self.addCleanup(setattr, vm, "_active", None)
-            plan = self.aw.resolve_auto_widgets(self.aw.AutoWidgetSignals(
-                wan_ok=True, wan_ok_at_startup=True, lan_ok=True, reliable_clock=True, receiver_ok=True,
-                player_metadata=self.aw.METADATA_OK, audio_levels=True, visualizer_mode=True))
-            self.aw.set_live_plan(plan)
             self.assertEqual(w._assignments()[3], "cast_info")
 
     def test_encoder_turn_changes_preset_only_while_showing(self) -> None:
@@ -202,6 +206,10 @@ class NowPlayingZone6Tests(unittest.TestCase):
         self.assertEqual(viz.index, start + 1)
         self.aw.set_live_plan(None)
         w2 = self._widget(metadata=True)
+        # Now Playing (no zone-6 visualizer): turns are not taken.
+        self.aw.set_live_plan(self.aw.resolve_auto_widgets(self.aw.AutoWidgetSignals(
+            wan_ok=True, wan_ok_at_startup=True, lan_ok=True, reliable_clock=True, receiver_ok=True,
+            player_metadata=self.aw.METADATA_OK, audio_levels=True)))
         self.assertFalse(w2.rotate_zone6_visualizer(1))
 
 
