@@ -9,6 +9,8 @@ While Pigeon is running this module also:
 - SIGSTOPs the desktop, on-screen keyboard, and notification daemons
 - closes Chromium / Firefox / PiOS dialogs that steal the screen
 - hides the pointer (Tk + X11 + a blank cursor theme)
+- turns off the panel's update checker and notification popups, which can
+  stay on screen after the panel is stopped
 """
 
 from __future__ import annotations
@@ -95,6 +97,10 @@ _CURSOR_NAMES = (
     "not-allowed",
     "circle",
 )
+
+# Pi OS panel settings that stop its update checker and notification popups.
+_PANEL_SYSTEM_INI = Path("/etc/xdg/wf-panel-pi/wf-panel-pi.ini")
+_PANEL_QUIET = {"updater_interval": "0", "notify_enable": "false"}
 
 _BLANK_THEME = "PigeonBlank"
 _DEFAULT_INDEX_BACKUP = "index.theme.pigeon-bak"
@@ -352,6 +358,62 @@ def _hide_xdg_autostart() -> None:
             continue
 
 
+def quiet_panel_ini(text: str, system_text: str = "") -> str:
+    """``text`` with the updater widget removed and :data:`_PANEL_QUIET` set in ``[panel]``.
+
+    An ini with no ``widgets_right`` starts from ``system_text`` so the panel keeps its layout.
+    """
+    src = text if "widgets_right=" in text.replace(" ", "") else (system_text or text)
+    out: list[str] = []
+    seen: set[str] = set()
+    in_panel = has_panel = False
+
+    def _missing() -> list[str]:
+        return [f"{k}={v}" for k, v in _PANEL_QUIET.items() if k not in seen]
+
+    for line in src.splitlines():
+        s = line.strip()
+        if s.startswith("["):
+            if in_panel:
+                out.extend(_missing())
+            in_panel = s == "[panel]"
+            has_panel = has_panel or in_panel
+        elif in_panel and "=" in s:
+            key, _, val = s.partition("=")
+            key = key.strip()
+            if key == "widgets_right":
+                line = "widgets_right=" + " ".join(w for w in val.split() if w != "updater")
+            elif key in _PANEL_QUIET:
+                line = f"{key}={_PANEL_QUIET[key]}"
+                seen.add(key)
+        out.append(line)
+    if in_panel:
+        out.extend(_missing())
+    elif not has_panel:
+        out.extend(["[panel]", *_missing()])
+    return "\n".join(out) + "\n"
+
+
+def _quiet_panel() -> None:
+    path = Path.home() / ".config" / "wf-panel-pi" / "wf-panel-pi.ini"
+    try:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return
+    try:
+        system_text = _PANEL_SYSTEM_INI.read_text(encoding="utf-8")
+    except OSError:
+        system_text = ""
+    new = quiet_panel_ini(text, system_text)
+    if new == text:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(new, encoding="utf-8")
+    except OSError:
+        return
+
+
 def install_user_kiosk_session() -> None:
     """User-writable kiosk files (cursor theme + hide PiOS autostart)."""
     global _session_installed
@@ -361,6 +423,7 @@ def install_user_kiosk_session() -> None:
         install_blank_cursor_theme()
         _set_default_cursor_theme(_BLANK_THEME)
         _hide_xdg_autostart()
+        _quiet_panel()
         os.environ["XCURSOR_THEME"] = _BLANK_THEME
         os.environ.setdefault("XCURSOR_SIZE", "24")
         _session_installed = True

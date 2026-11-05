@@ -151,6 +151,48 @@ class LinuxKioskTests(unittest.TestCase):
         with patch.object(sys, "platform", "darwin"):
             self.assertFalse(linux_kiosk_enabled())
 
+    _SYSTEM_PANEL = (
+        "[panel]\n"
+        "widgets_left=smenu launchers\n"
+        "widgets_right=tray power ejecter updater spacing2 clock\n"
+        "position=top\n"
+    )
+
+    def test_quiet_panel_seeds_empty_ini_from_system(self) -> None:
+        from pigeon.linux_kiosk import quiet_panel_ini
+
+        out = quiet_panel_ini("", self._SYSTEM_PANEL)
+        self.assertIn("widgets_left=smenu launchers\n", out)
+        self.assertIn("widgets_right=tray power ejecter spacing2 clock\n", out)
+        self.assertIn("updater_interval=0\n", out)
+        self.assertIn("notify_enable=false\n", out)
+
+    def test_quiet_panel_keeps_user_layout_and_is_stable(self) -> None:
+        from pigeon.linux_kiosk import quiet_panel_ini
+
+        user = "[panel]\nwidgets_right=clock updater\nnotify_enable=true\n[other]\nx=1\n"
+        out = quiet_panel_ini(user, self._SYSTEM_PANEL)
+        self.assertEqual(
+            out,
+            "[panel]\nwidgets_right=clock\nnotify_enable=false\nupdater_interval=0\n[other]\nx=1\n",
+        )
+        self.assertEqual(quiet_panel_ini(out, self._SYSTEM_PANEL), out)
+
+    def test_quiet_panel_writes_user_ini(self) -> None:
+        from pigeon import linux_kiosk
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sys_ini = Path(tmp) / "system.ini"
+            sys_ini.write_text(self._SYSTEM_PANEL, encoding="utf-8")
+            with (
+                patch.object(Path, "home", return_value=Path(tmp)),
+                patch.object(linux_kiosk, "_PANEL_SYSTEM_INI", sys_ini),
+            ):
+                linux_kiosk._quiet_panel()
+            text = (Path(tmp) / ".config" / "wf-panel-pi" / "wf-panel-pi.ini").read_text(encoding="utf-8")
+        self.assertNotIn("updater ", text)
+        self.assertIn("notify_enable=false", text)
+
 
 if __name__ == "__main__":
     unittest.main()
