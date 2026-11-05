@@ -39,6 +39,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
+from pigeon import noise_floor as _noise_floor
 from pigeon import zone4_eq as _audio
 from pigeon.font_cache import load_font
 from pigeon.font_paths import resolve_digital7_font, resolve_ui_font_bold, resolve_ui_font_medium
@@ -580,8 +581,15 @@ class Analysis:
         for name in names:
             x = frames.mean(axis=1) if name == "M" else frames[:, 0 if name == "L" else 1]
             mag = np.abs(np.fft.rfft(x * self._win)) * (4.0 / n_fft)  # full-scale sine ≈ 0 dB
-            db = 20.0 * np.log10(mag + 1e-12)
-            cell = np.where(narrow, np.interp(pos, np.arange(db.size), db), np.maximum.reduceat(db, b0))
+
+            def cells(m: np.ndarray) -> np.ndarray:
+                db = 20.0 * np.log10(m + 1e-12)
+                return np.where(narrow, np.interp(pos, np.arange(db.size), db), np.maximum.reduceat(db, b0))
+
+            cell = _noise_floor.clean_cells_db(
+                cells(mag), cells, ("fv", self._grid_key), n_fft, self._win, 4.0 / n_fft, name,
+                gain_db=_audio.input_gain_db(),
+            )
             v = np.clip((cell + gain - floor) / max(1.0, ceil - floor), 0.0, 1.0).astype(np.float32)
             lvl, pk, age = self.level[name], self.peak[name], self._age[name]
             lvl += (v - lvl) * np.where(v > lvl, k_a, k_r).astype(np.float32)
@@ -603,6 +611,7 @@ class Analysis:
     def _levels(self, p: dict, blk: np.ndarray, dt: float, needs: tuple[str, ...]) -> None:
         pk = np.abs(blk).max(axis=0) if blk.size else np.zeros(2)
         ms = (blk * blk).mean(axis=0) if blk.size else np.zeros(2)
+        ms = _noise_floor.clean_ms_lr(ms, gain_db=_audio.input_gain_db())
         pk_db = 20.0 * np.log10(pk + 1e-9)
         rms_db = 10.0 * np.log10(ms + 1e-12)
         fall = _f(p, "fallDbS", 20.0) * dt
