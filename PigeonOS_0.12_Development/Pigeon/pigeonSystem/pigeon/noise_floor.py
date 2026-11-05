@@ -172,7 +172,9 @@ class NoiseProfiler:
     def __init__(self, rate: int, channels: int = 2, *, clock=time.monotonic) -> None:
         self.rate = int(rate)
         self._clock = clock
+        # Ring buffer (write position ``_clip_pos``), put in time order only when a profile is taken.
         self._clip = np.zeros((int(rate * CLIP_S), int(channels)), dtype=np.float32)
+        self._clip_pos = 0
         self._clip_fill = 0
         self._block_n = int(rate * BLOCK_S)
         self._blk_ss = np.zeros(int(channels))
@@ -188,12 +190,20 @@ class NoiseProfiler:
         m = int(x.shape[0])
         if m == 0:
             return False
-        if m >= self._clip.shape[0]:
-            self._clip[:] = x[-self._clip.shape[0]:]
+        size = self._clip.shape[0]
+        if m >= size:
+            self._clip[:] = x[-size:]
+            self._clip_pos = 0
         else:
-            self._clip[:-m] = self._clip[m:]
-            self._clip[-m:] = x
-        self._clip_fill = min(self._clip.shape[0], self._clip_fill + m)
+            end = self._clip_pos + m
+            if end <= size:
+                self._clip[self._clip_pos:end] = x
+            else:
+                first = size - self._clip_pos
+                self._clip[self._clip_pos:] = x[:first]
+                self._clip[: m - first] = x[first:]
+            self._clip_pos = end % size
+        self._clip_fill = min(size, self._clip_fill + m)
         self._blk_ss += (x * x).sum(axis=0)
         self._blk_lfe += float(lfe_ms)
         self._blk_frames += m
@@ -218,7 +228,7 @@ class NoiseProfiler:
         cur = _profile
         if cur is not None and (now - cur.taken_mono) < REFRESH_S:
             return False
-        clip = self._clip.copy()
+        clip = np.concatenate((self._clip[self._clip_pos:], self._clip[: self._clip_pos]))
         p = Profile(
             clip=clip,
             rate=float(self.rate),
