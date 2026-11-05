@@ -705,7 +705,12 @@ def _clock_include_digital_time() -> bool:
 
 
 def _raise_clock_tick_groups(root: ET.Element) -> None:
-    """Hours / minutes / seconds must sit above the black rings."""
+    """Hours / minutes / seconds must sit above the black rings.
+
+    They stay under ``clock_center_container``: its black oval hides the hour
+    tick's inner end behind the digital readout.
+    """
+    hub = _find_by_key(root, "clock_center_container")
     for key in (
         "clock_hours_group",
         "clock_minutes_group",
@@ -716,7 +721,11 @@ def _raise_clock_tick_groups(root: ET.Element) -> None:
         if el is None or parent is None:
             continue
         parent.remove(el)
-        parent.append(el)
+        kids = list(parent)
+        if hub is not None and hub in kids:
+            parent.insert(kids.index(hub), el)
+        else:
+            parent.append(el)
 
 
 def _detach_clock_tick_groups(root: ET.Element, *, zone: int | None = None) -> None:
