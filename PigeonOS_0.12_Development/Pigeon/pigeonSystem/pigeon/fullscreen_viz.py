@@ -644,9 +644,11 @@ class Analysis:
         x[:] = np.clip(x, -0.02, 1.62)
         v[pinned] = 0.0
 
-    def update(self, p: dict, dt: float, needs: tuple[str, ...], names: tuple[str, ...] = ("M",)) -> None:
+    def update(self, p: dict, dt: float, needs: tuple[str, ...], names: tuple[str, ...] = ("M",),
+               *, silent: bool = False) -> None:
+        """``silent``: analyse silence, so levels fall at their release rate (e.g. an exit animation)."""
         sr = _audio.sample_rate()
-        fresh = _audio.audio_fresh()
+        fresh = _audio.audio_fresh() and not silent
         n_blk = int(min(8192, max(256, dt * sr)))
         n_fft = 0
         if "spectrum" in needs:
@@ -2071,11 +2073,12 @@ class FullscreenViz:
 
     # -- frame --------------------------------------------------------------------
     def render(self, out: np.ndarray, rect: tuple[int, ...] | None = None, *, capture: bool = True,
-               toast: bool = True, clear: bool = False) -> None:
+               toast: bool = True, clear: bool = False, silent: bool = False) -> None:
         """Draw the active preset into ``out`` (BGR or BGRA), or into ``rect = (x, y, w, h[, r])``.
 
         ``clear``: no page fill — the art draws straight over what ``rect`` already
-        holds (``rect`` must lie inside ``out``).
+        holds (``rect`` must lie inside ``out``). ``silent``: draw as if the
+        input went quiet (bars fall to rest).
         """
         t_start = time.perf_counter()
         p = self.preset()
@@ -2085,7 +2088,7 @@ class FullscreenViz:
         self._last_t = now
         if capture:
             _audio.want_mic_capture()
-        self.analysis.update(style.analysis_params(p), dt, style.needs, style.channels(p))
+        self.analysis.update(style.analysis_params(p), dt, style.needs, style.channels(p), silent=silent)
 
         oh, ow = out.shape[:2]
         if rect is None:

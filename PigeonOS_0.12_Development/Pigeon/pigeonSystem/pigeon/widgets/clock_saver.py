@@ -105,7 +105,8 @@ _VOLUME_CLEARANCE_PX = 12
 def _color_ink_mask(arr: np.ndarray, *, thresh: int = 40) -> np.ndarray:
     if arr.ndim != 3 or arr.shape[2] < 3:
         return np.zeros(arr.shape[:2], dtype=bool)
-    return arr[:, :, :3].max(axis=2) > int(thresh)
+    # Same as ``arr[..., :3].max(axis=2)``, ~9x faster on a Pi 5 (27 -> 3 ms a frame).
+    return np.maximum(np.maximum(arr[:, :, 0], arr[:, :, 1]), arr[:, :, 2]) > int(thresh)
 
 
 def _anchor_mm_extents(
@@ -1472,6 +1473,18 @@ def clock_saver_time_design_rect() -> tuple[int, int, int, int]:
     return (x, y, w, h_time)
 
 
+_PAGE_CACHE: dict[tuple[str, bytes], np.ndarray] = {}
+_DIGITS_CANVAS: list[np.ndarray] = []
+
+
+def _digits_canvas(letterbox) -> np.ndarray:
+    """A transparent page the size of the letterboxed face (shape found once)."""
+    if not _DIGITS_CANVAS:
+        blank = np.zeros((LEGACY_DESIGN_H, LEGACY_DESIGN_W, 4), np.uint8)
+        _DIGITS_CANVAS.append(np.zeros_like(letterbox(blank)))
+    return _DIGITS_CANVAS[0].copy()
+
+
 def render_clock_saver_bgra(
     *,
     layer_opacity: float = 1.0,
@@ -1482,11 +1495,14 @@ def render_clock_saver_bgra(
     include_weather: bool = True,
     include_seconds: bool = True,
     prefer_digital: bool = False,
+    digits_only: bool = False,
 ) -> np.ndarray:
     """Full 1280×800 BGRA idle face: digital clocksaver or centered clock widget.
 
     Zone 8 is Date / Weather / Volume / Time. Zone 5 is the seconds track.
     Pass ``include_seconds=False`` to omit the zone-5 bar (zone-8 crop).
+    ``digits_only`` (digital face): just the HH:MM:SS, transparent elsewhere,
+    in the same place as on the full face.
     """
     if not prefer_digital:
         try:
@@ -1531,16 +1547,42 @@ def render_clock_saver_bgra(
     weather_bottom_svg = _apply_clock_saver_svg_state(
         root, color_hex=color_hex, include_weather=include_weather
     )
-    from pigeon.np_layout import letterbox_legacy_ui
-    from pigeon.widgets.settings_svg_text import rasterize_settings_svg_bgra
+    # The SVG (date, weather, theme color) changes a few times a day; only the
+    # digits and the seconds bar below change every second. Rasterizing it was
+    # ~80 ms of each ~160 ms call on a Pi 5.
+    if digits_only:
+        from pigeon.np_layout import letterbox_legacy_ui
 
-    native = rasterize_settings_svg_bgra(
-        root,
-        width=LEGACY_DESIGN_W,
-        height=LEGACY_DESIGN_H,
-        font_mode="preferences",
-    )
-    framed = letterbox_legacy_ui(native)
+        framed = _digits_canvas(letterbox_legacy_ui)
+        _draw_hhmmss_fixed_cells(
+            framed,
+            time_text,
+            color=color,
+            volume="",
+            weather_bottom=(
+                clock_saver_svg_y_to_design_y(weather_bottom_svg, int(framed.shape[0]))
+                if include_weather
+                else None
+            ),
+            line_opacity=0.0,
+        )
+        return _apply_layer_opacity(framed, layer_opacity)
+    page_key = (str(path), ET.tostring(root))
+    hit = _PAGE_CACHE.get(page_key)
+    if hit is None:
+        from pigeon.np_layout import letterbox_legacy_ui
+        from pigeon.widgets.settings_svg_text import rasterize_settings_svg_bgra
+
+        native = rasterize_settings_svg_bgra(
+            root,
+            width=LEGACY_DESIGN_W,
+            height=LEGACY_DESIGN_H,
+            font_mode="preferences",
+        )
+        hit = letterbox_legacy_ui(native)
+        _PAGE_CACHE.clear()
+        _PAGE_CACHE[page_key] = hit
+    framed = hit.copy()
     weather_bottom = (
         clock_saver_svg_y_to_design_y(weather_bottom_svg, int(framed.shape[0]))
         if include_weather
@@ -2028,4 +2070,5 @@ def render_scaled_clock_saver_bgra(
 
 def clear_clock_saver_render_caches() -> None:
     _POSTER_SCALE_CACHE.clear()
+    _PAGE_CACHE.clear()
     _SVG_TREE_TEMPLATES.clear()

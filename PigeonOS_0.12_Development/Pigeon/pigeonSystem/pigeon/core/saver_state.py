@@ -248,7 +248,12 @@ def _clock_saver_dim_pre_digit_canvas(canvas: np.ndarray, dim: float) -> None:
     d = max(0.0, min(1.0, float(dim)))
     if d >= 1.0 - 1e-9:
         return
-    canvas[:] = (canvas.astype(np.float32) * d).clip(0, 255).astype(np.uint8)
+    # In place via OpenCV: the float32 round trip took ~24 ms a frame on a Pi 5
+    # (vs ~2 ms), which matters once a visualizer runs behind the saver.
+    if canvas.dtype == np.uint8 and canvas.flags.c_contiguous:
+        cv2.convertScaleAbs(canvas, dst=canvas, alpha=d)
+    else:
+        canvas[:] = (canvas.astype(np.float32) * d).clip(0, 255).astype(np.uint8)
 
 
 def _clock_saver_dim_overlay_bgra(patch_bgra: np.ndarray, dim: float) -> np.ndarray:

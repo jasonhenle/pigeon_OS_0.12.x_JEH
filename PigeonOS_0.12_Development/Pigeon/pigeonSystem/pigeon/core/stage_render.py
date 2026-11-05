@@ -920,8 +920,8 @@ def compose_display_from_source(
             )
             _cs_dim_d = _clock_saver_layer_opacity(now_cs)
             _meter_face_d = _idle_audio_meter_active(now_cs)
-            _viz_bg_d = intro_op is None and not _meter_face_d and _viz_backdrop.paint(canvas)
-            if intro_op is None and not _meter_face_d:
+            _viz_bg_d = intro_op is None and not _meter_face_d and _viz_backdrop.active()
+            if intro_op is None and not _meter_face_d and not _viz_bg_d:
                 _clock_saver_dim_pre_digit_canvas(canvas, _cs_dim_d)
             _time_op_d = float(intro_op) if intro_op is not None else 1.0
             _date_op_d = float(intro_op) if intro_op is not None else _cs_dim_d
@@ -937,9 +937,10 @@ def compose_display_from_source(
                 )
 
             if _viz_bg_d:
-                _viz_backdrop.clock_overlay(
-                    (int(time.time()), round(_cs_dim_d, 2), round(_time_op_d, 2), round(_date_op_d, 2)), _layers_d
-                ).blit(canvas)
+                canvas[:] = 0
+                _viz_backdrop.compose(
+                    canvas, (int(time.time()), round(_cs_dim_d, 2), round(_time_op_d, 2), round(_date_op_d, 2)), _layers_d
+                )
             else:
                 (time_bgra, t_rect), (date_bgra, d_rect) = _layers_d()
                 _blit_saver_layers_design(
@@ -1365,8 +1366,8 @@ def compose_display_fast_no_grid(
             )
             _cs_dim_v1 = _clock_saver_layer_opacity(now_cs)
             _meter_face_v1 = meter_v1
-            _viz_bg_v1 = not _meter_face_v1 and _viz_backdrop.paint(canvas_np)
-            if not _meter_face_v1:
+            _viz_bg_v1 = not _meter_face_v1 and _viz_backdrop.active()
+            if not _meter_face_v1 and not _viz_bg_v1:
                 _clock_saver_dim_pre_digit_canvas(canvas_np, _cs_dim_v1)
             def _layers_v1():
                 return _clock_saver_layers(
@@ -1380,7 +1381,8 @@ def compose_display_fast_no_grid(
                 )
 
             if _viz_bg_v1:
-                _viz_backdrop.clock_overlay((int(time.time()), round(_cs_dim_v1, 2)), _layers_v1).blit(canvas_np)
+                canvas_np[:] = 0
+                _viz_backdrop.compose(canvas_np, (int(time.time()), round(_cs_dim_v1, 2)), _layers_v1)
             else:
                 (time_bgra, t_rect), (date_bgra, d_rect) = _layers_v1()
                 _blit_saver_layers_design(
@@ -1473,8 +1475,8 @@ def compose_display_fast_no_grid(
             )
             _cs_dim = _clock_saver_layer_opacity(now_cs)
             _meter_face = _idle_audio_meter_active(now_cs)
-            _viz_bg = intro_op is None and not _meter_face and _viz_backdrop.paint(base)
-            if intro_op is None and not _meter_face:
+            _viz_bg = intro_op is None and not _meter_face and _viz_backdrop.active()
+            if intro_op is None and not _meter_face and not _viz_bg:
                 _clock_saver_dim_pre_digit_canvas(base, _cs_dim)
             _time_op = float(intro_op) if intro_op is not None else 1.0
             _date_op = float(intro_op) if intro_op is not None else _cs_dim
@@ -1490,9 +1492,10 @@ def compose_display_fast_no_grid(
                 )
 
             if _viz_bg:
-                _viz_backdrop.clock_overlay(
-                    (int(time.time()), round(_cs_dim, 2), round(_time_op, 2), round(_date_op, 2)), _layers_f
-                ).blit(base)
+                base[:] = 0
+                _viz_backdrop.compose(
+                    base, (int(time.time()), round(_cs_dim, 2), round(_time_op, 2), round(_date_op, 2)), _layers_f
+                )
             else:
                 (time_bgra, t_rect), (date_bgra, d_rect) = _layers_f()
                 _blit_saver_layers_target(
@@ -1940,6 +1943,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 else int(time.time())
             )
             clock_saver_off = 1 if _clock_saver_for_compose(now) else 0
+            viz_backdrop_off = False
             meter_off_key = 0
             meter_active_off = _PIGEON_EXT and _idle_audio_meter_active(now)
             if meter_active_off and latest_meter_cache_key is not None:
@@ -1949,6 +1953,13 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                     # Meter face has no second-hand clock; skip identical fills.
                     no_anim = True
                     tick_key_off = 0
+                elif latest_visualizer_cache_key is not None and _viz_backdrop.active():
+                    # Visualizer behind the clocksaver: its spectrum drives the key
+                    # (it changes every frame while audio plays; the clock rides along).
+                    no_anim = True
+                    tick_key_off = 0
+                    meter_off_key = int(latest_visualizer_cache_key())
+                    viz_backdrop_off = True
                 else:
                     # Digital clock needs ~1 Hz. Forcing no_anim=False plus a
                     # 1 ms catch-up delay spun the saver at full CPU.
@@ -2023,7 +2034,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
             t_compose1 = time.perf_counter()
             _update_label_photo_from_bgr(label, out_bgr, label_live_photo)
             t_compose2 = time.perf_counter()
-            if meter_active_off or live_audio_off:
+            if meter_active_off or live_audio_off or viz_backdrop_off:
                 _record_live_audio_timing(t_compose0, t_compose1, t_compose2)
             skip_cache[0] = scene_off_key
         else:
