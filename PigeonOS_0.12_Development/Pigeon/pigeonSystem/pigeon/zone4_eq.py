@@ -28,6 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
+from pigeon import noise_floor as _noise_floor
 from pigeon.runtime_paths import pigeon_state_dir
 
 CONFIG_NAME = "zone4_eq.json"
@@ -485,18 +486,26 @@ class Zone4EQ:
         self._grid = (fc / bin_hz, narrow, b0, b1, tilt_oct)
         return self._grid
 
-    def _raw(self, p: dict[str, object], x: np.ndarray, n_fft: int, sr: float) -> np.ndarray:
+    def _raw(self, p: dict[str, object], x: np.ndarray, n_fft: int, sr: float, chan: str = "M") -> np.ndarray:
         """0..1+ (pre-AGC) grid levels for one windowed channel."""
         mag = np.abs(np.fft.rfft(x * self._window)) / float(n_fft)
-        db = 20.0 * np.log10(mag + 1e-12)
         pos, narrow, b0, b1, tilt_oct = self._grid_for(p, n_fft, sr)
-        # Wide cells: max over their bins (cells are contiguous, so reduceat works).
-        wide_db = np.maximum.reduceat(db, b0)
-        if str(p.get("agg")) in ("mean", "rms"):
-            cnt = np.maximum(1, np.diff(np.append(b0, db.size)))
-            wide_db = np.add.reduceat(db, b0) / cnt
-        interp_db = np.interp(pos, np.arange(db.size), db)
-        cell_db = np.where(narrow | (b1 - b0 <= 1), interp_db, wide_db).astype(np.float32)
+        agg_mean = str(p.get("agg")) in ("mean", "rms")
+
+        def cells(m: np.ndarray) -> np.ndarray:
+            db = 20.0 * np.log10(m + 1e-12)
+            # Wide cells: max over their bins (cells are contiguous, so reduceat works).
+            wide_db = np.maximum.reduceat(db, b0)
+            if agg_mean:
+                cnt = np.maximum(1, np.diff(np.append(b0, db.size)))
+                wide_db = np.add.reduceat(db, b0) / cnt
+            interp_db = np.interp(pos, np.arange(db.size), db)
+            return np.where(narrow | (b1 - b0 <= 1), interp_db, wide_db).astype(np.float32)
+
+        cell_db = _noise_floor.clean_cells_db(
+            cells(mag), cells, ("z4", self._grid_key, agg_mean), n_fft, self._window, 1.0 / n_fft, chan,
+            gain_db=input_gain_db(),
+        )
         cell_db += _f(p, "gainDb") + _f(p, "tilt") * tilt_oct
         floor, ceil = _f(p, "floorDb"), _f(p, "ceilDb")
         return np.clip((cell_db - floor) / max(1.0, ceil - floor), 0.0, None)
@@ -518,7 +527,7 @@ class Zone4EQ:
         sig = {"L": frames[:, 0], "R": frames[:, 1]}
         if "M" in names:
             sig["M"] = frames.mean(axis=1)
-        raws = {k: self._raw(p, sig[k], n_fft, _sample_rate) for k in names}
+        raws = {k: self._raw(p, sig[k], n_fft, _sample_rate, k) for k in names}
         # One AGC for all channels so the L/R balance is preserved.
         frame_max = max(float(r.max()) for r in raws.values()) if raws else 0.0
         self._agc_ref = max(frame_max, self._agc_ref * math.exp(-dt / 4.0))

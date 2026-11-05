@@ -34,6 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
+from pigeon import hum_filter as _hum_filter
+from pigeon import noise_floor as _noise_floor
 from pigeon import zone4_eq as _zone4_eq
 from pigeon.compositing import apply_layer_opacity as _apply_layer_opacity
 from pigeon.design import DESIGN_H, DESIGN_W
@@ -736,7 +738,7 @@ def _push_spectrum_mono(mono: np.ndarray) -> None:
         _fft_window[:n_tail] = ring[pos:]
         _fft_window[n_tail:] = ring[:pos]
         np.multiply(_fft_window, _hanning, out=_fft_window)
-    mag = np.abs(np.fft.rfft(_fft_window))
+    mag = _noise_floor.clean_mag(np.abs(np.fft.rfft(_fft_window)), int(FFT_SIZE), _hanning, 1.0, "M")
     bins = _spectrum_bin_slices()
     raw = np.zeros(int(SPECTRUM_BINS), dtype=np.float64)
     for i, (lo, hi) in enumerate(bins):
@@ -1793,6 +1795,11 @@ def _capture_loop_body(
         env_r = 0.0
         env_lfe = 0.0
         lp_state = np.zeros(int(LFE_POLES), dtype=np.float64)
+        # Mains hum + subsonic rumble off the analog input before anything reads it.
+        hum_hz = _hum_filter.hum_hz_from_env()
+        hum = _hum_filter.HumCanceller(SAMPLE_RATE, CHANNELS, hum_hz=hum_hz)
+        rumble = _hum_filter.RumbleFilter(SAMPLE_RATE, CHANNELS, frames=FRAMES_PER_CHUNK) if hum_hz else None
+        profiler = _noise_floor.NoiseProfiler(SAMPLE_RATE, CHANNELS)
         got_pcm = False
         while _still_this_capture(gen):
             try:
@@ -1818,11 +1825,18 @@ def _capture_loop_body(
                 continue
             stereo = pcm.reshape(-1, CHANNELS)
             stereo_f = stereo.astype(np.float64) * (1.0 / FULL_SCALE)
+            stereo_f = hum.process(stereo_f)
+            if rumble is not None:
+                stereo_f = rumble.process(stereo_f)
             rms_l = _normalized_rms(stereo_f[:, 0])
             rms_r = _normalized_rms(stereo_f[:, 1])
             mono = (stereo_f[:, 0] + stereo_f[:, 1]) * 0.5
             y_lfe, lp_state = _lfe_filter_chunk(mono, lp_state)
             rms_lfe = _normalized_rms(y_lfe)
+            profiler.feed(stereo_f, rms_lfe * rms_lfe)
+            rms_l = math.sqrt(_noise_floor.clean_ms(rms_l * rms_l, 0))
+            rms_r = math.sqrt(_noise_floor.clean_ms(rms_r * rms_r, 1))
+            rms_lfe = math.sqrt(_noise_floor.clean_ms(rms_lfe * rms_lfe, None))
             env_l = _rms_envelope(env_l, rms_l, dt_chunk)
             env_r = _rms_envelope(env_r, rms_r, dt_chunk)
             env_lfe = _rms_envelope(env_lfe, rms_lfe, dt_chunk)
