@@ -103,6 +103,17 @@ class PresetTests(_Base):
         self.assertGreater(int(base[box].max()), 60, "badge drawn on the cover")
         self.assertEqual(int(plain[box].max()), 0)
 
+    def test_arc_vu_sits_on_the_sweep_vu_meters(self) -> None:
+        by = {p["name"]: p for p in fv.presets()}
+        sweep, arc = by["Sweep VU"], by["Arc VU"]
+        g = fv.ArcVU._geo(sweep)
+        pivots = [(g["x0"] + m * (g["W"] + g["gap"]) + g["W"] / 2.0, g["y0"] + g["piv"]) for m in range(2)]
+        self.assertEqual([m[:2] for m in fv.SweepVU._meters(arc)], pivots)
+        self.assertEqual(arc["sweepDeg"], sweep["sweepDeg"])
+        r_out = g["R"] + 6.0
+        self.assertAlmostEqual(arc["arcR"], r_out - sweep["segLen"] / 2.0)
+        self.assertEqual(arc["bandW"], sweep["segLen"])
+
     def test_text_is_off_by_default(self) -> None:
         for p in fv.presets() + [fv.complete_preset(dict(d)) for d in fv.LAB_PRESETS]:
             if "showText" in fv.style_specs(str(p["style"])):

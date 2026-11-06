@@ -227,7 +227,9 @@ STYLES: dict[str, dict[str, object]] = {
             "text": ("#8A8A8A", _C),
             "showText": (False, _B),
             "showTicks": (True, _B),
-            "layout": ("pair", _ch("pair", "single")),
+            # "vu pair": the analog / LED VU pair's pivots (meterW / meterH / meterY), so a
+            # preset can sit exactly where those meters do.
+            "layout": ("pair", _ch("pair", "single", "vu pair")),
             "mode": ("spot", _ch("spot", "fill", "spot + fill")),
             "spotDeg": (8.0, _n(1, 40, 0.5)),
             "peakHold": (True, _B),
@@ -235,6 +237,12 @@ STYLES: dict[str, dict[str, object]] = {
             "arcR": (290.0, _n(120, 320, 2)),
             "bandW": (64.0, _n(8, 120, 1)),
             "inset": (0.72, _n(0.2, 1.0, 0.01)),
+            "meterW": (580.0, _n(400, 620, 2)),
+            "meterH": (420.0, _n(300, 560, 2)),
+            "meterY": (190.0, _n(0, 500, 2)),
+            "brand": (False, _B),  # Pigeon badge under each meter ("vu pair" layout)
+            "brandColor": ("#87837A", _C),
+            "brandH": (30.0, _n(10, 80, 1)),
         },
     },
     "bars": {
@@ -418,11 +426,13 @@ DEFAULT_PRESETS: list[dict[str, object]] = [
      "fallDbS": 20.0, "brand": True, "brandColor": "#87837A", "brandH": 45.0,
      "meterY": 300.0},  # low enough to clear the clock above it on the visualizer clocksaver
     # Arched light pair (no needle): the spot and its fill in the UI colour.
+    # Sweep VU's alt: the same meters, arc and badge, with a lit spot on a grey groove in place of wedges.
     {"name": "Arc VU", "style": "sweep_vu", "bg": "#000000", "track": "#4D4D4D", "lit": THEME_BLUE,
-     "fillColor": "#1F4F7A", "red": "#FF0000", "redTint": 0.3, "text": "#8A8A8A", "showText": False,
-     "showTicks": False, "layout": "pair", "mode": "spot", "spotDeg": 8.0, "peakHold": True, "sweepDeg": 110.0,
-     "arcR": 290.0, "bandW": 64.0, "inset": 0.72, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8,
-     "holdMs": 1500.0, "fallDbS": 20.0},
+     "fillColor": "#1F4F7A", "red": "#FF0000", "redTint": 0.3, "text": "#87837A", "showText": False,
+     "showTicks": True, "layout": "vu pair", "mode": "spot", "spotDeg": 8.0, "peakHold": True, "sweepDeg": 90.0,
+     "arcR": 306.0, "bandW": 38.0, "inset": 0.72, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8,
+     "holdMs": 1500.0, "fallDbS": 20.0, "meterY": 300.0, "brand": True, "brandColor": "#87837A",
+     "brandH": 45.0},
     # Split-stereo bars (L left, R right), the UI colour below twoToneAt, near-white above.
     {"name": "Stereo Bars", "style": "bars", "bg": "#000000", "colA": THEME_BLUE, "colB": "#E4EDEC",
      "peakColor": "#FFFFFF", "slotColor": "#141414", "showSlots": False, "bands": 17.0, "gapPct": 30.0,
@@ -1420,6 +1430,9 @@ class SweepVU(Style):
     def _meters(p: dict) -> list[tuple[float, float, float, float, int]]:
         """``(pivot x, pivot y, radius, band width, channel)``; channel −1 = louder of L/R."""
         R, bw = _f(p, "arcR", 290), _f(p, "bandW", 64)
+        if str(p.get("layout")) == "vu pair":
+            g = AnalogVU._geo(p)
+            return [(g["x0"] + m * (g["W"] + g["gap"]) + g["W"] / 2.0, g["y0"] + g["piv"], R, bw, m) for m in range(2)]
         if str(p.get("layout")) == "single":
             return [(DESIGN_W / 2.0, 680.0, R * 1.65, bw * 1.5, -1)]
         return [(DESIGN_W * 0.25, 640.0, R, bw, 0), (DESIGN_W * 0.75, 640.0, R, bw, 1)]
@@ -1445,7 +1458,12 @@ class SweepVU(Style):
         z = self._theta(p, 1.0 / 1.4125)  # 0 VU
         text, ink = bool(p.get("showText")), _bgr(p["text"])
         vpos = lambda db: (10.0 ** (db / 20.0)) / 1.4125  # noqa: E731
+        vu_pair = str(p.get("layout")) == "vu pair"
+        red_ink = _bgr(p["red"])
         for cx, cy, R, bw, _chn in self._meters(p):
+            if vu_pair and p.get("brand"):
+                g = AnalogVU._geo(p)
+                _badge(cv, cx, g["y0"] + g["H"] - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
             self._arc(cv.img, cv.xf, cx, cy, R, self._theta(p, 0.0), self._theta(p, 1.0), track, bw)
             self._arc(cv.img, cv.xf, cx, cy, R, z, self._theta(p, 1.0), red_track, bw)
             if p.get("showTicks", True) or text:
@@ -1454,7 +1472,7 @@ class SweepVU(Style):
                     r0, r1 = R + bw / 2 + 10, R + bw / 2 + 22
                     if p.get("showTicks", True):
                         cv.line(cx + r0 * math.sin(a), cy - r0 * math.cos(a), cx + r1 * math.sin(a),
-                                cy - r1 * math.cos(a), ink, 3)
+                                cy - r1 * math.cos(a), red_ink if vu_pair and db > 0 else ink, 3)
                     if text:
                         rl = R + bw / 2 + 44
                         cv.text(f"+{db}" if db > 0 else str(db), cx + rl * math.sin(a), cy - rl * math.cos(a), 20, ink)
