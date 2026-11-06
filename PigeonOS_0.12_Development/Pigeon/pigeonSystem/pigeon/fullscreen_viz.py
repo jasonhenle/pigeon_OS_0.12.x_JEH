@@ -130,6 +130,9 @@ STYLES: dict[str, dict[str, object]] = {
             "peakLedDbfs": (-3.0, _n(-12, 0, 0.5)),
             "sweepDeg": (90.0, _n(60, 110, 1)),
             "faceRadius": (24.0, _n(0, 80, 1)),
+            "brand": (False, _B),  # Pigeon wordmark on each meter's cover, like the maker's badge
+            "brandColor": ("#87837A", _C),
+            "brandH": (30.0, _n(10, 80, 1)),
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
         },
@@ -181,6 +184,9 @@ STYLES: dict[str, dict[str, object]] = {
             "peakLedDbfs": (-3.0, _n(-12, 0, 0.5)),
             "sweepDeg": (90.0, _n(60, 110, 1)),
             "faceRadius": (24.0, _n(0, 80, 1)),
+            "brand": (False, _B),  # Pigeon wordmark on each meter's cover, like the maker's badge
+            "brandColor": ("#87837A", _C),
+            "brandH": (30.0, _n(10, 80, 1)),
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
         },
@@ -396,9 +402,18 @@ STYLES: dict[str, dict[str, object]] = {
     },
 }
 
+THEME_BLUE = "#4EA6F7"
+
 DEFAULT_PRESETS: list[dict[str, object]] = [
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
      "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
+    # LED arc pair on black, wedges in the UI colour, a Pigeon badge under each meter.
+    {"name": "Sweep VU", "style": "arc_vu", "bg": "#000000", "face": "#000000", "ink": "#87837A",
+     "segColor": THEME_BLUE, "red": "#D9412B", "cover": "#000000", "coverText": "#EDE6D3", "showText": False,
+     "label": "VU", "segments": 36.0, "segGapPct": 35.0, "segLen": 38.0, "unlit": 0.12, "peakHold": True,
+     "peakLed": False, "peakLedColor": "#FF3B30", "peakLedDbfs": -3.0, "sweepDeg": 90.0, "faceRadius": 24.0,
+     "meterW": 580.0, "meterH": 420.0, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8, "holdMs": 1500.0,
+     "fallDbS": 20.0, "brand": True, "brandColor": "#87837A"},
     # Not in the rotation, still selectable in the lab's tuner: bounce, analog_vu, modern_vu, arc_vu
     # (digital VU), pixel_vu, sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
@@ -438,7 +453,6 @@ RETIRED_DEFAULTS: dict[tuple[str, str], object] = {
 # The stock blues follow the settings UI (theme) colour: the blue itself, its
 # pale tint and its dark fill. Other colours, and any colour tuned in the lab,
 # stay as they are.
-THEME_BLUE = "#4EA6F7"
 _THEME_ROLES: dict[str, tuple[str, float]] = {  # stock hex -> (mix toward, amount)
     "#4ea6f7": ("#FFFFFF", 0.0),
     "#b2dafc": ("#FFFFFF", 0.58),
@@ -926,6 +940,52 @@ _VU_MINOR = (-15, -6, -4, -0.5, 0.5, 1.5, 2.5)
 _VU_PCT = (20, 40, 60, 80, 100)
 
 
+WORDMARK_FILE = Path("nowPlaying") / "pigeon_logo_np.png"
+
+
+@lru_cache(maxsize=1)
+def _wordmark_ink() -> np.ndarray | None:
+    """The Pigeon wordmark's letters (no outline) as a 0..1 float mask, cropped to the ink."""
+    try:
+        from pigeon.layout_paths import pigeon_logo_asset_dir_candidates
+
+        roots = pigeon_logo_asset_dir_candidates()
+    except Exception:
+        roots = []
+    roots.append(Path(__file__).resolve().parents[2] / "pigeonAssets")
+    for root in roots:
+        img = cv2.imread(str(Path(root) / WORDMARK_FILE), cv2.IMREAD_UNCHANGED)
+        if img is None or img.ndim != 3 or img.shape[2] != 4:
+            continue
+        # White letter fill inside a coloured outline: keep only near-white, opaque pixels.
+        white = np.clip((img[:, :, :3].min(axis=2).astype(np.float32) - 160.0) / 80.0, 0.0, 1.0)
+        mask = white * (img[:, :, 3].astype(np.float32) / 255.0)
+        rows, cols = np.flatnonzero(mask.max(axis=1) > 0.05), np.flatnonzero(mask.max(axis=0) > 0.05)
+        if rows.size and cols.size:
+            return np.ascontiguousarray(mask[rows[0] : rows[-1] + 1, cols[0] : cols[-1] + 1])
+    return None
+
+
+def _badge(cv: "Canvas", cx: float, cy: float, height: float, color: tuple) -> None:
+    """Pigeon wordmark centred on ``(cx, cy)`` (design units), ``height`` tall, in ``color``."""
+    ink = _wordmark_ink()
+    if ink is None:
+        cv.text("pigeon", cx, cy, height, color, "bold")
+        return
+    xf = cv.xf
+    th = max(2, int(round(xf.l(height))))
+    tw = max(2, int(round(th * ink.shape[1] / ink.shape[0])))
+    a = cv2.resize(ink, (tw, th), interpolation=cv2.INTER_AREA)[:, :, None]
+    x0, y0 = int(round(xf.x(cx) - tw / 2.0)), int(round(xf.y(cy) - th / 2.0))
+    H, W = cv.img.shape[:2]
+    xa, ya, xb, yb = max(0, x0), max(0, y0), min(W, x0 + tw), min(H, y0 + th)
+    if xb <= xa or yb <= ya:
+        return
+    a = a[ya - y0 : yb - y0, xa - x0 : xb - x0]
+    dst = cv.img[ya:yb, xa:xb].astype(np.float32)
+    cv.img[ya:yb, xa:xb] = (dst * (1.0 - a) + np.array(color, np.float32) * a).astype(np.uint8)
+
+
 class AnalogVU(Style):
     needs = ("vu", "ppm")
 
@@ -989,7 +1049,9 @@ class AnalogVU(Style):
             r = _f(p, "faceRadius", 24)
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H, r, _bgr(p["cover"]))
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H - g["cover"] + r + 1, 0, _bgr(p["cover"]))
-            if text:
+            if p.get("brand"):
+                _badge(cv, cx, oy + H - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
+            elif text:
                 cv.text("L" if m == 0 else "R", cx, oy + H - g["cover"] / 2.0, 30, _bgr(p["coverText"]), "bold")
             if p.get("peakLed", True):
                 cv.circle(ox + W - 40, oy + 40, 11, _mix(face, ink, 0.18))
@@ -1077,7 +1139,9 @@ class ArcVU(AnalogVU):
             r = _f(p, "faceRadius", 24)
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H, r, _bgr(p["cover"]))
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H - g["cover"] + r + 1, 0, _bgr(p["cover"]))
-            if text:
+            if p.get("brand"):
+                _badge(cv, cx, oy + H - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
+            elif text:
                 cv.text("L" if m == 0 else "R", cx, oy + H - g["cover"] / 2.0, 30, _bgr(p["coverText"]), "bold")
             if p.get("peakLed", True):
                 cv.circle(ox + W - 40, oy + 40, 11, _mix(face, ink, 0.18))
