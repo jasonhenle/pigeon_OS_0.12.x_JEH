@@ -16,8 +16,8 @@ brightens, glides back down, and the other clocksaver elements fade back in.
 
 Over the Pausesaver (the clock shrunk beside the paused title's poster), the
 poster and the rest of the face fade first with the small time left in place,
-then the time grows back to full size (:data:`SCALE_S`), then it glides up;
-leaving runs the same way back.
+then the time grows back to full size as it glides up; leaving runs the same
+way back.
 
 The analog clock option has no separate time layer, so the whole face moves
 and dims and nothing fades.
@@ -44,7 +44,6 @@ CLOCK_DIM = 0.30
 CLOCK_TOP_PX = 48  # where the time's top edge ends up
 # Phase lengths (s), in entering order; leaving runs them backwards.
 EXTRAS_S = 0.6
-SCALE_S = 0.8  # Pausesaver only, between the fade and the move
 MOVE_S = 1.0
 DIM_S = 0.6
 VIZ_S = 1.4  # leaving: the bars fall to rest, then the last VIZ_FADE fades out
@@ -70,7 +69,6 @@ _painted_mono = 0.0
 _exit_cb = None  # called once the timeline is back at 0 (long press off)
 _label_source = None  # () -> str: the receiver's current input label
 _suppressed = False  # long press dismissed the automatic visualizer until audio stops
-_split = False  # the face is the Pausesaver split (small clock beside a poster)
 
 
 def wanted() -> bool:
@@ -83,12 +81,8 @@ def wanted() -> bool:
         return False
 
 
-def _total() -> float:
-    return _TOTAL + (SCALE_S if _split else 0.0)
-
-
 def _target() -> float:
-    return _total() if (_exit_cb is None and not _suppressed and wanted()) else 0.0
+    return _TOTAL if (_exit_cb is None and not _suppressed and wanted()) else 0.0
 
 
 def active() -> bool:
@@ -415,17 +409,15 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
 
     ``render_full()`` returns the regular clocksaver layers ``((frame, rect), date)``.
     """
-    global _painted_mono, _split
+    global _painted_mono
     digital = _digital_face()
-    _split = digital and _split_poster()
+    split = digital and _split_poster()
     _advance()
     h, w = canvas.shape[:2]
-    grow_s = SCALE_S if _split else 0.0
     extras = _ease(_phase(0.0, EXTRAS_S))  # 1 = date / weather / volume / seconds (/ poster) gone
-    grow = _ease(_phase(EXTRAS_S, grow_s)) if grow_s else 1.0  # Pausesaver: 1 = the time at full size
-    move = _ease(_phase(EXTRAS_S + grow_s, MOVE_S))
-    dim = _ease(_phase(EXTRAS_S + grow_s + MOVE_S, DIM_S))
-    viz = _phase(EXTRAS_S + grow_s + MOVE_S + DIM_S, VIZ_S)
+    move = _ease(_phase(EXTRAS_S, MOVE_S))
+    dim = _ease(_phase(EXTRAS_S + MOVE_S, DIM_S))
+    viz = _phase(EXTRAS_S + MOVE_S + DIM_S, VIZ_S)
     leaving = _target() < _t
 
     if viz > 0.0:
@@ -455,13 +447,11 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
     y0, x0, _col, alpha = clock.prep(h, w)
     bh, bw = alpha.shape
     s, px, py = 1.0, float(x0), float(y0)  # the time's size and top-left before the move
-    if _split:
+    if split:
+        # Pausesaver: the small time beside the poster grows to full size as it moves.
         s0, tx, ty = _split_xform(h, w)
-        s = s0 + (1.0 - s0) * grow
-        ax, ay = x0 * s0 + tx, y0 * s0 + ty  # the small time beside the poster
-        # Grows from its top-left corner, held on screen.
-        px = max(0.0, min(ax, w - ax - bw * s))
-        py = max(0.0, min(ay, h - bh * s))
+        s = s0 + (1.0 - s0) * move
+        px, py = x0 * s0 + tx, y0 * s0 + ty
     px += (x0 - px) * move
     py += (CLOCK_TOP_PX - py) * move
     dx, dy = px - x0 * s, py - y0 * s
