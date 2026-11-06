@@ -251,6 +251,9 @@ def run(ctx) -> None:
         receiver_overlay_state=receiver_overlay_state,
         receiver_standby_holder=receiver_standby_holder,
     )
+    from pigeon import viz_backdrop as _viz_backdrop
+
+    _viz_backdrop.set_input_label_source(_resolve_receiver_input_label)
 
     _np_widgets_content_active = _bind_deps(
         _core_now_playing._np_widgets_content_active,

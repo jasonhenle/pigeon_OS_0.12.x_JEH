@@ -141,6 +141,21 @@ class TimelineTests(unittest.TestCase):
             self.assertEqual(int(c[vb.CLOCK_TOP_PX + 5, 900, 0]), 0)
             self.assertGreater(int(c[vb.CLOCK_TOP_PX + 5, 900, 1]), 0)
 
+    def test_input_label_sits_under_the_moved_clock(self) -> None:
+        vb.set_input_label_source(lambda: "PHONO")
+        self.addCleanup(vb.set_input_label_source, None)
+        with mock.patch.object(vb, "theme_key", lambda: "#FFFFFF"):
+            self._frames(vb._TOTAL + 0.2)
+        clock_bottom = vb.CLOCK_TOP_PX + 100  # the fake face's time is 100 rows tall
+        vb._viz = None  # no visualizer: only the label is under the clock
+        with mock.patch.object(vb, "theme_key", lambda: "#FFFFFF"), mock.patch.object(vb, "_instance", side_effect=RuntimeError):
+            c = self._frames(1 / 30)
+        band = c[clock_bottom : clock_bottom + 160].max(axis=2)
+        rows, cols = np.flatnonzero(band.max(axis=1) > 0), np.flatnonzero(band.max(axis=0) > 0)
+        self.assertTrue(rows.size, "label drawn")
+        self.assertGreaterEqual(int(rows[0]), vb.LABEL_GAP_PX - 2)
+        self.assertLessEqual(abs(int(cols[0]) - 200), 4, "flush with the time's left edge (x = 200)")
+
     def test_knob_turns_only_while_showing(self) -> None:
         self.assertFalse(vb.rotate(1))
         self._frames(vb._TOTAL + 0.2)
