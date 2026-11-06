@@ -110,6 +110,54 @@ LEVEL_PARAMS: dict[str, tuple[object, tuple]] = {
 }
 
 STYLES: dict[str, dict[str, object]] = {
+    "analog_vu": {
+        "label": "Analog VU pair (needle)",
+        "needs": ("vu", "ppm"),
+        "params": {
+            "bg": ("#000000", _C),
+            "face": ("#EDE6D3", _C),
+            "ink": ("#1A1A1A", _C),
+            "red": ("#D9412B", _C),
+            "needle": ("#1A1A1A", _C),
+            "needleW": (3.0, _n(1, 8, 0.5)),
+            "cover": ("#1A1A1A", _C),
+            "coverText": ("#EDE6D3", _C),
+            "showText": (False, _B),
+            "showPercent": (True, _B),
+            "label": ("VU", ("text",)),
+            "peakLed": (True, _B),
+            "peakLedColor": ("#FF3B30", _C),
+            "peakLedDbfs": (-3.0, _n(-12, 0, 0.5)),
+            "sweepDeg": (90.0, _n(60, 110, 1)),
+            "faceRadius": (24.0, _n(0, 80, 1)),
+            "meterW": (580.0, _n(400, 620, 2)),
+            "meterH": (420.0, _n(300, 560, 2)),
+        },
+    },
+    "modern_vu": {
+        "label": "Modern VU (thin needle, light trail)",
+        "needs": ("vu", "ppm"),
+        "params": {
+            "bg": ("#000000", _C),
+            "layout": ("pair", _ch("pair", "single")),
+            "scale": ("#5A5A5A", _C),
+            "text": ("#8A8A8A", _C),
+            "red": ("#FF3B30", _C),
+            "needle": ("#4EA6F7", _C),
+            "needleW": (4.0, _n(1, 10, 0.5)),
+            "trail": (True, _B),
+            "trailColor": ("#1F4F7A", _C),
+            "trailW": (34.0, _n(4, 120, 1)),
+            "hub": ("#2A2A2A", _C),
+            "showText": (False, _B),
+            "sweepDeg": (100.0, _n(60, 140, 1)),
+            "radius": (290.0, _n(120, 560, 2)),
+            "pivotY": (650.0, _n(300, 780, 2)),
+            "peakLed": (True, _B),
+            "peakLedColor": ("#FF3B30", _C),
+            "peakLedDbfs": (-3.0, _n(-12, 0, 0.5)),
+        },
+    },
     "arc_vu": {
         "label": "Digital VU pair (LED arc)",
         "needs": ("vu", "ppm"),
@@ -351,16 +399,14 @@ STYLES: dict[str, dict[str, object]] = {
 DEFAULT_PRESETS: list[dict[str, object]] = [
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
      "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
-    {"name": "Pixel VU", "style": "pixel_vu"},
-    {"name": "Sweep VU", "style": "sweep_vu"},
-    {"name": "Meter Bridge", "style": "led_ladder"},
-    {"name": "RTA 31", "style": "rta", "fftSize": 8192, "floorDb": -84.0, "ceilDb": -12.0,
-     "attackMs": 20.0, "releaseMs": 320.0, "peakHoldMs": 900.0, "peakFall": 0.4,
-     "segments": 10.0, "segGap": 10.0, "colGapPct": 7.0, "zoneColors": True, "showScale": False},
-    {"name": "Bounce", "style": "bounce"},
-    {"name": "Fireflies", "style": "fireflies", "dim": 0.8, "count": 239.0, "size": 20.0, "grow": 30.0,
-     "drift": 58.0, "speed": 1.25, "seed": 0.0},
-    # Not in the default rotation, still selectable in the lab's tuner: arc_vu (digital VU), skyline, bars.
+    {"name": "Classic VU", "style": "analog_vu"},
+    {"name": "Amber VU", "style": "analog_vu", "face": "#17120B", "ink": "#E9B565", "red": "#FF5A36",
+     "needle": "#FFD9A0", "cover": "#0B0B0B", "coverText": "#E9B565", "faceRadius": 18.0},
+    {"name": "Modern VU", "style": "modern_vu"},
+    {"name": "Studio VU", "style": "modern_vu", "layout": "single", "radius": 470.0, "pivotY": 720.0,
+     "sweepDeg": 90.0, "trail": False, "needleW": 3.0},
+    # Not in the rotation, still selectable in the lab's tuner: bounce, arc_vu (digital VU), pixel_vu,
+    # sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
 
 
@@ -1196,6 +1242,91 @@ class PixelVU(AnalogVU):
             dst[:] = src
 
 
+# -- 1c. modern VU: open scale, thin needle, light trail ---------------------------------
+class ModernVU(Style):
+    """No face or box: a fine tick arc, a slim needle and a soft trail behind it.
+
+    ``layout`` ``pair`` draws L and R side by side; ``single`` one large meter
+    reading the louder channel.
+    """
+
+    needs = ("vu", "ppm")
+
+    @staticmethod
+    def _meters(p: dict) -> list[tuple[float, float, float]]:
+        """``(cx, cy, r)`` per meter (design units)."""
+        r, cy = _f(p, "radius", 250), _f(p, "pivotY", 600)
+        if str(p.get("layout")) == "single":
+            return [(DESIGN_W / 2.0, cy, r)]
+        return [(DESIGN_W * 0.25, cy, r), (DESIGN_W * 0.75, cy, r)]
+
+    @staticmethod
+    def _theta(p: dict, pos: float) -> float:
+        """Degrees from vertical for scale position ``pos`` (0 = -inf, 1 = +3 VU)."""
+        sw = _f(p, "sweepDeg", 100)
+        return -sw / 2.0 + max(0.0, min(1.0, pos)) * sw
+
+    def layers(self, p: dict, w: int, h: int) -> dict[str, object]:
+        cv = Canvas(w, h, _bgr(p["bg"]))
+        scale, red, ink = _bgr(p["scale"]), _bgr(p["red"]), _bgr(p["text"])
+        text = bool(p.get("showText"))
+        vpos = lambda db: (10.0 ** (db / 20.0)) / 1.4125  # noqa: E731
+        for i, (cx, cy, r) in enumerate(self._meters(p)):
+            k = r / 250.0
+
+            def at(pos: float, rr: float) -> tuple[float, float]:
+                a = math.radians(self._theta(p, pos))
+                return cx + rr * math.sin(a), cy - rr * math.cos(a)
+
+            ang = lambda pos: -90.0 + self._theta(p, pos)  # noqa: E731
+            cv.arc(cx, cy, r, ang(0.0), ang(vpos(0)), scale, 2 * k)
+            cv.arc(cx, cy, r, ang(vpos(0)), ang(1.0), red, 4 * k)
+            for db in _VU_MAJOR:
+                col = red if db > 0 else scale
+                (x0, y0), (x1, y1) = at(vpos(db), r + 6 * k), at(vpos(db), r + 22 * k)
+                cv.line(x0, y0, x1, y1, col, 2.5 * k)
+                if text and db in (-20, -10, -5, -3, 0, 3):
+                    lx, ly = at(vpos(db), r + 44 * k)
+                    cv.text(f"+{db}" if db > 0 else str(db), lx, ly, 18 * k, red if db > 0 else ink)
+            for db in _VU_MINOR:
+                (x0, y0), (x1, y1) = at(vpos(db), r + 6 * k), at(vpos(db), r + 14 * k)
+                cv.line(x0, y0, x1, y1, red if db > 0 else scale, 1.5 * k)
+            if text:
+                lab = "VU" if len(self._meters(p)) == 1 else ("L" if i == 0 else "R")
+                cv.text(lab, cx, cy - r * 0.42, 26 * k, ink, "bold")
+        return {"base": cv.finish()}
+
+    def draw(self, img: np.ndarray, xf: Xf, p: dict, a: Analysis, L: dict[str, object]) -> None:
+        meters = self._meters(p)
+        needle, hub = _bgr(p["needle"]), _bgr(p["hub"])
+        trail = bool(p.get("trail", True))
+        led = bool(p.get("peakLed", True))
+        for i, (cx, cy, r) in enumerate(meters):
+            k = r / 250.0
+            m = i if len(meters) == 2 else int(np.argmax(a.vu))
+            v = float(a.vu[m]) / 1.4125
+            th = self._theta(p, v)
+            c = xf.p(cx, cy)
+            if trail and v > 0.002:
+                # Annular wedge from the scale start to the needle, square ends.
+                r_out = r - 4 * k
+                r_in = r_out - _f(p, "trailW", 34) * k
+                sweep = np.radians(np.linspace(self._theta(p, 0.0), th, 24))
+                ring = np.concatenate([np.stack([np.sin(sweep), -np.cos(sweep)], 1) * r_out,
+                                       np.stack([np.sin(sweep[::-1]), -np.cos(sweep[::-1])], 1) * r_in])
+                pts = np.empty_like(ring)
+                pts[:, 0] = (xf.ox + (cx + ring[:, 0]) * xf.s - 0.5) * _ONE
+                pts[:, 1] = (xf.oy + (cy + ring[:, 1]) * xf.s - 0.5) * _ONE
+                cv2.fillPoly(img, [pts.astype(np.int32)], _bgr(p["trailColor"]), cv2.LINE_AA, SHIFT)
+            col = _bgr(p["peakLedColor"]) if led and a.led_age[m] < 0.15 else needle
+            s_, c_ = math.sin(math.radians(th)), math.cos(math.radians(th))
+            r0, r1 = -0.08 * r, r + 12 * k  # short tail past the pivot, tip just over the scale
+            cv2.line(img, xf.p(cx + s_ * r0, cy - c_ * r0), xf.p(cx + s_ * r1, cy - c_ * r1), col,
+                     xf.th(_f(p, "needleW", 4) * k), cv2.LINE_AA, SHIFT)
+            cv2.circle(img, c, int(round(xf.l(16 * k) * _ONE)), hub, -1, cv2.LINE_AA, SHIFT)
+            cv2.circle(img, c, int(round(xf.l(6 * k) * _ONE)), col, -1, cv2.LINE_AA, SHIFT)
+
+
 # -- 1d. sweep VU: no needle; light travels along an arched track ------------------------
 class SweepVU(Style):
     needs = ("vu", "ppm")
@@ -1943,6 +2074,8 @@ class Fireflies(Style):
 
 
 STYLE_IMPLS: dict[str, Style] = {
+    "analog_vu": AnalogVU(),
+    "modern_vu": ModernVU(),
     "arc_vu": ArcVU(),
     "pixel_vu": PixelVU(),
     "sweep_vu": SweepVU(),

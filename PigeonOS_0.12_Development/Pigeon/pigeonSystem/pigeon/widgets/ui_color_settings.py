@@ -156,9 +156,9 @@ def hex_for_color_key(color_class: str, key: str) -> str:
 
 def read_ui_color_keys() -> dict[str, str]:
     try:
-        from pigeon.app_state import read_app_state
+        from pigeon.app_state import read_app_state_shared
 
-        raw = read_app_state().get("settings_ui_colors")
+        raw = read_app_state_shared().get("settings_ui_colors")
     except Exception:
         raw = None
     if not isinstance(raw, dict):

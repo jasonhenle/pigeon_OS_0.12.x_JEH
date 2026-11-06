@@ -173,13 +173,15 @@ def np_theme_from_settings() -> _NpTheme:
     """Load accent / ui / button colors from the settings color page."""
     try:
         from pigeon.widgets.ui_color_settings import (
+            current_ui_picker_key,
             hex_for_color_key,
             read_ui_color_keys,
         )
 
         keys = read_ui_color_keys()
         return _NpTheme(
-            ui_hex=hex_for_color_key("ui", keys.get("ui", "blue")),
+            # The live key, so a colour change (or preview) lands everywhere on the same frame.
+            ui_hex=hex_for_color_key("ui", current_ui_picker_key()),
             accent_hex=hex_for_color_key("accent", keys.get("accent", "white")),
             button_hex=hex_for_color_key("button", keys.get("button", "black")),
         )

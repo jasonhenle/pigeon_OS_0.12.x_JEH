@@ -2006,7 +2006,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 int(display_view_holder[0]),
                 _np_vol_sig,
             )
-            scene_off_key = (*scene_off_key, _sports_board_key())
+            scene_off_key = (*scene_off_key, _sports_board_key(), _viz_backdrop.theme_key())
             if no_anim and skip_cache[0] == scene_off_key:
                 _schedule_next_render()
                 return

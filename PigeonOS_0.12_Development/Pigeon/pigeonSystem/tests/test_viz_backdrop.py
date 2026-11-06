@@ -124,6 +124,23 @@ class TimelineTests(unittest.TestCase):
         self.assertGreater(vb._t, 0.0)
         self.assertFalse(vb.cancel_leave())
 
+    def test_theme_change_recolours_the_clock_on_the_next_frame(self) -> None:
+        theme = ["#4EA6F7"]
+
+        def digits():
+            f = _face()
+            f[400:500, 200:1000, :3] = (255, 0, 0) if theme[0] == "#4EA6F7" else (0, 255, 0)
+            return f
+
+        with mock.patch.object(vb, "theme_key", lambda: theme[0]), \
+                mock.patch.object(vb, "_render_digits", digits):
+            c = self._frames(vb._TOTAL + 0.2)
+            self.assertEqual(int(c[vb.CLOCK_TOP_PX + 5, 900, 0]), int(round(255 * vb.CLOCK_DIM)))
+            theme[0] = "#00A22D"
+            c = self._frames(1 / 30)
+            self.assertEqual(int(c[vb.CLOCK_TOP_PX + 5, 900, 0]), 0)
+            self.assertGreater(int(c[vb.CLOCK_TOP_PX + 5, 900, 1]), 0)
+
     def test_knob_turns_only_while_showing(self) -> None:
         self.assertFalse(vb.rotate(1))
         self._frames(vb._TOTAL + 0.2)

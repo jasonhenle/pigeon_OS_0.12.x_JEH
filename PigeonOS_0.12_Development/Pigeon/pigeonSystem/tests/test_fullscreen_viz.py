@@ -66,10 +66,11 @@ class _Base(unittest.TestCase):
 
 
 class PresetTests(_Base):
-    def test_default_presets_use_distinct_live_styles(self) -> None:
-        styles = [p["style"] for p in fv.presets()]
-        self.assertEqual(len(styles), len(set(styles)))
-        self.assertLessEqual(set(styles), set(fv.STYLES))
+    def test_default_presets_have_distinct_names_and_live_styles(self) -> None:
+        names = [p["name"] for p in fv.presets()]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertLessEqual({p["style"] for p in fv.presets()}, set(fv.STYLES))
+        self.assertEqual(names[0], "Spectrum")
 
     def test_retired_style_and_stale_keys_drop_out(self) -> None:
         fv.config_path().write_text(json.dumps({"presets": [
