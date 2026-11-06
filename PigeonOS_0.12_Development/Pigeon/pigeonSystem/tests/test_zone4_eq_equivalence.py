@@ -32,6 +32,18 @@ if _SYS_ROOT not in sys.path:
 from pigeon import zone4_eq  # noqa: E402
 from pigeon.zone4_eq import GRID, _STEREO_SPLIT, _f, _hex_bgr, target_bands  # noqa: E402,F401
 
+
+# Colour checks use the stock palette, not this machine's settings UI colour.
+_theme = mock.patch("pigeon.fullscreen_viz.theme_hex", lambda: "#4EA6F7")
+
+
+def setUpModule() -> None:
+    _theme.start()
+
+
+def tearDownModule() -> None:
+    _theme.stop()
+
 time = zone4_eq.time  # the reference's time.monotonic() is patched with zone4_eq's
 
 
