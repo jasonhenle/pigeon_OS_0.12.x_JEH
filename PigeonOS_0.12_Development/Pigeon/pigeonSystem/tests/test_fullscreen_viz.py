@@ -80,7 +80,7 @@ class PresetTests(_Base):
         self.assertNotIn("readouts", items[0])
 
     def test_rotation_is_spectrum_and_lab_starters_render(self) -> None:
-        self.assertEqual([p["name"] for p in fv.presets()], ["Spectrum", "Sweep VU", "Stereo Bars"])
+        self.assertEqual([p["name"] for p in fv.presets()], ["Spectrum", "Sweep VU", "Arc VU", "Stereo Bars"])
         names = [d["name"] for d in fv.LAB_PRESETS]
         self.assertEqual(len(names), len(set(names)))
         buf = np.zeros((400, 640, 3), np.uint8)
