@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The device's Settings > Pigeon > SPORTS page: SCORES show / hide, FOLLOWED TEAMS
-/// auto / off (only while scores are shown), the teams to follow, and today's games.
+/// The device's Settings > Pigeon > SPORTS page: SPORTS on / off (off, no game ever comes
+/// up), FOLLOWED TEAMS auto / off and today's games (both only while sports is on), and the
+/// teams to follow. The API still names the on / off switch `scores_shown`.
 @MainActor
 final class SportsModel: ObservableObject {
     @Published private(set) var data: SportsSettings?
@@ -15,7 +16,7 @@ final class SportsModel: ObservableObject {
         catch { errorText = error.localizedDescription }
     }
 
-    func setScoresShown(_ on: Bool) async { await send(SportsPatch(scoresShown: on, followedAuto: nil)) }
+    func setSportsOn(_ on: Bool) async { await send(SportsPatch(scoresShown: on, followedAuto: nil)) }
     func setFollowedAuto(_ on: Bool) async { await send(SportsPatch(scoresShown: nil, followedAuto: on)) }
 
     func clearGame() async {
@@ -50,9 +51,12 @@ struct SportsView: View {
                         NavigationLink {
                             TodaysGamesView(model: model)
                         } label: {
-                            linkTile(title: "Today's Games", detail: "Put any game on the Pigeon")
+                            linkTile(title: "Today's Games",
+                                     detail: d.scoresShown ? "Put any game on the Pigeon" : "Turn sports on to use this")
                         }
                         .buttonStyle(.plain)
+                        .disabled(!d.scoresShown)
+                        .opacity(d.scoresShown ? 1 : 0.45)
                     } else if model.errorText == nil {
                         ProgressView().frame(maxWidth: .infinity)
                     }
@@ -70,20 +74,20 @@ struct SportsView: View {
 
     @ViewBuilder private func settings(_ d: SportsSettings) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            LCDLabel(text: "Scores", size: 18, color: Theme.accent)
+            LCDLabel(text: "Sports", size: 18, color: Theme.accent)
             switchRow(
-                selection: Binding(get: { d.scoresShown }, set: { v in Task { await model.setScoresShown(v) } }),
-                on: "Show", off: "Hide",
+                selection: Binding(get: { d.scoresShown }, set: { v in Task { await model.setSportsOn(v) } }),
+                on: "On", off: "Off",
                 note: d.scoresShown
-                    ? "Games come up on the Pigeon with their scores."
-                    : "Games still come up, without the scores, so nothing is spoiled.")
+                    ? "Followed teams' games and games you pick come up on the Pigeon with their scores."
+                    : "No games come up on the Pigeon.")
             Divider().overlay(Theme.inactive)
             LCDLabel(text: "Followed Teams", size: 18, color: d.scoresShown ? Theme.accent : Theme.inactive)
             switchRow(
                 selection: Binding(get: { d.followedActive }, set: { v in Task { await model.setFollowedAuto(v) } }),
                 on: "Auto", off: "Off",
                 note: !d.scoresShown
-                    ? "Show scores to use this."
+                    ? "Turn sports on to use this."
                     : d.followedAuto
                         ? "When a team you follow plays, its game comes up on the Pigeon at kickoff."
                         : "Followed teams' games don't come up on their own.")

@@ -51,10 +51,11 @@ def read_sports() -> dict[str, Any]:
     from pigeon.sports_teams import FOLLOW_LEAGUES, teams
     from pigeon.widgets.sports_settings import uses_letters
 
-    shown = sf.scores_shown()
+    shown = sf.sports_on()
     board = selected_event() if scoreboard_active() else None
     return {
-        "scores_shown": shown,
+        "sports_on": shown,
+        "scores_shown": shown,  # the same switch, for app builds before SPORTS ON / OFF
         "followed_auto": sf.auto_enabled(),
         "followed_active": sf.auto_active(),
         "leagues": [
@@ -72,17 +73,21 @@ def read_sports() -> dict[str, Any]:
 
 
 def patch_sports(body: Mapping[str, Any]) -> None:
-    """``scores_shown`` / ``followed_auto`` booleans. Raises ValueError with the field names."""
+    """``sports_on`` (or its old name ``scores_shown``) / ``followed_auto`` booleans.
+
+    Raises ValueError with the field names.
+    """
     from pigeon import sports_follow as sf
 
-    errors = sorted(set(body) - {"scores_shown", "followed_auto"})
-    for key in ("scores_shown", "followed_auto"):
+    errors = sorted(set(body) - {"sports_on", "scores_shown", "followed_auto"})
+    for key in ("sports_on", "scores_shown", "followed_auto"):
         if key in body and not isinstance(body[key], bool):
             errors.append(key)
     if errors or not body:
-        raise ValueError(",".join(errors) or "scores_shown")
-    if "scores_shown" in body and body["scores_shown"] != sf.scores_shown():
-        sf.toggle_scores()
+        raise ValueError(",".join(errors) or "sports_on")
+    on = body.get("sports_on", body.get("scores_shown"))
+    if on is not None and on != sf.sports_on():
+        sf.set_sports(bool(on))
     if "followed_auto" in body:
         sf.set_auto(bool(body["followed_auto"]))
 
@@ -136,9 +141,15 @@ def read_games() -> dict[str, Any]:
 
 
 def show_game(event_id: str) -> None:
-    """Put a game from today's list on the scoreboard. Raises KeyError if it is not listed."""
+    """Put a game from today's list on the scoreboard.
+
+    Raises KeyError if it is not listed, PermissionError while SPORTS is off.
+    """
+    from pigeon.sports_follow import sports_on
     from pigeon.sports_scores import events_snapshot, select_event
 
+    if not sports_on():
+        raise PermissionError("sports off")
     ev = next((e for e in events_snapshot()[0] if e.event_id == str(event_id)), None)
     if ev is None:
         raise KeyError(event_id)

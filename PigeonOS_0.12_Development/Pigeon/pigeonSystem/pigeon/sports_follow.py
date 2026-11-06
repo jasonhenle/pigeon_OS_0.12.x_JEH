@@ -1,17 +1,20 @@
-"""Scores show / hide, followed teams, and their automatic games.
+"""Sports on / off, followed teams, and their automatic games.
 
 The sports page (settings_pigeon → SPORTS) has two settings, one under the
 other:
 
-* **SCORES: SHOW / HIDE** — whether the scoreboard shows the score numbers.
-  Hidden, a game still comes up, spoiler-free (teams, league, status, clock).
-* **FOLLOWED TEAMS: AUTO / OFF** — only with scores shown. A background
+* **SPORTS: ON / OFF** — the master switch. On, games come up with their
+  scores: a followed team's game, or one picked from TODAY'S GAMES. Off, no
+  scoreboard ever: a game on the board is taken off, picks are ignored and
+  the followed-teams watcher stays quiet.
+* **FOLLOWED TEAMS: AUTO / OFF** — only with sports on. A background
   watcher asks TheSportsDB for each followed team (leagues of
   :mod:`pigeon.sports_teams`) when its next game is and puts that game on the
-  scoreboard from its start until the final hold runs out. Hiding scores turns
-  this off (the AUTO choice is kept for when scores are shown again).
+  scoreboard from its start until the final hold runs out. Turning sports off
+  stops this (the AUTO choice is kept for when sports is on again).
 
-Saved in ``state.json`` as ``sports_follow``::
+Saved in ``state.json`` as ``sports_follow`` (``show_scores`` is the master
+switch; it was the old SCORES SHOW / HIDE)::
 
     {"show_scores": true, "auto": true, "teams": {"4391": ["134936", ...], ...}}
 
@@ -111,18 +114,33 @@ def settings_version() -> int:
     return _version
 
 
-def scores_shown() -> bool:
+def sports_on() -> bool:
+    """SPORTS: ON. Off, nothing sports-related ever comes up."""
     with _lock:
         return bool(_load()["show_scores"])
 
 
-def toggle_scores() -> bool:
-    """SCORES: SHOW ↔ HIDE; returns True when now shown."""
+# A game on the board always shows its score now; the name stays for callers.
+scores_shown = sports_on
+
+
+def set_sports(on: bool) -> None:
     with _lock:
-        data = _load()
-        data["show_scores"] = not data["show_scores"]
+        _load()["show_scores"] = bool(on)
         _save()
-        return data["show_scores"]
+    if not on:
+        from pigeon.sports_scores import clear_selection
+
+        clear_selection()
+
+
+def toggle_sports() -> bool:
+    """SPORTS: ON ↔ OFF; returns True when now on (off takes any game off the board)."""
+    set_sports(not sports_on())
+    return sports_on()
+
+
+toggle_scores = toggle_sports
 
 
 def auto_enabled() -> bool:
@@ -132,7 +150,7 @@ def auto_enabled() -> bool:
 
 
 def auto_active() -> bool:
-    """Followed teams come up on their own: AUTO, and scores shown."""
+    """Followed teams come up on their own: AUTO, and sports on."""
     with _lock:
         data = _load()
         return bool(data["auto"] and data["show_scores"])
@@ -297,6 +315,9 @@ __all__ = [
     "settings_version",
     "start_auto_watch",
     "scores_shown",
+    "set_sports",
+    "sports_on",
+    "toggle_sports",
     "toggle_auto",
     "toggle_scores",
     "toggle_follow",

@@ -608,6 +608,8 @@ class ControlService:
                     sports.show_game(str(body["event_id"]))
                 except KeyError:
                     return _err(404, "not_found", "That game is not in today's list.")
+                except PermissionError:
+                    return _err(409, "conflict", "Sports is off on this Pigeon.")
                 self.hub.publish("sports", {"changed": ["board"]})
                 return 200, sports.read_sports()
             if method == "DELETE":

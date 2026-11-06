@@ -686,14 +686,28 @@ def selected_event() -> SportsEvent | None:
         return _selected
 
 
+def _sports_on() -> bool:
+    try:
+        from pigeon.sports_follow import sports_on
+
+        return sports_on()
+    except Exception:
+        return True
+
+
 def scoreboard_active() -> bool:
     _expire_final()
+    if not _sports_on():
+        return False
     with _lock:
         return _selected is not None
 
 
 def select_event(ev: SportsEvent) -> None:
+    """Put ``ev`` on the scoreboard (ignored while SPORTS is off)."""
     global _selected, _final_since
+    if not _sports_on():
+        return
     with _lock:
         _selected = ev
         _final_since = time.monotonic() if ev.phase == FINAL else None
