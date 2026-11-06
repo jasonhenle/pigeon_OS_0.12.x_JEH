@@ -104,6 +104,9 @@ def _atomic_write_state(cur: dict[str, Any]) -> None:
 def write_app_state(**updates: Any) -> None:
     """Merge updates into existing JSON and atomically replace the file."""
     try:
+        shared = read_app_state_shared()
+        if shared and all(key in shared and shared[key] == val for key, val in updates.items()):
+            return
         cur = read_app_state()
         if not cur:
             # A sizable on-disk file that failed to parse must not be replaced
@@ -321,6 +324,8 @@ def migrate_device_slots_from_legacy_if_needed() -> None:
     One-time: split legacy ``saved_apple_tv_devices`` into ``saved_streaming_device`` and
     ``saved_av_receiver`` (at most one each), then clear the legacy list.
     """
+    if read_app_state_shared().get("device_slots_v1_migrated") is True:
+        return
     cur = read_app_state()
     if cur.get("device_slots_v1_migrated") is True:
         return
@@ -757,6 +762,9 @@ def _v2_persist_locations_and_mirror_legacy(locs: list[dict[str, Any]]) -> None:
 
 def _ensure_locations_v2_migrated() -> None:
     migrate_device_slots_from_legacy_if_needed()
+    raw = read_app_state_shared().get("locations_v2")
+    if isinstance(raw, list) and len(raw) > 0:
+        return
     cur = read_app_state()
     raw = cur.get("locations_v2")
     if isinstance(raw, list) and len(raw) > 0:
@@ -810,7 +818,7 @@ def _coerce_slot_row(row: dict[str, str], slot_key: str) -> dict[str, str] | Non
 
 def _v2_read_primary_streaming() -> dict[str, str] | None:
     _ensure_locations_v2_migrated()
-    cur = read_app_state()
+    cur = read_app_state_shared()
     locs = _v2_copy_locations_from_state(cur)
     if not locs:
         return _parse_one_saved_device_row(cur.get("saved_streaming_device"))
@@ -821,7 +829,7 @@ def _v2_read_primary_streaming() -> dict[str, str] | None:
 
 def _v2_read_primary_av_receiver() -> dict[str, str] | None:
     _ensure_locations_v2_migrated()
-    cur = read_app_state()
+    cur = read_app_state_shared()
     locs = _v2_copy_locations_from_state(cur)
     if not locs:
         return _parse_one_saved_device_row(cur.get("saved_av_receiver"))
@@ -877,14 +885,14 @@ def _v2_write_av_receiver_slot(row: dict[str, str] | None, *, for_location_id: s
 def read_all_locations_v2() -> list[dict[str, Any]]:
     migrate_device_slots_from_legacy_if_needed()
     _ensure_locations_v2_migrated()
-    cur = read_app_state()
+    cur = read_app_state_shared()
     return [copy.deepcopy(L) for L in _v2_copy_locations_from_state(cur)]
 
 
 def read_current_location_id() -> str:
     migrate_device_slots_from_legacy_if_needed()
     _ensure_locations_v2_migrated()
-    cur = read_app_state()
+    cur = read_app_state_shared()
     locs = _v2_copy_locations_from_state(cur)
     return _v2_resolve_effective_location_id(locs, cur)
 
@@ -892,7 +900,7 @@ def read_current_location_id() -> str:
 def read_current_location_name() -> str:
     migrate_device_slots_from_legacy_if_needed()
     _ensure_locations_v2_migrated()
-    cur = read_app_state()
+    cur = read_app_state_shared()
     locs = _v2_copy_locations_from_state(cur)
     lid = _v2_resolve_effective_location_id(locs, cur)
     loc = _v2_find_loc(locs, lid)

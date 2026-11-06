@@ -897,7 +897,7 @@ def compose_display_from_source(
     if intro_op is None and not (_view_one_uses_now_playing_screen() and not cs):
         _blend_top_gradient_design(canvas)
     if not cs and _view_one_uses_now_playing_screen():
-        canvas[:] = (0, 0, 0)
+        canvas[:] = 0
         if startup_ph[0] is not None and not _splash_reveal_clock[0]:
             # Pre-reveal splash underlay stays black.
             pass
@@ -1327,7 +1327,7 @@ def compose_display_fast_no_grid(
             and not cs_v1
         )
         if not meter_v1 and not np_live:
-            canvas_np[:] = (0, 0, 0)
+            canvas_np[:] = 0
         # Pre-reveal splash: black underlay. From the reveal frame: full UI under PNG alpha.
         if startup_ph[0] is not None and not _splash_reveal_clock[0]:
             pass
