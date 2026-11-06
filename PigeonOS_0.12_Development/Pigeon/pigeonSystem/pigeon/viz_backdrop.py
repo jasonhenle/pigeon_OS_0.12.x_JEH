@@ -14,6 +14,11 @@ runs back: the bars fall to rest (the visualizer analyses silence), the time
 brightens, glides back down, and the other clocksaver elements fade back in.
 :mod:`pigeon.visualizer_mode` holds the layout until that exit has finished.
 
+Over the Pausesaver (the clock shrunk beside the paused title's poster), the
+poster and the rest of the face fade first with the small time left in place,
+then the time grows back to full size (:data:`SCALE_S`), then it glides up;
+leaving runs the same way back.
+
 The analog clock option has no separate time layer, so the whole face moves
 and dims and nothing fades.
 
@@ -39,6 +44,7 @@ CLOCK_DIM = 0.30
 CLOCK_TOP_PX = 48  # where the time's top edge ends up
 # Phase lengths (s), in entering order; leaving runs them backwards.
 EXTRAS_S = 0.6
+SCALE_S = 0.8  # Pausesaver only, between the fade and the move
 MOVE_S = 1.0
 DIM_S = 0.6
 VIZ_S = 1.4  # leaving: the bars fall to rest, then the last VIZ_FADE fades out
@@ -64,6 +70,7 @@ _painted_mono = 0.0
 _exit_cb = None  # called once the timeline is back at 0 (long press off)
 _label_source = None  # () -> str: the receiver's current input label
 _suppressed = False  # long press dismissed the automatic visualizer until audio stops
+_split = False  # the face is the Pausesaver split (small clock beside a poster)
 
 
 def wanted() -> bool:
@@ -76,8 +83,12 @@ def wanted() -> bool:
         return False
 
 
+def _total() -> float:
+    return _TOTAL + (SCALE_S if _split else 0.0)
+
+
 def _target() -> float:
-    return _TOTAL if (_exit_cb is None and not _suppressed and wanted()) else 0.0
+    return _total() if (_exit_cb is None and not _suppressed and wanted()) else 0.0
 
 
 def active() -> bool:
@@ -194,6 +205,7 @@ class ClockOverlay:
         self._frame = key_page(frame)
         self._prepped: dict[tuple[int, int], tuple] = {}
         self._scaled: tuple[float, np.ndarray] | None = None
+        self._resized: tuple[tuple, np.ndarray, np.ndarray] | None = None
 
     def prep(self, h: int, w: int) -> tuple:
         """``(y0, x0, colour, alpha)``: the box's corner, straight BGR and 1-channel alpha (uint8)."""
@@ -225,22 +237,43 @@ class ClockOverlay:
             self._scaled = hit
         return hit[1]
 
-    def blit(self, canvas: np.ndarray, *, opacity: float = 1.0, gain: float = 1.0, dy: int = 0,
-             under: bool = False) -> None:
-        """Blend onto ``canvas``: ``gain`` scales brightness, ``dy`` moves it down (px),
-        ``under`` keeps whatever bright pixels ``canvas`` already has on top."""
+    def _resize(self, colour: np.ndarray, alpha: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
+        bh, bw = alpha.shape
+        size = (max(1, int(round(bw * scale))), max(1, int(round(bh * scale))))
+        key = (size, alpha.shape)
+        hit = self._resized
+        if hit is None or hit[0] != key:
+            interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+            hit = (key, cv2.resize(colour, size, interpolation=interp), cv2.resize(alpha, size, interpolation=interp))
+            self._resized = hit
+        return hit[1], hit[2]
+
+    def blit(self, canvas: np.ndarray, *, opacity: float = 1.0, gain: float = 1.0, dx: float = 0, dy: float = 0,
+             scale: float = 1.0, under: bool = False) -> None:
+        """Blend onto ``canvas``: ``gain`` scales brightness, a pixel at ``(x, y)`` lands at
+        ``(x*scale + dx, y*scale + dy)``, ``under`` keeps whatever bright pixels ``canvas``
+        already has on top."""
         if opacity <= 0.0:
             return
         h, w = canvas.shape[:2]
         y0, x0, colour, alpha = self.prep(h, w)
-        bh, bw = alpha.shape
-        top = y0 + int(dy)
-        r0, r1 = max(0, top), min(h, top + bh)
-        if r1 <= r0 or bw == 0:
+        if alpha.size == 0:
             return
-        colour = self._colour(colour, gain)[r0 - top : r1 - top]
-        k = alpha[r0 - top : r1 - top]
-        dst = canvas[r0:r1, x0 : x0 + bw]
+        if abs(scale - 1.0) > 1e-3:
+            colour, alpha = self._resize(colour, alpha, scale)
+            colour = colour if gain >= 1.0 else cv2.convertScaleAbs(colour, alpha=float(gain))
+        else:
+            scale = 1.0
+            colour = self._colour(colour, gain)
+        bh, bw = alpha.shape
+        top, left = int(round(y0 * scale + dy)), int(round(x0 * scale + dx))
+        r0, r1 = max(0, top), min(h, top + bh)
+        c0, c1 = max(0, left), min(w, left + bw)
+        if r1 <= r0 or c1 <= c0:
+            return
+        colour = colour[r0 - top : r1 - top, c0 - left : c1 - left]
+        k = alpha[r0 - top : r1 - top, c0 - left : c1 - left]
+        dst = canvas[r0:r1, c0:c1]
         cur = dst[:, :, :3]
         if opacity < 1.0:
             k = cv2.convertScaleAbs(k, alpha=float(opacity))
@@ -354,6 +387,23 @@ def _digital_face() -> bool:
         return False
 
 
+def _split_poster() -> bool:
+    try:
+        from pigeon.core.saver_state import split_poster
+
+        return split_poster() is not None
+    except Exception:
+        return False
+
+
+def _split_xform(h: int, w: int) -> tuple[float, float, float]:
+    """``(s, tx, ty)`` in ``canvas`` pixels: where the Pausesaver puts a full-frame clock pixel."""
+    from pigeon.widgets.clock_saver import clock_saver_poster_split_xform
+
+    s, tx, ty = clock_saver_poster_split_xform(DESIGN_W, DESIGN_H)
+    return s, tx * w / float(DESIGN_W), ty * h / float(DESIGN_H)
+
+
 def _render_digits() -> np.ndarray:
     from pigeon.widgets.clock_saver import render_clock_saver_bgra
 
@@ -365,15 +415,18 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
 
     ``render_full()`` returns the regular clocksaver layers ``((frame, rect), date)``.
     """
-    global _painted_mono
+    global _painted_mono, _split
+    digital = _digital_face()
+    _split = digital and _split_poster()
     _advance()
     h, w = canvas.shape[:2]
-    extras = _ease(_phase(0.0, EXTRAS_S))  # 1 = date / weather / volume / seconds gone
-    move = _ease(_phase(EXTRAS_S, MOVE_S))
-    dim = _ease(_phase(EXTRAS_S + MOVE_S, DIM_S))
-    viz = _phase(EXTRAS_S + MOVE_S + DIM_S, VIZ_S)
+    grow_s = SCALE_S if _split else 0.0
+    extras = _ease(_phase(0.0, EXTRAS_S))  # 1 = date / weather / volume / seconds (/ poster) gone
+    grow = _ease(_phase(EXTRAS_S, grow_s)) if grow_s else 1.0  # Pausesaver: 1 = the time at full size
+    move = _ease(_phase(EXTRAS_S + grow_s, MOVE_S))
+    dim = _ease(_phase(EXTRAS_S + grow_s + MOVE_S, DIM_S))
+    viz = _phase(EXTRAS_S + grow_s + MOVE_S + DIM_S, VIZ_S)
     leaving = _target() < _t
-    digital = _digital_face()
 
     if viz > 0.0:
         try:
@@ -399,11 +452,24 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
     if digital and full is not None and extras < 1.0:
         # Fading phase: the time is still in place, the rest of the face fades.
         full.blit(canvas, opacity=1.0 - extras)
-    dy = int(round((CLOCK_TOP_PX - clock.top(h, w)) * move)) if move > 0.0 else 0
+    y0, x0, _col, alpha = clock.prep(h, w)
+    bh, bw = alpha.shape
+    s, px, py = 1.0, float(x0), float(y0)  # the time's size and top-left before the move
+    if _split:
+        s0, tx, ty = _split_xform(h, w)
+        s = s0 + (1.0 - s0) * grow
+        ax, ay = x0 * s0 + tx, y0 * s0 + ty  # the small time beside the poster
+        # Grows from its top-left corner, held on screen.
+        px = max(0.0, min(ax, w - ax - bw * s))
+        py = max(0.0, min(ay, h - bh * s))
+    px += (x0 - px) * move
+    py += (CLOCK_TOP_PX - py) * move
+    dx, dy = px - x0 * s, py - y0 * s
     gain = 1.0 - (1.0 - CLOCK_DIM) * dim
-    clock.blit(canvas, gain=gain, dy=dy, under=viz > 0.0)
+    clock.blit(canvas, gain=gain, dx=dx, dy=dy, scale=s, under=viz > 0.0)
     label = input_label() if digital else ""
     if label and extras > 0.0:
-        y0, x0, _col, alpha = clock.prep(h, w)
-        top = y0 + alpha.shape[0] + int(round(LABEL_GAP_PX * w / float(DESIGN_W)))
-        _label_overlay(label, x0, top, theme, h, w).blit(canvas, opacity=extras, gain=gain, dy=dy, under=viz > 0.0)
+        top = y0 + bh + int(round(LABEL_GAP_PX * w / float(DESIGN_W)))
+        _label_overlay(label, x0, top, theme, h, w).blit(
+            canvas, opacity=extras, gain=gain, dx=dx, dy=dy, scale=s, under=viz > 0.0
+        )

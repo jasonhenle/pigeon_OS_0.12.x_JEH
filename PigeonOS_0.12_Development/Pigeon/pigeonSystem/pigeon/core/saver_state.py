@@ -1258,6 +1258,21 @@ def set_paused_poster_hook(fn) -> None:
     _PAUSED_POSTER_HOOK[0] = fn
 
 
+def split_poster():
+    """The poster the clocksaver shrinks beside (a searched title, else the paused one), or None."""
+    try:
+        from pigeon import manual_search
+
+        if manual_search.current_title() and manual_search.poster_allowed():
+            poster = manual_search.poster_bgr()
+            if poster is not None:
+                return poster
+        hook = _PAUSED_POSTER_HOOK[0]
+        return hook() if hook is not None else None
+    except Exception:
+        return None
+
+
 def _clock_saver_layers(*, _clock_saver_volume_raw, _volume_lines, clock_saver_composite_bgra, render_audio_meter_composite_bgra, **kwargs):
     try:
         from pigeon.auto_widgets import live_plan
@@ -1285,21 +1300,7 @@ def _clock_saver_layers(*, _clock_saver_volume_raw, _volume_lines, clock_saver_c
         return render_audio_meter_composite_bgra(layer_opacity=float(op))
     composite = clock_saver_composite_bgra(**kwargs)
     try:
-        from pigeon import manual_search
-
-        if manual_search.current_title() and manual_search.poster_allowed():
-            poster = manual_search.poster_bgr()
-            if poster is not None:
-                from pigeon.widgets.clock_saver import compose_clock_with_poster
-
-                op = kwargs.get("time_layer_opacity")
-                if op is None:
-                    op = kwargs.get("layer_opacity", 1.0)
-                (frame, rect), date = composite
-                frame = compose_clock_with_poster(frame, poster, opacity=float(op))
-                return (frame, rect), date
-        hook = _PAUSED_POSTER_HOOK[0]
-        poster = hook() if hook is not None else None
+        poster = split_poster()
         if poster is not None:
             from pigeon.widgets.clock_saver import compose_clock_with_poster
 

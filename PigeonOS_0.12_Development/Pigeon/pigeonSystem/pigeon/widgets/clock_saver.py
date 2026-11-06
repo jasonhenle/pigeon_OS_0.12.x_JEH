@@ -1957,6 +1957,19 @@ def clock_saver_poster_split_boxes(
     return clock, (px, m, pw, ph)
 
 
+def clock_saver_poster_split_xform(
+    canvas_w: int = DESIGN_W, canvas_h: int = DESIGN_H
+) -> tuple[float, float, float]:
+    """``(s, tx, ty)``: a full-frame clock pixel ``(x, y)`` lands at ``(x*s + tx, y*s + ty)`` in the split."""
+    from pigeon.np_layout import clock_saver_scaled_source_xywh
+
+    (bx, by, bw, bh), _poster = clock_saver_poster_split_boxes(canvas_w, canvas_h)
+    sx, sy, sw, sh = clock_saver_scaled_source_xywh()
+    s = min(bw / float(sw), bh / float(sh))
+    nw, nh = max(1, int(round(sw * s))), max(1, int(round(sh * s)))
+    return s, bx + (bw - nw) // 2 - sx * s, by + (bh - nh) // 2 - sy * s
+
+
 def compose_clock_with_poster(
     frame: np.ndarray,
     poster_bgr: np.ndarray,
