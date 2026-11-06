@@ -413,10 +413,12 @@ class DiscoveryTests(_Base):
         from pigeon.control_api.discovery import Advertiser
 
         captured: list[str] = []
+        servers: list[str] = []
 
         class FakeInfo:
             def __init__(self, type_, name, **kw):
                 captured.append(name)
+                servers.append(kw.get("server"))
 
         class FakeZC:
             def register_service(self, info): pass
@@ -429,3 +431,5 @@ class DiscoveryTests(_Base):
         self.assertEqual(len(captured), 2)
         self.assertNotEqual(captured[0], captured[1])
         self.assertTrue(captured[0].startswith("Pigeon Clock "))
+        # a plain host name for the address record, not the service name
+        self.assertEqual(servers, ["pigeon-aaaaaa.local.", "pigeon-bbbbbb.local."])

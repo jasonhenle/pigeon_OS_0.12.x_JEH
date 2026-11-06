@@ -41,6 +41,10 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIAppFonts: [Digital-7.ttf, SharpSansMedium.otf, SharpSansSemibold.otf]
+        # pigeon://setup#… — the QR code on a new Pigeon's Welcome screen opens the setup flow.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.jasonhenle.pigeon.setup
+            CFBundleURLSchemes: [pigeon]
         NSLocalNetworkUsageDescription: Pigeon Remote finds and controls the Pigeon devices on your home network.
         NSBonjourServices: [_pigeon._tcp]
         NSAppTransportSecurity:

@@ -69,6 +69,7 @@ struct DeviceRow: View {
 
 struct DeviceDetailView: View {
     @EnvironmentObject private var store: DeviceStore
+    @EnvironmentObject private var setup: SetupCoordinator
     @Environment(\.dismiss) private var dismiss
     let device: KnownDevice
 
@@ -80,12 +81,29 @@ struct DeviceDetailView: View {
     @State private var name = ""
     @State private var errorText: String?
     @State private var confirmRemove = false
+    /// Setup on the device is not finished (the user left the wizard with "Later").
+    @State private var setupPending = false
 
     var body: some View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    if setupPending {
+                        Button { setup.request = .device(id: device.id) } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Finish setting up").font(Theme.uiBold(18)).foregroundStyle(.white)
+                                    Text("Location, player and audio").font(Theme.ui(14))
+                                        .foregroundStyle(Theme.secondaryText)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(Theme.accent)
+                            }
+                            .tile(selected: true)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     VStack(alignment: .leading, spacing: 8) {
                         LCDLabel(text: "Name", size: 18, color: Theme.accent)
                         TextField("Name", text: $name)
@@ -138,6 +156,9 @@ struct DeviceDetailView: View {
         } catch { errorText = error.localizedDescription }
         if caps?.capabilities.contains("pigeon_settings") == true {
             clockSettings = try? await c.pigeonSettings()
+        }
+        if caps?.capabilities.contains("setup") == true, let s = try? await c.setup() {
+            setupPending = !s.isDone
         }
     }
 

@@ -89,6 +89,20 @@ class StateTests(_Base):
         self.assertEqual(setup_state.public(), {"state": "welcome", "step": None, "skipped": []})
         self.assertEqual(seen, ["app", "app", "done", "welcome"])
 
+    def test_screen_steps_aside_for_on_device_pairing(self) -> None:
+        setup_state.reset_to_welcome()
+        self.assertTrue(setup_state.screen_wanted())
+        setup_state.note_claimed()
+        self.assertTrue(setup_state.screen_wanted())
+        setup_state.set_progress("player")
+        self.assertFalse(setup_state.screen_wanted())
+        setup_state.set_progress("audio")
+        self.assertFalse(setup_state.screen_wanted())
+        setup_state.set_progress("finish")
+        self.assertTrue(setup_state.screen_wanted())
+        setup_state.complete("app")
+        self.assertFalse(setup_state.screen_wanted())
+
     def test_corrupt_file_reads_as_done(self) -> None:
         (self.dir / "setup_state.json").write_text("{nope")
         self.assertEqual(setup_state.state(), "done")
@@ -156,8 +170,12 @@ class ApiTests(_Base):
         svc = self._svc()
         svc.tls_info = {"port": 8781, "fingerprint_sha256": "ab" * 32}
         setup_state.reset_to_welcome()
-        with mock.patch.object(control_api, "_service", svc):
+        srv = mock.Mock(port=8780)
+        with mock.patch.object(control_api, "_service", svc), mock.patch.object(control_api, "_server", srv), \
+                mock.patch("pigeon.local_ip.local_ipv4_address", return_value="10.0.0.9"):
             url = control_api.setup_url()
+            self.assertEqual(parse_qs(urlparse(url).fragment)["host"], ["10.0.0.9"])
+            self.assertEqual(parse_qs(urlparse(url).fragment)["port"], ["8780"])
             self.assertTrue(url.startswith("pigeon://setup#"))
             q = parse_qs(urlparse(url).fragment)
             self.assertEqual(q["code"], [svc.auth.pairing_code])

@@ -82,10 +82,13 @@ def _start_welcome_overlay(ctx) -> None:
         splash_done = ctx._startup_splash_complete
 
         def get_view():
-            st = setup_state.state()
+            cur = setup_state.current()
+            st = cur["state"]
             if st == setup_state.DONE or _api.display_code():
                 return None  # set up, or the full-screen pairing code is up instead
             if st == setup_state.APP:
+                if not setup_state.screen_wanted(cur):
+                    return None  # the app's player / audio step: the device's own picker must show
                 return WelcomeView("app", controller=_api.setup_controller_name())
             code = _api.claim_code_to_show()
             return WelcomeView("welcome", url=_api.setup_url(), code=code)

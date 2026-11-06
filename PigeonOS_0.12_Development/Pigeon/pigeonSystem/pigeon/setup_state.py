@@ -143,6 +143,19 @@ def welcome_showing() -> bool:
     return state() == WELCOME
 
 
+# While the app is on these steps the device shows its own on-screen search, picked with the knob,
+# so the "Continue on your iPhone" screen steps aside.
+ON_DEVICE_STEPS = ("player", "audio")
+
+
+def screen_wanted(cur: dict[str, Any] | None = None) -> bool:
+    """Whether the Welcome / "Continue on your iPhone" screen should be up right now."""
+    c = cur if cur is not None else current()
+    if c["state"] == DONE:
+        return False
+    return not (c["state"] == APP and c["step"] in ON_DEVICE_STEPS)
+
+
 def public() -> dict[str, Any]:
     """What ``/hello`` and ``/setup`` report."""
     c = current()

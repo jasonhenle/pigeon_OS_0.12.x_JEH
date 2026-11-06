@@ -3,10 +3,12 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var store: DeviceStore
     @EnvironmentObject private var browser: DeviceBrowser
+    @EnvironmentObject private var setup: SetupCoordinator
 
     var body: some View {
         DevicesView()
             .background(Theme.canvas)
+            .fullScreenCover(item: $setup.request) { SetupFlowView(request: $0) }
             .onChange(of: browser.devices) { _, found in
                 // Keep known devices reachable when their IP changes.
                 for d in found where store.devices.contains(where: { $0.id == d.id }) {

@@ -13,6 +13,22 @@ struct Hello: Codable, Equatable {
     var setupMode: Bool
     /// Present on firmware that serves HTTPS; absent on older devices (plain HTTP only).
     var tls: TLSInfo?
+    /// First-run setup progress; absent on firmware before 0.12.122.
+    var setup: SetupInfo?
+}
+
+/// The device's first-run setup (spec section 2.4). `state` is `welcome`, `app` or `done`.
+struct SetupInfo: Codable, Equatable {
+    var state: String
+    var step: String?
+    var skipped: [String]
+
+    var isDone: Bool { state == "done" }
+}
+
+struct SetupProgress: Codable {
+    var step: String?
+    var skipped: [String]?
 }
 
 struct TLSInfo: Codable, Equatable {

@@ -7,6 +7,12 @@ import socket
 SERVICE = "_pigeon._tcp.local."
 
 
+def host_name(uid: str) -> str:
+    """mDNS host name for this device, e.g. ``pigeon-7f3a91.local.``."""
+    label = "".join(c for c in str(uid or "").lower() if c.isalnum())[-6:]
+    return f"pigeon-{label}.local." if label else "pigeon.local."
+
+
 class Advertiser:
     def __init__(self) -> None:
         self._zc = None
@@ -30,6 +36,10 @@ class Advertiser:
                 f"{instance}.{SERVICE}",
                 addresses=[socket.inet_aton(ip)],
                 port=port,
+                # A real host name for the address record. Without it zeroconf uses the service name
+                # ("Pigeon Clock 7f3a91._pigeon._tcp.local."), which iOS can fail to look up, so the
+                # app sees the device but can't connect to it.
+                server=host_name(uid),
                 properties={k: str(v).encode("utf-8") for k, v in txt.items()},
             )
             self._zc = Zeroconf()
