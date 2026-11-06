@@ -135,6 +135,7 @@ STYLES: dict[str, dict[str, object]] = {
             "brandH": (30.0, _n(10, 80, 1)),
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
+            "meterY": (190.0, _n(0, 500, 2)),  # top edge; 190 centres the default height
         },
     },
     "modern_vu": {
@@ -189,6 +190,7 @@ STYLES: dict[str, dict[str, object]] = {
             "brandH": (30.0, _n(10, 80, 1)),
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
+            "meterY": (190.0, _n(0, 500, 2)),  # top edge; 190 centres the default height
         },
     },
     "pixel_vu": {
@@ -413,7 +415,8 @@ DEFAULT_PRESETS: list[dict[str, object]] = [
      "label": "VU", "segments": 36.0, "segGapPct": 35.0, "segLen": 38.0, "unlit": 0.12, "peakHold": True,
      "peakLed": False, "peakLedColor": "#FF3B30", "peakLedDbfs": -3.0, "sweepDeg": 90.0, "faceRadius": 24.0,
      "meterW": 580.0, "meterH": 420.0, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8, "holdMs": 1500.0,
-     "fallDbS": 20.0, "brand": True, "brandColor": "#87837A"},
+     "fallDbS": 20.0, "brand": True, "brandColor": "#87837A", "brandH": 45.0,
+     "meterY": 300.0},  # low enough to clear the clock above it on the visualizer clocksaver
     # Not in the rotation, still selectable in the lab's tuner: bounce, analog_vu, modern_vu, arc_vu
     # (digital VU), pixel_vu, sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
@@ -995,8 +998,9 @@ class AnalogVU(Style):
         gap = max(24.0, (DESIGN_W - 2 * W) / 3.0)
         R = W * 0.55
         # Pivot sits in the bottom cover so only the needle's upper part shows.
+        y0 = max(0.0, min(DESIGN_H - H, _f(p, "meterY", (DESIGN_H - H) / 2.0)))
         return {"W": W, "H": H, "gap": gap, "x0": (DESIGN_W - 2 * W - gap) / 2.0,
-                "y0": (DESIGN_H - H) / 2.0, "R": R, "piv": R + H * 0.226, "cover": H * 0.26}
+                "y0": y0, "R": R, "piv": R + H * 0.226, "cover": H * 0.26}
 
     @staticmethod
     def _theta(p: dict, pos: float) -> float:
