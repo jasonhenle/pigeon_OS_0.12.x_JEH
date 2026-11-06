@@ -246,6 +246,18 @@ class SelectionTests(_Reset):
         self.assertGreater(ss.board_token(), t0)
         self.assertFalse(ss.apply_update(_ev("other", status="Q4")))
 
+    def test_sports_off_takes_the_game_off_and_ignores_picks(self) -> None:
+        ss.select_event(_ev("1", status="Q2"))
+        self.assertTrue(ss.scoreboard_active())
+        sf.set_sports(False)
+        self.assertFalse(ss.scoreboard_active())
+        self.assertIsNone(ss.selected_event())
+        ss.select_event(_ev("2", status="Q1"))
+        self.assertFalse(ss.scoreboard_active(), "no game comes up while sports is off")
+        sf.set_sports(True)
+        ss.select_event(_ev("2", status="Q1"))
+        self.assertTrue(ss.scoreboard_active())
+
     def test_board_clears_after_final_hold(self) -> None:
         ss.select_event(_ev("1", status="Q4"))
         ss.apply_update(_ev("1", status="FT"))

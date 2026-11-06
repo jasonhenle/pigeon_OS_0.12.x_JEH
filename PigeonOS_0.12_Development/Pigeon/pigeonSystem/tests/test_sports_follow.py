@@ -246,21 +246,23 @@ class SportsPageTests(_Reset):
         self.assertFalse(sf.auto_enabled())
         self.assertEqual(w.activate(), "sports_followed:auto")
 
-    def test_hiding_scores_greys_out_followed_teams(self) -> None:
+    def test_sports_off_greys_out_followed_teams_and_todays_games(self) -> None:
         w = self._widget()
         self._focus(w, "sports_scores")
-        self.assertEqual(w.activate(), "sports_scores:hide")
-        self.assertFalse(sf.scores_shown())
-        self.assertNotIn("sports_followed", ps.pigeon_focus_ring(w.state.pigeon_view))
-        # Still on SCORES; the next stop skips FOLLOWED TEAMS.
+        self.assertEqual(w.activate(), "sports:off")
+        self.assertFalse(sf.sports_on())
+        ring = ps.pigeon_focus_ring(w.state.pigeon_view)
+        self.assertNotIn("sports_followed", ring)
+        self.assertNotIn("sports_today", ring)
+        # Still on SPORTS; the next stop wraps past the greyed-out tiles.
         self.assertEqual(w.state.pigeon_focused_id, "sports_scores")
         w.navigate(forward=True)
-        self.assertEqual(w.state.pigeon_focused_id, "sports_today")
+        self.assertEqual(w.state.pigeon_focused_id, "exit")
         # The AUTO choice is kept, but nothing comes up on its own.
         self.assertTrue(sf.auto_enabled())
         self.assertFalse(sf.auto_active())
         w.navigate(forward=False)
-        self.assertEqual(w.activate(), "sports_scores:show")
+        self.assertEqual(w.activate(), "sports:on")
         self.assertTrue(sf.auto_active())
 
     def test_today_opens_the_game_list(self) -> None:

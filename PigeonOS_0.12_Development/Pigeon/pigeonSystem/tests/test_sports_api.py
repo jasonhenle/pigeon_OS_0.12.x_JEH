@@ -151,6 +151,15 @@ class GamesTests(_Base):
         self.assertFalse(d["failed"])  # rows are still there to show
         self.assertEqual(len(d["games"]), 1)
 
+    def test_sports_off_blocks_picks_and_clears_the_board(self) -> None:
+        ss._events = (_ev("1"),)
+        ss._events_mono = 1e18
+        self.assertEqual(self.call("PUT", "/sports/board", {"event_id": "1"})[0], 200)
+        st, d = self.call("PATCH", "/sports", {"sports_on": False})
+        self.assertEqual((st, d["sports_on"], d["scores_shown"], d["board"]), (200, False, False, None))
+        self.assertEqual(self.call("PUT", "/sports/board", {"event_id": "1"})[0], 409)
+        self.assertEqual(self.call("PATCH", "/sports", {"sports_on": True})[1]["sports_on"], True)
+
     def test_hidden_scores_are_not_sent(self) -> None:
         ss._events = (_ev("1"),)
         ss._events_mono = 1e18

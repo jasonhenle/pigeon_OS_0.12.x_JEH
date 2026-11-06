@@ -2796,11 +2796,11 @@ class MainSettingsWidget:
                     self.invalidate()
                     return f"sports_teams_open:{league_id}"
                 if focused == FOCUS_SCORES:
-                    from pigeon.sports_follow import toggle_scores
+                    from pigeon.sports_follow import toggle_sports
 
-                    shown = toggle_scores()
+                    on = toggle_sports()
                     self.invalidate()
-                    return f"sports_scores:{'show' if shown else 'hide'}"
+                    return f"sports:{'on' if on else 'off'}"
                 if focused == FOCUS_FOLLOWED:
                     from pigeon.sports_follow import toggle_auto
 

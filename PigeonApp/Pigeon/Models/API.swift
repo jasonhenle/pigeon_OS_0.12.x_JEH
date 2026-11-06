@@ -266,7 +266,7 @@ struct SportsLeague: Codable, Equatable, Identifiable {
 }
 
 /// A game from TODAY'S GAMES or on the scoreboard. Scores are nil before kickoff
-/// and whenever the device has SCORES set to HIDE.
+/// (and from older devices with SCORES set to HIDE).
 struct SportsGame: Codable, Equatable, Identifiable {
     var id: String
     var league: String
@@ -284,8 +284,9 @@ struct SportsGame: Codable, Equatable, Identifiable {
 }
 
 struct SportsSettings: Codable, Equatable {
+    /// SPORTS on / off (the API's name predates the switch; it was SCORES show / hide).
     var scoresShown: Bool
-    /// FOLLOWED TEAMS as set; `followedActive` is whether it runs (needs scores shown).
+    /// FOLLOWED TEAMS as set; `followedActive` is whether it runs (needs sports on).
     var followedAuto: Bool
     var followedActive: Bool
     var leagues: [SportsLeague]

@@ -5,15 +5,16 @@ Opened from settings_pigeon → **SPORTS** (shown as ``pigeon_view == "sports"``
 Seven league logos, left → right in the art: NFL, MLB, NBA, WNBA,
 NCAA football, NCAA basketball, NHL. Under them:
 
-* **SCORES: SHOW / HIDE** — score numbers on the scoreboard; hidden, games
-  still come up spoiler-free.
-* **FOLLOWED TEAMS: AUTO / OFF** — followed teams' games come up on their own
-  (:mod:`pigeon.sports_follow`). Greyed out and skipped while scores are hidden.
+* **SPORTS: ON / OFF** — the master switch (:mod:`pigeon.sports_follow`).
+  Off, no game ever comes up.
+* **FOLLOWED TEAMS: AUTO / OFF** — followed teams' games come up on their own.
+  Greyed out and skipped while sports is off.
 * **TODAY'S GAMES** — the list of today's games (pick one to watch now).
+  Greyed out and skipped while sports is off.
 
 Focus ring::
 
-    BACK → 7 leagues → SCORES → FOLLOWED TEAMS → TODAY'S GAMES
+    BACK → 7 leagues → SPORTS → FOLLOWED TEAMS → TODAY'S GAMES
 
 Activating a league opens its team list over the page: **BACK** first, then
 every team; activating a team follows / unfollows it. The NCAA leagues list
@@ -94,16 +95,15 @@ def league_for_focus(focus_id: str) -> str | None:
 def sports_focus_ring() -> tuple[str, ...]:
     from pigeon.sports_teams import FOLLOW_LEAGUES
 
-    from pigeon.sports_follow import scores_shown
+    from pigeon.sports_follow import sports_on
 
-    # FOLLOWED TEAMS is greyed out (skipped) while scores are hidden.
-    followed = (FOCUS_FOLLOWED,) if scores_shown() else ()
+    # FOLLOWED TEAMS and TODAY'S GAMES are greyed out (skipped) while sports is off.
+    games = (FOCUS_FOLLOWED, FOCUS_TODAY) if sports_on() else ()
     return (
         "exit",
         *(league_focus_id(lg.league_id) for lg in FOLLOW_LEAGUES),
         FOCUS_SCORES,
-        *followed,
-        FOCUS_TODAY,
+        *games,
     )
 
 
@@ -400,7 +400,7 @@ def _add_badge(parent: ET.Element, tile: ET.Element, count: int, *, ui_hex: str)
 
 
 def apply_sports_svg_state(root: ET.Element, state) -> None:
-    from pigeon.sports_follow import auto_enabled, followed_count, scores_shown
+    from pigeon.sports_follow import auto_enabled, followed_count, sports_on
     from pigeon.sports_teams import FOLLOW_LEAGUES
     from pigeon.widgets.main_settings import _set_paint, _set_text_content, _set_visible
     from pigeon.widgets.options_settings import ui_is_simple
@@ -465,8 +465,9 @@ def apply_sports_svg_state(root: ET.Element, state) -> None:
         if group is not None:
             _add_badge(group, tile, followed_count(lg.league_id), ui_hex=ui_hex)
 
-    shown = scores_shown()
-    _set_value(_by_id(root, "sports_scores_value"), "SHOW" if shown else "HIDE")
+    shown = sports_on()
+    _set_value(_by_id(root, "sports_scores_caption"), "SPORTS")
+    _set_value(_by_id(root, "sports_scores_value"), "ON" if shown else "OFF")
     _set_value(_by_id(root, "sports_followed_value"), "AUTO" if shown and auto_enabled() else "OFF")
     for name, fid in (("scores", FOCUS_SCORES), ("followed", FOCUS_FOLLOWED), ("today", FOCUS_TODAY)):
         _style_tile(
@@ -475,7 +476,7 @@ def apply_sports_svg_state(root: ET.Element, state) -> None:
             selected=focused == fid,
             simple=simple,
             ui_hex=ui_hex,
-            dim=fid == FOCUS_FOLLOWED and not shown,
+            dim=fid in (FOCUS_FOLLOWED, FOCUS_TODAY) and not shown,
         )
 
 
