@@ -8,7 +8,8 @@ automatic layout.
 settings_pigeon option5 picks the state Pigeon starts in.
 
 Audio with no player metadata gets the same visualizer Clocksaver without the
-long press. The zone-6 badge below belongs to the older zone-6 layout.
+long press. settings_pigeon option8 (VIZ LOCK) holds the mode on: the long
+press does nothing while it is set. The zone-6 badge below belongs to the older zone-6 layout.
 """
 
 from __future__ import annotations
@@ -32,9 +33,21 @@ _active: bool | None = None
 _changed_mono = 0.0
 
 
+def locked() -> bool:
+    """VIZ LOCK (option8): visualizer mode stays on whatever is playing."""
+    try:
+        from pigeon.widgets.options_settings import viz_lock_on
+
+        return bool(viz_lock_on())
+    except Exception:
+        return False
+
+
 def is_active() -> bool:
-    """True in visualizer mode (first call reads the option5 default)."""
+    """True in visualizer mode, or while VIZ LOCK holds it (first call reads the option5 default)."""
     global _active
+    if locked():
+        return True
     if _active is None:
         try:
             from pigeon.widgets.options_settings import zone6_visualizer_default
@@ -62,6 +75,8 @@ def toggle() -> bool:
     """
     from pigeon import viz_backdrop
 
+    if locked():
+        return True
     if viz_backdrop.cancel_leave():
         return is_active()
     if is_active():
