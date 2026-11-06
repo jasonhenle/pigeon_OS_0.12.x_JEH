@@ -417,6 +417,19 @@ DEFAULT_PRESETS: list[dict[str, object]] = [
      "meterW": 580.0, "meterH": 420.0, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8, "holdMs": 1500.0,
      "fallDbS": 20.0, "brand": True, "brandColor": "#87837A", "brandH": 45.0,
      "meterY": 300.0},  # low enough to clear the clock above it on the visualizer clocksaver
+    # Arched light pair (no needle): the spot and its fill in the UI colour.
+    {"name": "Arc VU", "style": "sweep_vu", "bg": "#000000", "track": "#4D4D4D", "lit": THEME_BLUE,
+     "fillColor": "#1F4F7A", "red": "#FF0000", "redTint": 0.3, "text": "#8A8A8A", "showText": False,
+     "showTicks": False, "layout": "pair", "mode": "spot", "spotDeg": 8.0, "peakHold": True, "sweepDeg": 110.0,
+     "arcR": 290.0, "bandW": 64.0, "inset": 0.72, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8,
+     "holdMs": 1500.0, "fallDbS": 20.0},
+    # Split-stereo bars (L left, R right), the UI colour below twoToneAt, near-white above.
+    {"name": "Stereo Bars", "style": "bars", "bg": "#000000", "colA": THEME_BLUE, "colB": "#E4EDEC",
+     "peakColor": "#FFFFFF", "slotColor": "#141414", "showSlots": False, "bands": 17.0, "gapPct": 30.0,
+     "minGapPx": 2.0, "radius": 8.0, "layout": "split stereo", "colorMode": "two-tone", "twoToneAt": 0.67,
+     "hueStart": 200.0, "hueSpan": 240.0, "peaks": True, "peakH": 6.0, "minLevel": 0.02, "insetX": 56.0,
+     "top": 96.0, "bottom": 704.0, "fftSize": 4096, "fMin": 30.0, "fMax": 16000.0, "floorDb": -80.0,
+     "ceilDb": -15.0, "tilt": 3.0, "attackMs": 25.0, "releaseMs": 250.0, "peakHoldMs": 500.0, "peakFall": 0.6},
     # Not in the rotation, still selectable in the lab's tuner: bounce, analog_vu, modern_vu, arc_vu
     # (digital VU), pixel_vu, sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
