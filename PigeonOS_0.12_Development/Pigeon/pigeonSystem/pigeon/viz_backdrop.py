@@ -30,6 +30,7 @@ from __future__ import annotations
 import threading
 import time
 
+import cv2
 import numpy as np
 
 from pigeon.design import DESIGN_H, DESIGN_W
@@ -178,34 +179,47 @@ def key_page(bgra: np.ndarray) -> np.ndarray:
 
 
 class ClockOverlay:
-    """One clocksaver frame, keyed and flattened to the pixels it covers.
+    """One clocksaver frame, keyed and cropped to the box its pixels cover.
 
-    A full-frame alpha blend costs ~50 ms on a Pi 5; the face only changes once
-    a second, so its pixels are found once and each frame blends just those.
+    A full-frame alpha blend costs ~50 ms on a Pi 5 in numpy; the face only
+    changes once a second, so its box and straight colour are worked out once
+    and each frame blends just that box with uint8 OpenCV ops (~2 ms).
     """
 
     def __init__(self, frame: np.ndarray) -> None:
         self._frame = key_page(frame)
         self._prepped: dict[tuple[int, int], tuple] = {}
+        self._scaled: tuple[float, np.ndarray] | None = None
 
     def prep(self, h: int, w: int) -> tuple:
+        """``(y0, x0, colour, alpha)``: the box's corner, straight BGR and 1-channel alpha (uint8)."""
         hit = self._prepped.get((h, w))
         if hit is not None:
             return hit
         f = self._frame
         if f.shape[:2] != (h, w):
-            import cv2
-
             f = cv2.resize(f, (w, h), interpolation=cv2.INTER_AREA)
-        flat = f.reshape(-1, 4)
-        idx = np.flatnonzero(flat[:, 3])
-        a = (flat[idx, 3].astype(np.float32) / 255.0)[:, None]
-        out = (idx, flat[idx, :3].astype(np.float32) * a, a, int(idx.min() // w) if idx.size else 0)
+        a = f[:, :, 3]
+        rows = np.flatnonzero(a.max(axis=1))
+        cols = np.flatnonzero(a.max(axis=0))
+        if rows.size == 0:
+            out = (0, 0, np.zeros((0, 0, 3), np.uint8), np.zeros((0, 0), np.uint8))
+        else:
+            y0, y1, x0, x1 = int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1
+            out = (y0, x0, np.ascontiguousarray(f[y0:y1, x0:x1, :3]), np.ascontiguousarray(a[y0:y1, x0:x1]))
         self._prepped[(h, w)] = out
         return out
 
     def top(self, h: int, w: int) -> int:
-        return self.prep(h, w)[3]
+        return self.prep(h, w)[0]
+
+    def _colour(self, colour: np.ndarray, gain: float) -> np.ndarray:
+        g = round(float(gain), 3)
+        hit = self._scaled
+        if hit is None or hit[0] != g or hit[1].shape != colour.shape:
+            hit = (g, colour if g >= 1.0 else cv2.convertScaleAbs(colour, alpha=g))
+            self._scaled = hit
+        return hit[1]
 
     def blit(self, canvas: np.ndarray, *, opacity: float = 1.0, gain: float = 1.0, dy: int = 0,
              under: bool = False) -> None:
@@ -214,23 +228,29 @@ class ClockOverlay:
         if opacity <= 0.0:
             return
         h, w = canvas.shape[:2]
-        idx, fg, a, _top = self.prep(h, w)
-        if dy:
-            moved = idx + int(dy) * w
-            ok = (moved >= 0) & (moved < h * w)
-            idx, fg, a = moved[ok], fg[ok], a[ok]
-        target = canvas if canvas.flags.c_contiguous else np.ascontiguousarray(canvas)
-        flat = target.reshape(-1, target.shape[2])
-        cur = flat[idx, :3].astype(np.float32)
-        k = a * float(opacity)
+        y0, x0, colour, alpha = self.prep(h, w)
+        bh, bw = alpha.shape
+        top = y0 + int(dy)
+        r0, r1 = max(0, top), min(h, top + bh)
+        if r1 <= r0 or bw == 0:
+            return
+        colour = self._colour(colour, gain)[r0 - top : r1 - top]
+        k = alpha[r0 - top : r1 - top]
+        dst = canvas[r0:r1, x0 : x0 + bw]
+        cur = dst[:, :, :3]
+        if opacity < 1.0:
+            k = cv2.convertScaleAbs(k, alpha=float(opacity))
         if under:
-            lit = np.maximum(np.maximum(cur[:, 0], cur[:, 1]), cur[:, 2])
-            k = k * np.clip(1.0 - lit / float(_COVER_MIN), 0.0, 1.0)[:, None]
-        # fg is premultiplied by a: colour * gain * k + what was there * (1 - k).
-        out = fg * (float(gain) * k / np.maximum(a, 1e-6)) + cur * (1.0 - k)
-        flat[idx, :3] = np.clip(out, 0, 255).astype(np.uint8)
-        if target is not canvas:
-            canvas[:] = target
+            lit = cv2.max(cv2.max(cur[:, :, 0], cur[:, :, 1]), cur[:, :, 2])
+            cover = cv2.bitwise_not(cv2.convertScaleAbs(lit, alpha=255.0 / _COVER_MIN))  # 255 - lit*k, floored at 0
+            k = cv2.multiply(k, cover, scale=1.0 / 255.0)
+        k3 = cv2.merge((k, k, k))
+        # colour * k + what was there * (1 - k), k in 0..255.
+        out = cv2.add(
+            cv2.multiply(colour, k3, scale=1.0 / 255.0),
+            cv2.multiply(cur, cv2.bitwise_not(k3), scale=1.0 / 255.0),
+        )
+        cur[...] = out
 
 
 # Faces, rendered once a second off the frame loop.
@@ -304,8 +324,6 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
             _instance().render(canvas, silent=leaving)
             fade = min(1.0, viz / VIZ_FADE)
             if fade < 1.0:
-                import cv2
-
                 cv2.convertScaleAbs(canvas, dst=canvas, alpha=fade)
             _painted_mono = time.monotonic()
         except Exception:

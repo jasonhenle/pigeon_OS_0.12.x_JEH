@@ -146,6 +146,22 @@ class OverlayTests(unittest.TestCase):
         vb.ClockOverlay(frame).blit(got)
         self.assertLessEqual(int(np.abs(got.astype(int) - want.astype(int)).max()), 1)
 
+    def test_overlay_dimmed_moved_under_bright_pixels(self) -> None:
+        frame = np.zeros((800, 1280, 4), np.uint8)
+        frame[400:500, 200:900] = (40, 80, 250, 255)
+        frame[500:520, 200:900, :3] = 220
+        frame[500:520, 200:900, 3] = 128
+        bg = np.random.default_rng(7).integers(0, 60, (800, 1280, 3), dtype=np.uint8)
+        got = bg.copy()
+        vb.ClockOverlay(frame).blit(got, opacity=0.8, gain=0.3, dy=-300, under=True)
+        # Reference: per-pixel float maths, the frame moved up 300 rows.
+        src = np.roll(frame, -300, axis=0).astype(np.float32)
+        cur = bg.astype(np.float32)
+        lit = cur.max(axis=2, keepdims=True)
+        k = src[:, :, 3:] / 255.0 * 0.8 * np.clip(1.0 - lit / vb._COVER_MIN, 0.0, 1.0)
+        want = src[:, :, :3] * 0.3 * k + cur * (1.0 - k)
+        self.assertLessEqual(float(np.abs(got.astype(np.float32) - want).max()), 3.0)
+
     def test_key_page_clears_the_digital_page_keeps_ink(self) -> None:
         frame = np.zeros((10, 10, 4), np.uint8)
         frame[..., :3] = 15

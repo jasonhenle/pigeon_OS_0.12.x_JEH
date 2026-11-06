@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -641,6 +642,27 @@ def _fit_digital7_fixed_cells(
     min_sz: int = 12,
 ) -> ImageFont.ImageFont:
     """Largest Digital-7 size that fits ``matching_units`` matching cells in the box."""
+    key = (path, float(matching_units), int(max_w), int(max_h), int(prefer_sz), int(min_sz))
+    hit = _FIT_CACHE.get(key)
+    if hit is None:
+        hit = _FIT_CACHE[key] = _fit_digital7_fixed_cells_search(
+            path, matching_units, max_w=max_w, max_h=max_h, prefer_sz=prefer_sz, min_sz=min_sz
+        )
+    return hit
+
+
+_FIT_CACHE: dict[tuple, ImageFont.ImageFont] = {}
+
+
+def _fit_digital7_fixed_cells_search(
+    path: str | None,
+    matching_units: float,
+    *,
+    max_w: int,
+    max_h: int,
+    prefer_sz: int,
+    min_sz: int,
+) -> ImageFont.ImageFont:
     if max_w < 4 or max_h < 4 or matching_units <= 0:
         return _load_font(path, min_sz)
     lo, hi = min_sz, max(prefer_sz, max_h, 24)
@@ -1153,7 +1175,7 @@ def _draw_hhmmss_fixed_cells(
         max_h=max_h,
         prefer_sz=prefer_sz,
     )
-    rgba = np.ascontiguousarray(bgra[:, :, [2, 1, 0, 3]])
+    rgba = cv2.cvtColor(np.ascontiguousarray(bgra), cv2.COLOR_BGRA2RGBA)
     img = Image.fromarray(rgba)
     draw = ImageDraw.Draw(img)
     matching_w, _cell_h = _cell_metrics(draw, font, _HHMMSS_CHAR_SET)
@@ -1165,7 +1187,7 @@ def _draw_hhmmss_fixed_cells(
     else:
         cy = int(round(_HHMMSS_MID_Y_SVG * float(canvas_h) / _ARTBOARD_H))
 
-    pre_ink = _color_ink_mask(np.asarray(img)).copy()
+    pre_ink = _color_ink_mask(rgba)
     pre_rows = np.where(pre_ink.any(axis=1))[0]
     wx_bottom_px = (
         float(int(pre_rows.max()) + 1)
@@ -1183,8 +1205,11 @@ def _draw_hhmmss_fixed_cells(
         canvas_w=canvas_w,
     )
 
-    post_ink = _color_ink_mask(np.asarray(img))
-    new_rows = np.where((post_ink & ~pre_ink).any(axis=1))[0]
+    # The run's ink sits around its baseline, so only that band is compared.
+    fs = int(getattr(font, "size", 0) or max_h)
+    b0, b1 = max(0, int(cy) - 2 * fs), min(canvas_h, int(cy) + fs)
+    post_ink = _color_ink_mask(np.asarray(img.crop((0, b0, canvas_w, b1))))
+    new_rows = np.where((post_ink & ~pre_ink[b0:b1]).any(axis=1))[0] + b0
     time_box = draw.textbbox((0, int(cy)), "0", font=font, anchor="ms")
     time_top_px = int(new_rows.min()) if new_rows.size else int(time_box[1])
 
@@ -1201,11 +1226,7 @@ def _draw_hhmmss_fixed_cells(
         line_opacity=line_opacity,
     )
 
-    out = np.asarray(img)
-    bgra[:, :, 0] = out[:, :, 2]
-    bgra[:, :, 1] = out[:, :, 1]
-    bgra[:, :, 2] = out[:, :, 0]
-    bgra[:, :, 3] = out[:, :, 3]
+    bgra[...] = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGBA2BGRA)
 
 
 def _draw_clock_saver_volume_line(
@@ -2069,6 +2090,7 @@ def render_scaled_clock_saver_bgra(
 
 
 def clear_clock_saver_render_caches() -> None:
+    _FIT_CACHE.clear()
     _POSTER_SCALE_CACHE.clear()
     _PAGE_CACHE.clear()
     _SVG_TREE_TEMPLATES.clear()

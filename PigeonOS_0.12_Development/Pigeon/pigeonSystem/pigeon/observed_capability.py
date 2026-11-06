@@ -21,13 +21,13 @@ def _observed_state_key(loc_id: str) -> str:
 
 def _read_observed_store_for_location(loc_id: str) -> dict[str, dict[str, str]]:
     try:
-        from pigeon.app_state import read_app_state
+        from pigeon.app_state import read_app_state_shared
     except ImportError:
         return {}
     lid = str(loc_id or "").strip()
     if not lid:
         return {}
-    raw = read_app_state()
+    raw = read_app_state_shared()
     blob = raw.get(_observed_state_key(lid))
     if not isinstance(blob, dict):
         return {}
