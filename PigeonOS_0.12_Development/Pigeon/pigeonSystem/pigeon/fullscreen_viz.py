@@ -133,6 +133,7 @@ STYLES: dict[str, dict[str, object]] = {
             "brand": (False, _B),  # Pigeon wordmark on each meter's cover, like the maker's badge
             "brandColor": ("#87837A", _C),
             "brandH": (30.0, _n(10, 80, 1)),
+            "brandY": (0.0, _n(0, 800, 1)),  # badge centre row; 0 = middle of the meter's cover
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
             "meterY": (190.0, _n(0, 500, 2)),  # top edge; 190 centres the default height
@@ -188,6 +189,7 @@ STYLES: dict[str, dict[str, object]] = {
             "brand": (False, _B),  # Pigeon wordmark on each meter's cover, like the maker's badge
             "brandColor": ("#87837A", _C),
             "brandH": (30.0, _n(10, 80, 1)),
+            "brandY": (0.0, _n(0, 800, 1)),  # badge centre row; 0 = middle of the meter's cover
             "meterW": (580.0, _n(400, 620, 2)),
             "meterH": (420.0, _n(300, 560, 2)),
             "meterY": (190.0, _n(0, 500, 2)),  # top edge; 190 centres the default height
@@ -243,6 +245,7 @@ STYLES: dict[str, dict[str, object]] = {
             "brand": (False, _B),  # Pigeon badge under each meter ("vu pair" layout)
             "brandColor": ("#87837A", _C),
             "brandH": (30.0, _n(10, 80, 1)),
+            "brandY": (0.0, _n(0, 800, 1)),  # badge centre row; 0 = middle of the meter's cover
         },
     },
     "bars": {
@@ -416,7 +419,8 @@ THEME_BLUE = "#4EA6F7"
 
 DEFAULT_PRESETS: list[dict[str, object]] = [
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
-     "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
+     "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0,
+     "ceilDb": -9.0},  # 6 dB headroom over the stock ceiling: peaks reach the clock less often
     # LED arc pair on black, wedges in the UI colour, a Pigeon badge under each meter.
     {"name": "Sweep VU", "style": "arc_vu", "bg": "#000000", "face": "#000000", "ink": "#87837A",
      "segColor": THEME_BLUE, "red": "#D9412B", "cover": "#000000", "coverText": "#EDE6D3", "showText": False,
@@ -424,22 +428,22 @@ DEFAULT_PRESETS: list[dict[str, object]] = [
      "peakLed": False, "peakLedColor": "#FF3B30", "peakLedDbfs": -3.0, "sweepDeg": 90.0, "faceRadius": 24.0,
      "meterW": 580.0, "meterH": 420.0, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8, "holdMs": 1500.0,
      "fallDbS": 20.0, "brand": True, "brandColor": "#87837A", "brandH": 45.0,
-     "meterY": 300.0},  # low enough to clear the clock above it on the visualizer clocksaver
+     "meterY": 340.0, "brandY": 665.4},  # clear of the clock and input label; badge kept where it was
     # Arched light pair (no needle): the spot and its fill in the UI colour.
     # Sweep VU's alt: the same meters, arc and badge, with a lit spot on a grey groove in place of wedges.
     {"name": "Arc VU", "style": "sweep_vu", "bg": "#000000", "track": "#4D4D4D", "lit": THEME_BLUE,
      "fillColor": "#1F4F7A", "red": "#FF0000", "redTint": 0.3, "text": "#87837A", "showText": False,
      "showTicks": True, "layout": "vu pair", "mode": "spot", "spotDeg": 8.0, "peakHold": True, "sweepDeg": 90.0,
      "arcR": 306.0, "bandW": 38.0, "inset": 0.72, "refDbfs": -18.0, "riseMs": 300.0, "damping": 0.8,
-     "holdMs": 1500.0, "fallDbS": 20.0, "meterY": 300.0, "brand": True, "brandColor": "#87837A",
+     "holdMs": 1500.0, "fallDbS": 20.0, "meterY": 340.0, "brandY": 665.4, "brand": True, "brandColor": "#87837A",
      "brandH": 45.0},
     # Split-stereo bars (L left, R right), the UI colour below twoToneAt, near-white above.
     {"name": "Stereo Bars", "style": "bars", "bg": "#000000", "colA": THEME_BLUE, "colB": "#E4EDEC",
      "peakColor": "#FFFFFF", "slotColor": "#141414", "showSlots": False, "bands": 17.0, "gapPct": 30.0,
      "minGapPx": 2.0, "radius": 8.0, "layout": "split stereo", "colorMode": "two-tone", "twoToneAt": 0.67,
      "hueStart": 200.0, "hueSpan": 240.0, "peaks": True, "peakH": 6.0, "minLevel": 0.02, "insetX": 56.0,
-     "top": 96.0, "bottom": 704.0, "fftSize": 4096, "fMin": 30.0, "fMax": 16000.0, "floorDb": -80.0,
-     "ceilDb": -15.0, "tilt": 3.0, "attackMs": 25.0, "releaseMs": 250.0, "peakHoldMs": 500.0, "peakFall": 0.6},
+     "top": 150.0, "bottom": 704.0, "fftSize": 4096, "fMin": 30.0, "fMax": 16000.0, "floorDb": -80.0,
+     "ceilDb": -9.0, "tilt": 3.0, "attackMs": 25.0, "releaseMs": 250.0, "peakHoldMs": 500.0, "peakFall": 0.6},
     # Not in the rotation, still selectable in the lab's tuner: bounce, analog_vu, modern_vu, arc_vu
     # (digital VU), pixel_vu, sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
@@ -1077,7 +1081,8 @@ class AnalogVU(Style):
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H, r, _bgr(p["cover"]))
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H - g["cover"] + r + 1, 0, _bgr(p["cover"]))
             if p.get("brand"):
-                _badge(cv, cx, oy + H - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
+                _badge(cv, cx, _f(p, "brandY", 0) or oy + H - g["cover"] / 2.0, _f(p, "brandH", 30),
+                       _bgr(p["brandColor"]))
             elif text:
                 cv.text("L" if m == 0 else "R", cx, oy + H - g["cover"] / 2.0, 30, _bgr(p["coverText"]), "bold")
             if p.get("peakLed", True):
@@ -1167,7 +1172,8 @@ class ArcVU(AnalogVU):
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H, r, _bgr(p["cover"]))
             cv.rrect(ox, oy + H - g["cover"], ox + W, oy + H - g["cover"] + r + 1, 0, _bgr(p["cover"]))
             if p.get("brand"):
-                _badge(cv, cx, oy + H - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
+                _badge(cv, cx, _f(p, "brandY", 0) or oy + H - g["cover"] / 2.0, _f(p, "brandH", 30),
+                       _bgr(p["brandColor"]))
             elif text:
                 cv.text("L" if m == 0 else "R", cx, oy + H - g["cover"] / 2.0, 30, _bgr(p["coverText"]), "bold")
             if p.get("peakLed", True):
@@ -1463,7 +1469,8 @@ class SweepVU(Style):
         for cx, cy, R, bw, _chn in self._meters(p):
             if vu_pair and p.get("brand"):
                 g = AnalogVU._geo(p)
-                _badge(cv, cx, g["y0"] + g["H"] - g["cover"] / 2.0, _f(p, "brandH", 30), _bgr(p["brandColor"]))
+                _badge(cv, cx, _f(p, "brandY", 0) or g["y0"] + g["H"] - g["cover"] / 2.0, _f(p, "brandH", 30),
+                       _bgr(p["brandColor"]))
             self._arc(cv.img, cv.xf, cx, cy, R, self._theta(p, 0.0), self._theta(p, 1.0), track, bw)
             self._arc(cv.img, cv.xf, cx, cy, R, z, self._theta(p, 1.0), red_track, bw)
             if p.get("showTicks", True) or text:

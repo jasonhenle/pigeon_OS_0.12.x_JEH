@@ -52,8 +52,8 @@ _INK_MIN = 56
 # A visualizer pixel this bright covers the time under it.
 _COVER_MIN = 24
 _ROTATE_WINDOW_S = 1.0
-# Receiver input label, centred just under the time (moves, dims and fades with it).
-LABEL_PX = 40
+# Receiver input label just under the time, flush with its left edge (moves, dims and fades with it).
+LABEL_PX = 80
 LABEL_GAP_PX = 18
 _TOTAL = EXTRAS_S + MOVE_S + DIM_S + VIZ_S
 
@@ -312,9 +312,9 @@ def input_label() -> str:
 _label_cache: dict[tuple, ClockOverlay] = {}
 
 
-def _label_overlay(text: str, top: int, theme: str, h: int, w: int) -> ClockOverlay:
-    """``text`` centred at row ``top`` of an ``h×w`` frame, in the theme colour (Digital-7)."""
-    key = (text, top, theme, h, w)
+def _label_overlay(text: str, left: int, top: int, theme: str, h: int, w: int) -> ClockOverlay:
+    """``text`` with its top-left at ``(left, top)`` of an ``h×w`` frame, in the theme colour (Digital-7)."""
+    key = (text, left, top, theme, h, w)
     hit = _label_cache.get(key)
     if hit is None:
         from PIL import Image, ImageDraw
@@ -326,7 +326,9 @@ def _label_overlay(text: str, top: int, theme: str, h: int, w: int) -> ClockOver
         font = load_font(resolve_digital7_font() or resolve_ui_font_bold(), max(8, int(round(LABEL_PX * s))))
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         rgb = tuple(int(theme.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4)) if len(theme) == 7 else (255, 255, 255)
-        ImageDraw.Draw(img).text((w / 2.0, top), text, fill=(*rgb, 255), font=font, anchor="mt")
+        draw = ImageDraw.Draw(img)
+        ink_left = draw.textbbox((0, 0), text, font=font, anchor="lt")[0]
+        draw.text((left - ink_left, top), text, fill=(*rgb, 255), font=font, anchor="lt")
         hit = ClockOverlay(cv2.cvtColor(np.asarray(img), cv2.COLOR_RGBA2BGRA))
         _label_cache.clear()
         _label_cache[key] = hit
@@ -402,6 +404,6 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
     clock.blit(canvas, gain=gain, dy=dy, under=viz > 0.0)
     label = input_label() if digital else ""
     if label and extras > 0.0:
-        y0, _x0, _col, alpha = clock.prep(h, w)
+        y0, x0, _col, alpha = clock.prep(h, w)
         top = y0 + alpha.shape[0] + int(round(LABEL_GAP_PX * w / float(DESIGN_W)))
-        _label_overlay(label, top, theme, h, w).blit(canvas, opacity=extras, gain=gain, dy=dy, under=viz > 0.0)
+        _label_overlay(label, x0, top, theme, h, w).blit(canvas, opacity=extras, gain=gain, dy=dy, under=viz > 0.0)
