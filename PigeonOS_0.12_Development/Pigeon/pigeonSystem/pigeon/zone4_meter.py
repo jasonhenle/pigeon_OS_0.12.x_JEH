@@ -92,7 +92,7 @@ def params() -> dict[str, object]:
     p["style"] = style
     if style == "ladder" and str(p.get("layout")) not in LAYOUTS:
         p["layout"] = LADDER_DEFAULTS["layout"]
-    return p
+    return _fv.themed(p)
 
 
 def selected() -> bool:

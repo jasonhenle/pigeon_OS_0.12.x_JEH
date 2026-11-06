@@ -51,6 +51,7 @@ class _Base(unittest.TestCase):
             mock.patch.object(zone4_eq, "want_mic_capture", lambda: None),
             # Metering checks read calibrated levels: no visualizer input gain.
             mock.patch.object(zone4_eq, "input_gain_db", lambda: 0.0),
+            mock.patch.object(fv, "theme_hex", lambda: fv.THEME_BLUE),
         ]
         for p in patches:
             p.start()
@@ -126,6 +127,31 @@ def _viz_for(style: str) -> fv.FullscreenViz:
     """A visualizer showing one preset of ``style`` (defaults)."""
     fv.set_presets([fv.complete_preset({"style": style})])
     return fv.FullscreenViz(0)
+
+
+class ThemeTests(_Base):
+    def test_stock_blues_follow_the_theme_others_stay(self) -> None:
+        spectrum = fv.complete_preset(fv.DEFAULT_PRESETS[0])
+        red = fv.themed(spectrum, "#FF3B30")
+        self.assertEqual(red["colA"], "#FF3B30")
+        self.assertEqual(red["colB"], fv._mix_hex("#FF3B30", "#FFFFFF", 0.58))
+        self.assertEqual(red["peakColor"], spectrum["peakColor"])
+        sweep = fv.themed(fv.complete_preset({"style": "sweep_vu"}), "#3DDC84")
+        self.assertEqual(sweep["lit"], "#3DDC84")
+        self.assertEqual(sweep["fillColor"], fv._mix_hex("#3DDC84", "#000000", 0.53))
+        self.assertEqual(sweep["red"], "#FF3B30")
+
+    def test_default_theme_and_tuned_colours_unchanged(self) -> None:
+        spectrum = fv.complete_preset(fv.DEFAULT_PRESETS[0])
+        self.assertIs(fv.themed(spectrum, fv.THEME_BLUE), spectrum)
+        tuned = dict(spectrum, colA="#123456")
+        self.assertEqual(fv.themed(tuned, "#FF3B30")["colA"], "#123456")
+
+    def test_active_preset_uses_the_live_ui_colour(self) -> None:
+        fv.set_presets(fv.default_presets())
+        with mock.patch.object(fv, "theme_hex", lambda: "#FF3B30"):
+            self.assertEqual(fv.FullscreenViz(0).preset()["colA"], "#FF3B30")
+        self.assertEqual(fv.presets()[0]["colA"], fv.THEME_BLUE, "saved presets keep the stock colour")
 
 
 class MeteringTests(_Base):

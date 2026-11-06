@@ -865,7 +865,9 @@ class Zone4EQ:
 
         ``track_bgr`` fills the container behind the bars.
         """
-        p = params()
+        from pigeon.fullscreen_viz import themed
+
+        p = themed(params())
         now = time.monotonic()
         dt = 1.0 / 30.0 if self._last_t is None else max(1e-3, min(0.1, now - self._last_t))
         self._last_t = now

@@ -16,6 +16,18 @@ if _SYS_ROOT not in sys.path:
 
 from pigeon import zone4_eq, zone4_meter  # noqa: E402
 
+
+# Colour checks use the stock palette, not this machine's settings UI colour.
+_theme = mock.patch("pigeon.fullscreen_viz.theme_hex", lambda: "#4EA6F7")
+
+
+def setUpModule() -> None:
+    _theme.start()
+
+
+def tearDownModule() -> None:
+    _theme.stop()
+
 TRACK = (113, 536, 1067, 100, 13)
 GREEN = (0x84, 0xDC, 0x3D)  # ladder colSafe, BGR
 BLUE = (0xF7, 0xA6, 0x4E)  # sweep lit, BGR

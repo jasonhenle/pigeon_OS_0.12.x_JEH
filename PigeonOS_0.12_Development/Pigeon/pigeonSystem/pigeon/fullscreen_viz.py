@@ -385,6 +385,47 @@ RETIRED_DEFAULTS: dict[tuple[str, str], object] = {
 }
 
 
+# The stock blues follow the settings UI (theme) colour: the blue itself, its
+# pale tint and its dark fill. Other colours, and any colour tuned in the lab,
+# stay as they are.
+THEME_BLUE = "#4EA6F7"
+_THEME_ROLES: dict[str, tuple[str, float]] = {  # stock hex -> (mix toward, amount)
+    "#4ea6f7": ("#FFFFFF", 0.0),
+    "#b2dafc": ("#FFFFFF", 0.58),
+    "#1f4f7a": ("#000000", 0.53),
+}
+
+
+def theme_hex() -> str:
+    """The live settings UI colour (including a colour-page preview)."""
+    try:
+        from pigeon.widgets.ui_color_settings import current_ui_picker_key, hex_for_color_key
+
+        return hex_for_color_key("ui", current_ui_picker_key())
+    except Exception:
+        return THEME_BLUE
+
+
+def _mix_hex(a: str, b: str, t: float) -> str:
+    ca, cb = _bgr(a), _bgr(b)
+    m = [int(round(x + (y - x) * t)) for x, y in zip(ca, cb)]
+    return f"#{m[2]:02X}{m[1]:02X}{m[0]:02X}"
+
+
+def themed(p: dict[str, object], theme: str | None = None) -> dict[str, object]:
+    """``p`` with its stock blues recoloured for ``theme`` (default: :func:`theme_hex`)."""
+    t = str(theme or theme_hex())
+    if t.strip().lower() == THEME_BLUE.lower():
+        return p
+    out = None
+    for k, v in p.items():
+        role = _THEME_ROLES.get(str(v).strip().lower()) if isinstance(v, str) else None
+        if role is not None:
+            out = dict(p) if out is None else out
+            out[k] = _mix_hex(t, role[0], role[1])
+    return p if out is None else out
+
+
 def complete_preset(raw: dict[str, object]) -> dict[str, object]:
     """``raw`` over its style's defaults (unknown style → bars); keys the style doesn't use are dropped."""
     style = str(raw.get("style", "bars"))
@@ -1919,8 +1960,9 @@ STYLE_IMPLS: dict[str, Style] = {
 # Toast (preset name on an encoder turn)
 # ---------------------------------------------------------------------------
 @lru_cache(maxsize=32)
-def _toast(name: str, index: int, count: int, w: int, h: int) -> tuple[np.ndarray, np.ndarray, int, int]:
-    """``(bgr, alpha, row, col)`` for the pill: preset name over one dot per preset."""
+def _toast(name: str, index: int, count: int, w: int, h: int,
+           dot: str = THEME_BLUE) -> tuple[np.ndarray, np.ndarray, int, int]:
+    """``(bgr, alpha, row, col)`` for the pill: preset name over one dot per preset (``dot``: the current one)."""
     f = load_font(_font_path("medium"), 30)
     pw = max(260.0, f.getlength(name) + 80.0)
     x0, y0 = (DESIGN_W - pw) / 2.0, DESIGN_H - 150.0
@@ -1933,7 +1975,7 @@ def _toast(name: str, index: int, count: int, w: int, h: int) -> tuple[np.ndarra
     step = 22.0
     dx0 = DESIGN_W / 2.0 - step * (count - 1) / 2.0
     for i in range(count):
-        col.circle(dx0 + i * step, y0 + 72, 5, (0xF7, 0xA6, 0x4E) if i == index else (0x5A, 0x5A, 0x5A))
+        col.circle(dx0 + i * step, y0 + 72, 5, _bgr(dot) if i == index else (0x5A, 0x5A, 0x5A))
     bgr = col.finish()
     xf = Xf(w, h)
     r0, r1 = max(0, int(math.floor(xf.y(y0)))), min(h, int(math.ceil(xf.y(y1))))
@@ -1974,7 +2016,7 @@ class FullscreenViz:
 
     def preset(self) -> dict[str, object]:
         items = presets()
-        return items[self.index] if items else complete_preset({"style": "bars"})
+        return themed(items[self.index] if items else complete_preset({"style": "bars"}))
 
     def rotate(self, steps: int) -> None:
         """Encoder turn: move ``steps`` presets (wraps) and show the name toast."""
@@ -2064,7 +2106,7 @@ class FullscreenViz:
         """Build every preset's static layers for ``w×h`` (e.g. on a background thread).
 
         ``clear`` builds the black / white pair :meth:`render` mattes with ``clear=True``."""
-        for p in presets():
+        for p in map(themed, presets()):
             if clear:
                 for bg in ("#000000", "#FFFFFF"):
                     self._layers_for(dict(p, bg=bg, **{MATTE_BG_KEY: bg}), w, h)
@@ -2137,7 +2179,7 @@ class FullscreenViz:
 
     def _draw_toast(self, img: np.ndarray, w: int, h: int) -> None:
         items = presets()
-        bgr, a, r0, c0 = _toast(str(self.preset().get("name", "")), self.index, len(items), w, h)
+        bgr, a, r0, c0 = _toast(str(self.preset().get("name", "")), self.index, len(items), w, h, theme_hex())
         th, tw = a.shape[:2]
         sub = img[r0 : r0 + th, c0 : c0 + tw]
         if sub.shape[:2] != (th, tw):
