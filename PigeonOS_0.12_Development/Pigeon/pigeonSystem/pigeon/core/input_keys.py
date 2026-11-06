@@ -638,6 +638,13 @@ def _on_par_chord_press(event: tk.Event, *, _par_chord_fired, _par_chord_held, _
 
 def _on_rotary_action(action: str, *, DevPhase, _bump_pigeon_user_activity, _enter_main_settings_for_rotary, _handle_main_settings_action, _nav_request, dev_phase, main_settings_widget, render_once, root, skip_cache, sync_developer_chrome, view_circles_widget_holder=None) -> None:
     _bump_pigeon_user_activity()
+    try:
+        from pigeon.widgets.welcome_setup import handle_rotary_action
+
+        if handle_rotary_action(action):
+            return  # the first-run Welcome screen has the knob
+    except Exception:
+        pass
     was_main = dev_phase[0] == DevPhase.MAIN_SETTINGS
     if action == "hold":
         # Long press: Now Playing <-> visualizer mode (ignored inside settings).

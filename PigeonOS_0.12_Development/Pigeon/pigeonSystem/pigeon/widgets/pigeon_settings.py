@@ -1474,6 +1474,12 @@ def factory_reset_pigeon_persisted_state() -> None:
 
     clear_all_persisted_devices_and_targets()
     try:
+        from pigeon import setup_state
+
+        setup_state.reset_to_welcome()
+    except Exception:
+        pass
+    try:
         clear_last_apple_tv()
     except Exception:
         pass

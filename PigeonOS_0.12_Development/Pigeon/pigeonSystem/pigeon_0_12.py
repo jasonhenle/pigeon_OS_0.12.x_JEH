@@ -946,6 +946,13 @@ def _format_hmmss(seconds_value: float | int | None) -> str:
 
 
 def main() -> int:
+    # First-run Welcome screen: decide before anything at startup writes state.json.
+    try:
+        from pigeon import setup_state
+
+        setup_state.resolve_at_boot()
+    except Exception:
+        pass
     # Setup runs as 4 phases in pigeon/core/boot/ (m*.py, see BootContext);
     # the rest of main() and bootstrap() read their results back below.
     _main_ctx = _BootContext(

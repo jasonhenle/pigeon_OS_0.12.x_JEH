@@ -417,6 +417,7 @@ def run(ctx) -> None:
     )
 
     ctx._on_rotary_action = _on_rotary_action
+    ctx._enter_main_settings_for_rotary = _enter_main_settings_for_rotary
 
     def _on_visualizer_key(event: tk.Event) -> str | None:
         """``v``: same as a long encoder press (HID boards send it for a hold)."""

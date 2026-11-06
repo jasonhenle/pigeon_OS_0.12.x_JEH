@@ -116,10 +116,21 @@ class AuthStore:
             return self._code
 
     def claim_open(self) -> bool:
-        """Claims are accepted while unclaimed, during an invite window, or while the code is on screen."""
+        """Claims are accepted while unclaimed, during an invite window, or while the code is on screen.
+
+        The first-run Welcome screen shows the code (in its QR code), so claims stay open while it is up,
+        even if a phone from before a factory reset is still paired.
+        """
         with self._lock:
             now = time.monotonic()
-            return not self._load() or now < self._invite_until or now < self._display_until
+            if not self._load() or now < self._invite_until or now < self._display_until:
+                return True
+        try:
+            from pigeon import setup_state
+
+            return setup_state.welcome_showing()
+        except Exception:
+            return False
 
     # ---- on-screen code (the phone asks the device to show it)
     def request_display(self, ttl_s: float = DISPLAY_TTL_S) -> bool:

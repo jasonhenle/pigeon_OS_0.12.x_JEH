@@ -61,6 +61,7 @@ Each device advertises `_pigeon._tcp` on its API port.
 | `api` | `1` | Highest supported major version |
 | `ver` | `0.12.11` | PigeonOS version |
 | `claimed` | `0` \| `1` | Whether a controller owns it |
+| `setup` | `0` \| `1` | `1` while first-run setup is pending (§2.4): the app should offer to set this device up |
 
 The TXT record is a hint. `GET /hello` is authoritative.
 
@@ -108,6 +109,32 @@ A device is **unclaimed** until a controller claims it. The claim proves physica
 - Legacy clients: `PIGEON_CONTROL_ALLOW_PLAIN=1` serves the full API over plain HTTP again (tokens in the clear; only until the companion app ships pinning). `PIGEON_CONTROL_TLS=0` disables TLS and logs a warning. If TLS is wanted but no certificate can be created (no `openssl` command and no `cryptography` package), the API does not start rather than falling back to plain HTTP.
 
 **Connection limits.** At most 24 concurrent connections, 8 per client address; extras get `503` (`Retry-After: 2`) without costing a thread. Every socket read or write has a 10 s timeout (TLS handshake, headers, body, idle keep-alive, a stalled event-stream reader), and a request must be fully received within 15 s. Clients should reuse connections and keep only a few open besides `GET /events`.
+
+### 2.4 First-run setup *(capability `setup`)* — implemented
+
+A new or factory-reset Pigeon shows a **Welcome to Pigeon** screen after the splash with two ways forward: a QR code for the Pigeon app, and **SET UP MANUALLY** (a knob press) for the encoders. The device tracks this in `setup_state.json` (`pigeon/setup_state.py`):
+
+| `state` | Screen | Meaning |
+|---|---|---|
+| `welcome` | QR code + SET UP MANUALLY | Nobody has started. Claims are open (§2.3) even if a phone from before a factory reset is still paired, because the screen shows the code. |
+| `app` | "Continue on your iPhone" (+ SET UP MANUALLY INSTEAD) | A phone claimed from the Welcome screen and is running the wizard. |
+| `done` | — | Set up by the app or by hand, or an install that predates this feature. |
+
+A device that has never recorded a setup state but already has a `state.json` is an existing install: it is recorded as `done`, so updating never shows the Welcome screen. While setup is pending the Control API runs even when `control_api` is unset (an explicit `"control_api": false` or `PIGEON_CONTROL_API=0` still turns it off). A factory reset (Settings > Pigeon > RESET or `POST /device/reset`) returns to `welcome`; paired phones stay paired.
+
+**QR code.** It encodes `pigeon://setup#v=1&id=<device id>&name=<device name>&code=<claim code>&fp=<TLS fingerprint>` (form-encoded in the fragment; `code` only while a claim is open, `fp` only with TLS on). One scan gives the app the device, the claim code and the pin, so it can connect to the TLS port, verify the pin and claim without the user typing anything. Because the pin came from the screen rather than the network, the check-digit confirmation is not needed for a QR claim. The base is `PIGEON_SETUP_URL_BASE` (default `pigeon://setup`); an `https://` universal link can replace it later, and the fragment keeps the code off that web server. The device finds itself on the LAN by mDNS as usual: match `id` against the TXT record.
+
+**Wizard.** `GET /hello` and `GET /setup` carry `setup: { "state", "step", "skipped" }`. Steps are `network`, `location`, `player`, `audio`, `finish`; the app chooses the order and reports as it goes.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /setup` | `{ "state": "app", "step": "player", "skipped": ["location"] }` |
+| `PUT /setup` | `{ "step"?: "...", "skipped"?: ["..."] }` → `200` with the new state. `400` for an unknown step, `409` once `done`. |
+| `POST /setup/complete` | Finish: `state` becomes `done` and the screen goes away. `skipped` is kept so the app can show follow-ups. |
+
+Every change publishes a `setup` event (§5.2) with the same object. A successful `POST /claim` while `welcome` moves the device to `app`. Picking SET UP MANUALLY on the device moves it straight to `done` (`via: "manual"`) and opens Settings on the Pigeon page.
+
+`PIGEON_SETUP=welcome` forces the Welcome screen at boot (testing); `PIGEON_SETUP=done` skips it.
 
 ## 3. First-boot provisioning (setup hotspot)
 
@@ -218,6 +245,7 @@ An endpoint whose capability is absent returns `422 unsupported`. The Marquee co
 | `session` | session object (§6.7) |
 | `settings` | `{ changed: ["id", ...] }` |
 | `device` | `{ name?, claimed? }` |
+| `setup` | `{ state, step, skipped }` (§2.4) |
 
 A `: keepalive` comment is sent every 15 s.
 
@@ -556,6 +584,8 @@ This session contract is the target for the `core/pairing.py` state-machine extr
 | POST | `/claim` | open (unclaimed) | |
 | POST | `/pair/start`, `/pair/cancel` | open (unclaimed) | |
 | GET, PATCH | `/device` | token | |
+| GET, PUT | `/setup` | token | `setup` |
+| POST | `/setup/complete` | token | `setup` |
 | GET | `/capabilities` | token | |
 | GET | `/status` | token | |
 | GET | `/events` | token | |

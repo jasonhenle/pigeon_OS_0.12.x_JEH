@@ -62,9 +62,52 @@ def run(ctx) -> None:
             pass
     bootstrap_done[0] = True
     _splash_clock_refresh_stop[0] = True
+    _start_welcome_overlay(ctx)
     _log_view_one_startup_phase("bootstrap-done")
     # Splash already finished before bootstrap started; run the deferred post-splash hook.
     if startup_ph[0] is None:
         _finish_post_splash_startup_transition()
     else:
         _try_remove_splash_overlay()
+
+
+def _start_welcome_overlay(ctx) -> None:
+    """First-run "Welcome to Pigeon" screen (``pigeon.setup_state``); after the splash, while setup is pending."""
+    try:
+        from pigeon import control_api as _api
+        from pigeon import setup_state
+        from pigeon.widgets.welcome_setup import WelcomeOverlay, WelcomeView
+
+        root = ctx.root
+        splash_done = ctx._startup_splash_complete
+
+        def get_view():
+            st = setup_state.state()
+            if st == setup_state.DONE or _api.display_code():
+                return None  # set up, or the full-screen pairing code is up instead
+            if st == setup_state.APP:
+                return WelcomeView("app", controller=_api.setup_controller_name())
+            code = _api.claim_code_to_show()
+            return WelcomeView("welcome", url=_api.setup_url(), code=code)
+
+        def on_manual() -> None:
+            setup_state.complete("manual")
+            vars_ = vars(ctx)
+            enter = vars_.get("_enter_main_settings_for_rotary")
+            holder = vars_.get("main_settings_widget_holder")
+            try:
+                if enter is not None and enter():
+                    w = holder[0] if holder else None
+                    if w is not None and w.state.focus_main_button("main_box1_button"):
+                        w.invalidate()
+            except Exception:
+                pass
+            try:
+                ctx.skip_cache[0] = None
+                ctx.render_once()
+            except Exception:
+                pass
+
+        WelcomeOverlay(root, get_view=get_view, on_manual=on_manual, ready=lambda: bool(splash_done[0])).start()
+    except Exception:
+        pass  # never block startup over the Welcome screen
