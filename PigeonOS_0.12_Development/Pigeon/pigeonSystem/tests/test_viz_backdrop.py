@@ -58,7 +58,6 @@ class TimelineTests(unittest.TestCase):
         patches = [
             mock.patch.object(vb, "_split_poster", lambda: self.split),
             mock.patch.object(vb, "_split_xform", lambda h, w: (0.5, 40.0, 100.0)),
-            mock.patch.object(vb, "_split", False),
             mock.patch.object(vb, "_viz", self.fake),
             mock.patch.object(vb.time, "monotonic", self.clock),
             mock.patch.object(vb, "wanted", lambda: self.audio),
@@ -168,25 +167,27 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(self.fake.turns, [-1])
 
 
-    def test_pausesaver_fades_then_grows_then_moves(self) -> None:
+    def test_pausesaver_fades_then_grows_as_it_moves(self) -> None:
         # The time (x 200..1000, y 400..500) sits at half size beside the poster: x 140..540, y 300..350.
         self.split = True
         c = self._frames(vb.EXTRAS_S + 0.05)
         self.assertEqual(int(c[120, 600].max()), 0, "rest of the face faded out")
         self.assertGreater(int(c[325, 300].max()), 200, "small time still in place")
         self.assertEqual(int(c[450, 900].max()), 0, "not at full size yet")
-        c = self._frames(vb.SCALE_S)
-        self.assertGreater(int(c[350, 900].max()), 200, "full size, grown from its top-left corner")
-        self.assertEqual(int(c[350, 1000].max()), 0)
-        self.assertEqual(int(np.argmax(c[:, 300].max(axis=1) > 0)), 300, "not moved yet")
-        c = self._frames(vb.MOVE_S + vb.DIM_S)
-        self.assertEqual(int(np.argmax(c[:, 900].max(axis=1) > 0)), vb.CLOCK_TOP_PX, "then moved to the top")
+        c = self._frames(vb.MOVE_S / 2)
+        lit = np.argwhere(c.max(axis=2) > 0)
+        (r0, c0), (r1, c1) = lit.min(axis=0), lit.max(axis=0) + 1
+        self.assertTrue(400 < c1 - c0 < 800, "halfway grown")
+        self.assertTrue(vb.CLOCK_TOP_PX < r0 < 300, "while moving up")
+        self.assertTrue(140 < c0 < 200)
+        c = self._frames(vb.MOVE_S / 2 + vb.DIM_S)
+        self.assertEqual(int(np.argmax(c[:, 900].max(axis=1) > 0)), vb.CLOCK_TOP_PX, "full size at the top")
         self.assertEqual(int(np.flatnonzero(c[vb.CLOCK_TOP_PX + 5].max(axis=1))[0]), 200)
         self._frames(vb.VIZ_S + 0.2)
-        self.assertAlmostEqual(vb._t, vb._TOTAL + vb.SCALE_S, places=3)
+        self.assertAlmostEqual(vb._t, vb._TOTAL, places=3)
         # Leaving runs it back: the time shrinks into place beside the poster last.
         self.audio = False
-        self._frames(vb.VIZ_S + vb.DIM_S + vb.MOVE_S + vb.SCALE_S)
+        self._frames(vb.VIZ_S + vb.DIM_S + vb.MOVE_S)
         c = self._frames(0.05)
         self.assertGreater(int(c[325, 300].max()), 200, "small time back beside the poster")
         self.assertLess(int(c[450, 900].max()), 40, "only the (fake, unsplit) face fading back in")
