@@ -37,7 +37,7 @@ def product() -> str:
 def capabilities() -> list[str]:
     """Capabilities implemented by *this build* for this product (Phase 1 subset)."""
     implemented = {"now_playing", "manual_search", "now_playing_override", "rooms", "room_reset", "pigeon_settings", "display_brightness", "sports",
-                   "update", "restart", "factory_reset", "tmdb_refresh", "pairing_player", "pairing_receiver"}
+                   "viz", "update", "restart", "factory_reset", "tmdb_refresh", "pairing_player", "pairing_receiver"}
     return [c for c in _CAPABILITIES[product()] if c in implemented]
 
 

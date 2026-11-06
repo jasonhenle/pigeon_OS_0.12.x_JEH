@@ -213,6 +213,8 @@ class ControlService:
             return self._display(method, body)
         elif route == "/sports" or route.startswith("/sports/"):
             return self._sports(method, route, body)
+        elif route == "/visualizer":
+            return self._visualizer(method, body)
         elif route == "/controllers":
             if method == "GET":
                 return 200, {"controllers": self.auth.controllers()}
@@ -578,6 +580,28 @@ class ControlService:
             self._on_ui(self._apply_settings)
             self.hub.publish("settings", {"changed": ["display"]})
             return 200, ds.read_display()
+        return _err(404, "not_found", "Unknown endpoint or method.")
+
+    def _visualizer(self, method: str, body: Any) -> Response:
+        """The full-screen visualizer rotation: pick a preset, VIZ LOCK."""
+        from pigeon.control_api import visualizer
+
+        if not profile.has_capability("viz"):
+            return _err(422, "unsupported", "viz not supported on this device.")
+        if method == "GET":
+            return 200, visualizer.read_visualizer()
+        if method == "PATCH":
+            if not isinstance(body, dict):
+                return _err(400, "bad_request", "JSON object required.")
+            try:
+                visualizer.patch_visualizer(body)
+            except ValueError as exc:
+                return _err(400, "bad_request", "Invalid value.", fields=str(exc).split(","))
+            if "viz_lock" in body:
+                self._on_ui(self._apply_settings)
+                self.hub.publish("settings", {"changed": ["options"]})
+            self.hub.publish("visualizer", {"changed": sorted(body)})
+            return 200, visualizer.read_visualizer()
         return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _sports(self, method: str, route: str, body: Any) -> Response:

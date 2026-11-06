@@ -257,6 +257,27 @@ struct PairingRequest: Codable { var kind: String }
 
 // MARK: Sports (Settings > Pigeon > SPORTS)
 
+/// One full-screen visualizer in the device's rotation (`GET /visualizer`).
+struct VisualizerPreset: Codable, Equatable, Identifiable {
+    var index: Int
+    var name: String
+    var style: String
+    /// The style's description, e.g. "Dot matrix".
+    var kind: String
+    var id: Int { index }
+}
+
+struct VisualizerState: Codable, Equatable {
+    var presets: [VisualizerPreset]
+    var active: Int
+    var vizLock: Bool
+}
+
+struct VisualizerPatch: Codable {
+    var active: Int?
+    var vizLock: Bool?
+}
+
 struct SportsLeague: Codable, Equatable, Identifiable {
     var id: String
     var name: String

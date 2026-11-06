@@ -269,6 +269,12 @@ struct PigeonClient {
 
     // MARK: Sports
 
+    func visualizer() async throws -> VisualizerState { try await send("GET", "/visualizer") }
+
+    func patchVisualizer(_ patch: VisualizerPatch) async throws -> VisualizerState {
+        try await send("PATCH", "/visualizer", body: patch)
+    }
+
     func sports() async throws -> SportsSettings { try await send("GET", "/sports") }
 
     func patchSports(_ patch: SportsPatch) async throws -> SportsSettings {

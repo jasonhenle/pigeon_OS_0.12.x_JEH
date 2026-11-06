@@ -199,6 +199,7 @@ private struct PigeonClockSettingsPage: View {
                     if caps.contains("rooms") {
                         RoomsCard(client: client, canReset: caps.contains("room_reset")).id(reload)
                     }
+                    if caps.contains("viz") { visualizer }
                     if caps.contains("sports") { sports }
                     if hasSettings || caps.contains("display_brightness") {
                         CollapsibleTile(title: "Display") { display }
@@ -215,6 +216,22 @@ private struct PigeonClockSettingsPage: View {
         }
         .toolbar { if settings.busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } } }
         .task(id: reload) { if hasSettings { await settings.load() } }
+    }
+
+    private var visualizer: some View {
+        NavigationLink { VisualizerView(client: client) } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    LCDLabel(text: "Visualizer", size: 18, color: Theme.accent)
+                    Text("Pick the visualizer, and Viz Lock")
+                        .font(Theme.ui(13)).foregroundStyle(Theme.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Theme.inactive)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).tile()
+        }
+        .buttonStyle(.plain)
     }
 
     private var sports: some View {
@@ -246,11 +263,6 @@ private struct PigeonClockSettingsPage: View {
                           note: d.options["np_layout"] == "zone63"
                               ? "Wide title, with the volume beside it."
                               : "Large title across the top, with the running time below it.")
-                OptionRow(model: settings, data: d, key: "viz_lock", title: "Visualizer",
-                          labels: ["off": "Auto", "on": "Viz Lock"],
-                          note: d.options["viz_lock"] == "on"
-                              ? "The visualizer shows whatever is playing, even with track info."
-                              : "The visualizer comes up for audio without track info, or on a long press.")
                 OptionRow(model: settings, data: d, key: "zone4_mode", title: "Playback bar",
                           labels: ["info": "Info", "visualizer": "Visualizer"])
             } else {
