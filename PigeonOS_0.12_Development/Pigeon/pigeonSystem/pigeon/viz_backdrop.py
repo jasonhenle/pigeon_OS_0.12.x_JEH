@@ -263,10 +263,13 @@ def _face(name: str, key: object, render, size: tuple[int, int]) -> ClockOverlay
     """The overlay for ``name`` at ``key``: inline the first time, then a worker keeps it fresh."""
     with _lock:
         have, val = _faces.get(name, (None, None))
-        start = have != key and val is not None and name not in _busy
+        # A new theme colour is drawn inline: the worker's second of lag shows as the
+        # clock changing colour after the visualizer.
+        recolour = val is not None and have != key and have[-1] != key[-1]
+        start = have != key and val is not None and name not in _busy and not recolour
         if start:
             _busy.add(name)
-    if val is None:
+    if val is None or recolour:
         val = ClockOverlay(render())
         with _lock:
             _faces[name] = (key, val)
@@ -287,6 +290,16 @@ def _face(name: str, key: object, render, size: tuple[int, int]) -> ClockOverlay
 
         threading.Thread(target=_work, name=f"pigeon-viz-backdrop-{name}", daemon=True).start()
     return val
+
+
+def theme_key() -> str:
+    """The live UI colour; part of every cached clock key so a theme change redraws at once."""
+    try:
+        from pigeon.fullscreen_viz import theme_hex
+
+        return theme_hex()
+    except Exception:
+        return ""
 
 
 def _digital_face() -> bool:
@@ -329,13 +342,14 @@ def compose(canvas: np.ndarray, key: object, render_full) -> None:
         except Exception:
             pass
 
-    full_key = ("full", key)
+    theme = theme_key()
+    full_key = ("full", key, theme)
     if extras < 1.0 or not digital:
         full = _face("full", full_key, lambda: render_full()[0][0], (h, w))
     else:
         full = None
     clock = (
-        _face("digits", (int(time.time()),), _render_digits, (h, w)) if digital else full
+        _face("digits", (int(time.time()), theme), _render_digits, (h, w)) if digital else full
     )
     if clock is None:
         return

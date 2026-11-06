@@ -404,8 +404,17 @@ def write_work(items: list[dict], active: int) -> None:
     path = work_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps({"active": int(active), "presets": items}, indent=2) + "\n", encoding="utf-8")
+    body = {"active": int(active), "presets": items, "knownDefaults": [d["name"] for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS]}
+    tmp.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _add_new_defaults(items: list[dict], known: list[str] | None) -> bool:
+    """Append app defaults and lab starters added since the list was saved (a deleted one stays deleted)."""
+    have = {str(p.get("name")) for p in items} | set(known or ())
+    new = [fv.complete_preset(dict(d)) for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS if d["name"] not in have]
+    items.extend(new)
+    return bool(new)
 
 
 def read_work() -> tuple[list[dict], int]:
@@ -415,7 +424,10 @@ def read_work() -> tuple[list[dict], int]:
         items = [fv.complete_preset(dict(x)) for x in raw["presets"]
                  if isinstance(x, dict) and x.get("style") in fv.STYLES]  # retired styles drop out
         if items:
-            return items, int(raw.get("active", 0)) % len(items)
+            active = int(raw.get("active", 0)) % len(items)
+            if _add_new_defaults(items, raw.get("knownDefaults")):
+                write_work(items, active)
+            return items, active
     except (OSError, ValueError, KeyError, TypeError):
         pass
     items, active = fv._read_config()
