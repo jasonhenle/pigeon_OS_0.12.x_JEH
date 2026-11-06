@@ -79,8 +79,19 @@ class PresetTests(_Base):
         self.assertEqual([p["name"] for p in items], ["B"])
         self.assertNotIn("readouts", items[0])
 
+    def test_rotation_is_spectrum_and_lab_starters_render(self) -> None:
+        self.assertEqual([p["name"] for p in fv.presets()], ["Spectrum"])
+        names = [d["name"] for d in fv.LAB_PRESETS]
+        self.assertEqual(len(names), len(set(names)))
+        buf = np.zeros((400, 640, 3), np.uint8)
+        fv.set_presets([fv.complete_preset(dict(d)) for d in fv.LAB_PRESETS])
+        self.addCleanup(fv.set_presets, None)
+        for i in range(len(names)):
+            fv.FullscreenViz(i).render(buf, toast=False)
+            self.assertGreater(int(buf.max()), 0, names[i])
+
     def test_text_is_off_by_default(self) -> None:
-        for p in fv.presets():
+        for p in fv.presets() + [fv.complete_preset(dict(d)) for d in fv.LAB_PRESETS]:
             if "showText" in fv.style_specs(str(p["style"])):
                 self.assertFalse(p["showText"], p["name"])
 
@@ -109,7 +120,7 @@ class PresetTests(_Base):
         self.assertEqual(len(fv.load_config()[0]), len(fv.DEFAULT_PRESETS))
 
     def test_save_round_trips(self) -> None:
-        items = fv.default_presets()
+        items = fv.default_presets() + [fv.complete_preset(dict(d)) for d in fv.LAB_PRESETS]
         items[2]["name"] = "Bridge"
         fv.save_config(items, 2)
         fv._cfg_checked = 0.0
@@ -117,9 +128,12 @@ class PresetTests(_Base):
         self.assertEqual((got[2]["name"], active), ("Bridge", 2))
 
     def test_rotate_wraps_both_ways(self) -> None:
+        items = [fv.complete_preset(dict(d)) for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS]
+        fv.set_presets(items)
+        self.addCleanup(fv.set_presets, None)
         viz = fv.FullscreenViz(0)
         viz.rotate(-1)
-        self.assertEqual(viz.index, len(fv.DEFAULT_PRESETS) - 1)
+        self.assertEqual(viz.index, len(items) - 1)
         viz.rotate(2)
         self.assertEqual(viz.index, 1)
 

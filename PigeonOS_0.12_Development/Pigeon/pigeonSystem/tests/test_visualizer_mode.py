@@ -19,6 +19,7 @@ if _SYS_ROOT not in sys.path:
     sys.path.insert(0, _SYS_ROOT)
 
 from pigeon import visualizer_mode as vm  # noqa: E402
+from pigeon import fullscreen_viz as fv  # noqa: E402
 from pigeon import zone4_eq  # noqa: E402
 
 
@@ -199,6 +200,8 @@ class NowPlayingZone6Tests(unittest.TestCase):
             self.assertEqual(w._assignments()[3], "cast_info")
 
     def test_encoder_turn_changes_preset_only_while_showing(self) -> None:
+        fv.set_presets([fv.complete_preset(dict(d)) for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS])
+        self.addCleanup(fv.set_presets, None)
         w = self._widget(metadata=False)
         viz = w._zone6_visualizer()
         start = viz.index

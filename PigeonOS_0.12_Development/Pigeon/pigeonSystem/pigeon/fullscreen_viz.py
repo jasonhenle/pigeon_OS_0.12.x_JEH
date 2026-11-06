@@ -399,14 +399,18 @@ STYLES: dict[str, dict[str, object]] = {
 DEFAULT_PRESETS: list[dict[str, object]] = [
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
      "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
+    # Not in the rotation, still selectable in the lab's tuner: bounce, analog_vu, modern_vu, arc_vu
+    # (digital VU), pixel_vu, sweep_vu, led_ladder, rta, skyline, bars, fireflies.
+]
+
+# Starting points the lab adds to its working list (not in the app's rotation).
+LAB_PRESETS: list[dict[str, object]] = [
     {"name": "Classic VU", "style": "analog_vu"},
     {"name": "Amber VU", "style": "analog_vu", "face": "#17120B", "ink": "#E9B565", "red": "#FF5A36",
      "needle": "#FFD9A0", "cover": "#0B0B0B", "coverText": "#E9B565", "faceRadius": 18.0},
     {"name": "Modern VU", "style": "modern_vu"},
     {"name": "Studio VU", "style": "modern_vu", "layout": "single", "radius": 470.0, "pivotY": 720.0,
      "sweepDeg": 90.0, "trail": False, "needleW": 3.0},
-    # Not in the rotation, still selectable in the lab's tuner: bounce, arc_vu (digital VU), pixel_vu,
-    # sweep_vu, led_ladder, rta, skyline, bars, fireflies.
 ]
 
 

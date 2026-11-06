@@ -404,15 +404,15 @@ def write_work(items: list[dict], active: int) -> None:
     path = work_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    body = {"active": int(active), "presets": items, "knownDefaults": [d["name"] for d in fv.DEFAULT_PRESETS]}
+    body = {"active": int(active), "presets": items, "knownDefaults": [d["name"] for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS]}
     tmp.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
 
 def _add_new_defaults(items: list[dict], known: list[str] | None) -> bool:
-    """Append app defaults added since the working list was saved (a deleted one stays deleted)."""
+    """Append app defaults and lab starters added since the list was saved (a deleted one stays deleted)."""
     have = {str(p.get("name")) for p in items} | set(known or ())
-    new = [fv.complete_preset(dict(d)) for d in fv.DEFAULT_PRESETS if d["name"] not in have]
+    new = [fv.complete_preset(dict(d)) for d in fv.DEFAULT_PRESETS + fv.LAB_PRESETS if d["name"] not in have]
     items.extend(new)
     return bool(new)
 
