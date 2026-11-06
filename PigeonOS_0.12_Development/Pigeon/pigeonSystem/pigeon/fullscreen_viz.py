@@ -31,6 +31,7 @@ import os
 import sys
 import threading
 import time
+import weakref
 from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
@@ -2229,6 +2230,36 @@ def _toast(name: str, index: int, count: int, w: int, h: int,
 # ---------------------------------------------------------------------------
 # Visualizer
 # ---------------------------------------------------------------------------
+# Visualizers that keep the encoder's pick (``remember=True``): the zone-6
+# visualizer and the clocksaver backdrop. :func:`select_preset` moves them all.
+_REMEMBERING: "weakref.WeakSet[FullscreenViz]" = weakref.WeakSet()
+
+
+def active_preset_index() -> int:
+    """The preset the visualizers show: the last one picked (encoder or app), else the file's."""
+    n = len(presets())
+    if not n:
+        return 0
+    i = FullscreenViz._remembered_index()
+    return (load_config()[1] if i is None else i) % n
+
+
+def select_preset(i: int) -> None:
+    """Show preset ``i`` (the app's pick): saved like an encoder pick, and live at once."""
+    n = len(presets())
+    if not n:
+        return
+    i = int(i) % n
+    try:
+        from pigeon.app_state import write_app_state
+
+        write_app_state(**{STATE_KEY: i})
+    except Exception:
+        pass
+    for viz in list(_REMEMBERING):
+        viz.set_index(i)
+
+
 class FullscreenViz:
     """Owns analysis state, the active preset and the per-size layer cache."""
 
@@ -2250,6 +2281,8 @@ class FullscreenViz:
         self._matte: tuple[tuple, dict[str, object]] | None = None
         self._matte_over: tuple[tuple, dict[str, object]] | None = None
         self.last_render_ms = 0.0
+        if self._remember:
+            _REMEMBERING.add(self)
 
     # -- presets / encoder ----------------------------------------------------
     @property

@@ -24,6 +24,7 @@
 		A1303CFD64AF17CF0F6000B9 /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9CFC40C338AD19039EAFF /* DeviceBrowser.swift */; };
 		BEC1783752922461FE24BE8A /* SportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C8B7D63F9A818EDBB0E7E8 /* SportsView.swift */; };
 		D31D243110E497C175787245 /* DevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ECFBD1CCB8CB5A1B062300 /* DevicesView.swift */; };
+		D45C89CC4C6B55C1F424BB92 /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417BC2EAA7CAADD62359ABFB /* VisualizerView.swift */; };
 		E70DB177052A319EB162F2BE /* SharpSansSemibold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 4A64913793A2F88E121414D0 /* SharpSansSemibold.otf */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +47,7 @@
 		3372496F28E40E0542291FD1 /* PigeonTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PigeonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3762431839A00E0481DC1636 /* PigeonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PigeonApp.swift; sourceTree = "<group>"; };
 		40F938D02692D7D45891F5A1 /* AddDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDeviceView.swift; sourceTree = "<group>"; };
+		417BC2EAA7CAADD62359ABFB /* VisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualizerView.swift; sourceTree = "<group>"; };
 		4A64913793A2F88E121414D0 /* SharpSansSemibold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SharpSansSemibold.otf; sourceTree = "<group>"; };
 		5013FC18FF49E1805AE52DBA /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		63ECFBD1CCB8CB5A1B062300 /* DevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesView.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 				03C1744ECA1BF8B623A51E9A /* RootView.swift */,
 				5013FC18FF49E1805AE52DBA /* SearchView.swift */,
 				97C8B7D63F9A818EDBB0E7E8 /* SportsView.swift */,
+				417BC2EAA7CAADD62359ABFB /* VisualizerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -271,6 +274,7 @@
 				121DB773A35E34FBBEF8FC78 /* SearchView.swift in Sources */,
 				BEC1783752922461FE24BE8A /* SportsView.swift in Sources */,
 				9FDA03837E893E2D3474638A /* Theme.swift in Sources */,
+				D45C89CC4C6B55C1F424BB92 /* VisualizerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,7 +366,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -375,7 +379,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.14;
+				MARKETING_VERSION = 0.1.15;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -438,7 +442,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -457,7 +461,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.14;
+				MARKETING_VERSION = 0.1.15;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
