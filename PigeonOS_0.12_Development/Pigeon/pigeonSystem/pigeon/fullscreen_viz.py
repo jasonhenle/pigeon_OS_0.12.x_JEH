@@ -441,7 +441,7 @@ DEFAULT_PRESETS: list[dict[str, object]] = [
     # Split-stereo bars (L left, R right), the UI colour below twoToneAt, near-white above.
     {"name": "Stereo Bars", "style": "bars", "bg": "#000000", "colA": THEME_BLUE, "colB": "#E4EDEC",
      "peakColor": "#FFFFFF", "slotColor": "#141414", "showSlots": False, "bands": 17.0, "gapPct": 30.0,
-     "minGapPx": 2.0, "radius": 8.0, "layout": "split stereo", "colorMode": "two-tone", "twoToneAt": 0.67,
+     "minGapPx": 2.0, "radius": 8.0, "layout": "split stereo", "colorMode": "two-tone", "twoToneAt": 0.5,
      "hueStart": 200.0, "hueSpan": 240.0, "peaks": True, "peakH": 6.0, "minLevel": 0.02, "insetX": 56.0,
      "top": 150.0, "bottom": 704.0, "fftSize": 4096, "fMin": 30.0, "fMax": 16000.0, "floorDb": -80.0,
      "ceilDb": -9.0, "tilt": 3.0, "attackMs": 25.0, "releaseMs": 250.0, "peakHoldMs": 500.0, "peakFall": 0.6},
