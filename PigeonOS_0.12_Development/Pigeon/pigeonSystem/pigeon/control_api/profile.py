@@ -21,6 +21,7 @@ _CAPABILITIES: dict[str, tuple[str, ...]] = {
     "clock": (
         "now_playing", "manual_search", "now_playing_override", "rooms", "room_reset", "pigeon_settings", "display_brightness", "sports", "clock", "locations", "wifi",
         "pairing_player", "pairing_receiver", "viz", "rotary", "update", "restart", "factory_reset", "tmdb_refresh",
+        "setup",
     ),
     "marquee": (
         "now_playing", "manual_search", "now_playing_override", "rooms", "room_reset", "display_brightness", "locations", "wifi",
@@ -37,7 +38,8 @@ def product() -> str:
 def capabilities() -> list[str]:
     """Capabilities implemented by *this build* for this product (Phase 1 subset)."""
     implemented = {"now_playing", "manual_search", "now_playing_override", "rooms", "room_reset", "pigeon_settings", "display_brightness", "sports",
-                   "viz", "update", "restart", "factory_reset", "tmdb_refresh", "pairing_player", "pairing_receiver"}
+                   "viz", "update", "restart", "factory_reset", "tmdb_refresh", "pairing_player", "pairing_receiver",
+                   "setup"}
     return [c for c in _CAPABILITIES[product()] if c in implemented]
 
 

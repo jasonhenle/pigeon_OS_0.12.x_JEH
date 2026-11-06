@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 from typing import Any, Callable
+from urllib.parse import urlencode
 
 from pigeon.control_api import profile, tls
 from pigeon.control_api.discovery import Advertiser
@@ -22,16 +23,66 @@ _advertiser: Advertiser | None = None
 _service: ControlService | None = None
 
 
+# Where the Welcome screen's QR code points. The app registers the ``pigeon`` URL scheme; a
+# universal link (https://…/setup) can replace it once there is a domain, since the details ride in
+# the fragment, which browsers never send to the server.
+DEFAULT_SETUP_URL_BASE = "pigeon://setup"
+
+
 def enabled() -> bool:
+    """``PIGEON_CONTROL_API`` wins, then ``"control_api"`` in the state file. With neither set, the API
+    runs while first-run setup is pending, so a new or factory-reset Pigeon can be set up from the app."""
     env = (os.environ.get("PIGEON_CONTROL_API") or "").strip().lower()
     if env:
         return env in ("1", "true", "yes", "on")
     try:
         from pigeon.app_state import read_app_state
 
-        return bool(read_app_state().get("control_api"))
+        flag = read_app_state().get("control_api")
+        if flag is not None:
+            return bool(flag)
+    except Exception:
+        pass
+    try:
+        from pigeon import setup_state
+
+        return setup_state.needs_setup()
     except Exception:
         return False
+
+
+def running() -> bool:
+    return _service is not None
+
+
+def setup_url() -> str:
+    """What the Welcome screen's QR code encodes: device id, claim code (while a claim is open) and the
+    TLS pin, so one scan finds, pairs and trusts this device. ``""`` when the API is not running."""
+    svc = _service
+    if svc is None:
+        return ""
+    fields = {"v": "1", "id": profile.device_id(), "name": profile.device_name()}
+    try:
+        if svc.auth.claim_open():
+            fields["code"] = svc.auth.pairing_code
+    except Exception:
+        pass
+    if svc.tls_info:
+        fields["fp"] = str(svc.tls_info.get("fingerprint_sha256") or "")
+    base = (os.environ.get("PIGEON_SETUP_URL_BASE") or "").strip() or DEFAULT_SETUP_URL_BASE
+    return f"{base}#{urlencode(fields)}"
+
+
+def setup_controller_name() -> str:
+    """Name of the phone that most recently paired (shown as "Continue on <name>")."""
+    svc = _service
+    if svc is None:
+        return ""
+    try:
+        rows = sorted(svc.auth.controllers(), key=lambda r: str(r.get("added") or ""))
+        return str(rows[-1].get("name") or "") if rows else ""
+    except Exception:
+        return ""
 
 
 def _flag(name: str, default: bool) -> bool:

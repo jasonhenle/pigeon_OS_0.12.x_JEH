@@ -20,6 +20,7 @@ from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlparse
 
 from pigeon import manual_search as ms
+from pigeon import setup_state
 from pigeon.control_api import profile, tls as tls_mod
 from pigeon.control_api.auth import DISPLAY_TTL_S, AuthStore
 from pigeon.control_api.events import EventHub, format_event
@@ -115,6 +116,7 @@ class ControlService:
             "version": profile.version(),
             "claimed": self.auth.claimed(),
             "setup_mode": False,
+            "setup": setup_state.public(),
         }
         if self.tls_info:
             body["tls"] = dict(self.tls_info)
@@ -152,6 +154,7 @@ class ControlService:
         txt = {
             "id": h["id"], "name": h["name"], "product": h["product"],
             "api": str(h["api"]), "ver": h["version"], "claimed": "1" if h["claimed"] else "0",
+            "setup": "0" if h["setup"]["state"] == setup_state.DONE else "1",
         }
         if self.tls_info:
             txt["tlsport"] = str(self.tls_info["port"])
@@ -201,6 +204,8 @@ class ControlService:
             }
         elif route == "/status" and method == "GET":
             return 200, self.status()
+        elif route == "/setup" or route == "/setup/complete":
+            return self._setup(method, route, body)
         elif route.startswith("/search"):
             return self._search(method, route, query, body)
         elif route.startswith("/now-playing"):
@@ -245,7 +250,37 @@ class ControlService:
         if token is None:
             return _err(403, "not_claimed", "Pairing code rejected.")
         self.hub.publish("device", {"claimed": True})
+        if setup_state.note_claimed():
+            self.hub.publish("setup", setup_state.public())
         return 200, {"token": token, "device": {"id": profile.device_id(), "name": profile.device_name()}}
+
+    def _setup(self, method: str, route: str, body: Any) -> Response:
+        """First-run wizard progress (spec section 2.4)."""
+        if not profile.has_capability("setup"):
+            return _err(422, "unsupported", "setup not supported on this device.")
+        if route == "/setup" and method == "GET":
+            return 200, setup_state.public()
+        if route == "/setup" and method == "PUT":
+            if not isinstance(body, dict):
+                return _err(400, "bad_request", "JSON object required.")
+            step = body.get("step")
+            skipped = body.get("skipped")
+            if skipped is not None and not (isinstance(skipped, list) and all(isinstance(x, str) for x in skipped)):
+                return _err(400, "bad_request", "skipped must be a list of step names.", fields=["skipped"])
+            if setup_state.state() == setup_state.DONE:
+                return _err(409, "conflict", "Setup is already complete.")
+            try:
+                out = setup_state.set_progress(None if step is None else str(step), skipped)
+            except ValueError as exc:
+                return _err(400, "bad_request", str(exc), fields=["step", "skipped"])
+            self.hub.publish("setup", out)
+            return 200, out
+        if route == "/setup/complete" and method == "POST":
+            setup_state.complete("app")
+            out = setup_state.public()
+            self.hub.publish("setup", out)
+            return 200, out
+        return _err(404, "not_found", "Unknown endpoint or method.")
 
     def _patch_device(self, body: Any) -> Response:
         if not isinstance(body, dict) or "name" not in body:
