@@ -216,6 +216,29 @@ class NowPlayingZone6Tests(unittest.TestCase):
         self.assertFalse(w2.rotate_zone6_visualizer(1))
 
 
+class VizLockTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._prev = vm._active
+        self.addCleanup(setattr, vm, "_active", self._prev)
+
+    def test_lock_holds_the_mode_and_ignores_the_long_press(self) -> None:
+        vm.set_active(False)
+        with mock.patch("pigeon.widgets.options_settings.viz_lock_on", return_value=True):
+            self.assertTrue(vm.is_active())
+            self.assertTrue(vm.toggle())
+            self.assertTrue(vm.is_active())
+        self.assertFalse(vm.is_active(), "unlocked: back to the press-driven state")
+
+    def test_saved_zone11_style_is_ignored_and_zone11_is_alt(self) -> None:
+        from pigeon.widgets import options_settings as o
+
+        vals = o._normalize({"zone11_style": "standard", "np_layout": "zone11"})
+        self.assertNotIn("zone11_style", vals)
+        self.assertEqual(vals["viz_lock"], "off")
+        with mock.patch.object(o, "read_options", lambda: vals):
+            self.assertTrue(o.zone11_alt_selected())
+
+
 class FeedTests(unittest.TestCase):
     def test_feed_wanted_while_a_visualizer_draws(self) -> None:
         with mock.patch.object(zone4_eq, "enabled", return_value=False), \

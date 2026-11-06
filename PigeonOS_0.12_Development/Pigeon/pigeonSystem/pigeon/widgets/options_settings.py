@@ -9,10 +9,12 @@ installs the latest release only while nothing is playing; the old
 auto / manual update switch is gone and any saved "manual" reads as auto).
 ``option5`` picks the now-playing layout: zone 11 (TT across zones 1–3,
 input / volume / TRT strip in zone 4, the default) or the zone 6 + 3 look (wide
-TT in zone 6, volume in zone 3). ``option8`` picks zone 11's look: standard or
-alt (no input id, clock or volume; the TT grows into the freed header). It only
-applies while option5 is zone 11. A long
-encoder press still flips into the visualizer, see :mod:`pigeon.visualizer_mode`.
+TT in zone 6, volume in zone 3). Zone 11 always uses its alt look (no input id,
+clock or volume; the TT grows into the freed header); the old ``zone11_style``
+switch is retired and a saved value is ignored. ``option8`` is VIZ LOCK: on, the
+visualizer clocksaver shows no matter what is playing (metadata or not), and
+the long encoder press can't leave it. Off, a long press still flips into the
+visualizer, see :mod:`pigeon.visualizer_mode`.
 Values persist under ``settings_options``.
 
 The 0.8–0.11.38 options bar also had idle delay and clocksaver on/off
@@ -40,7 +42,7 @@ _DEFAULTS: dict[str, Any] = {
     "clock_saver": "on",
     "zone4_mode": "info",
     "np_layout": "zone11",
-    "zone11_style": "standard",
+    "viz_lock": "off",
     "auto_update": "auto",
 }
 
@@ -53,7 +55,7 @@ _SWITCHES: tuple[tuple[int, str, Any, Any], ...] = (
     (5, "np_layout", "zone11", "zone63"),
     (6, "clock_format", "digital", "analog"),
     (7, "ui_style", "standard", "simple"),
-    (8, "zone11_style", "standard", "alt"),
+    (8, "viz_lock", "off", "on"),
 )
 
 _STATE_KEY = "settings_options"
@@ -83,8 +85,8 @@ def _normalize(raw: object) -> dict[str, Any]:
     out["zone4_mode"] = "visualizer" if z4 in ("visualizer", "viz", "eq") else "info"
     nl = str(raw.get("np_layout") or out["np_layout"]).strip().lower()
     out["np_layout"] = "zone63" if nl in ("zone63", "zone6", "zone 6,3", "6,3") else "zone11"
-    z11 = str(raw.get("zone11_style") or out["zone11_style"]).strip().lower()
-    out["zone11_style"] = "alt" if z11 == "alt" else "standard"
+    vl = str(raw.get("viz_lock") or out["viz_lock"]).strip().lower()
+    out["viz_lock"] = "on" if vl in ("on", "true", "1") else "off"
     cf = str(raw.get("clock_format") or out["clock_format"]).strip().lower()
     out["clock_format"] = "analog" if cf in ("analog", "analogue") else "digital"
     return out
@@ -220,9 +222,13 @@ def zone11_selected(state: MainSettingsState | None = None) -> bool:
 
 
 def zone11_alt_selected(state: MainSettingsState | None = None) -> bool:
-    """option8 = alt while option5 = zone11: no input id / clock / volume, bigger TT."""
-    vals = _vals(state)
-    return vals["np_layout"] == "zone11" and vals["zone11_style"] == "alt"
+    """Zone 11 always uses its alt look (no input id / clock / volume, bigger TT)."""
+    return zone11_selected(state)
+
+
+def viz_lock_on(state: MainSettingsState | None = None) -> bool:
+    """option8 = on: the visualizer clocksaver shows whatever is playing."""
+    return _vals(state)["viz_lock"] == "on"
 
 
 def auto_update_enabled(state: MainSettingsState | None = None) -> bool:
@@ -389,5 +395,6 @@ __all__ = [
     "zone4_visualizer_on",
     "zone6_visualizer_default",
     "zone11_alt_selected",
+    "viz_lock_on",
     "zone11_selected",
 ]

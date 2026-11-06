@@ -245,15 +245,12 @@ private struct PigeonClockSettingsPage: View {
                           labels: ["zone11": "Zone 11", "zone63": "Zone 6,3"],
                           note: d.options["np_layout"] == "zone63"
                               ? "Wide title, with the volume beside it."
-                              : "Title across the top, with input, volume and running time below it.")
-                // Zone 11's own look; Pigeon only offers it while the layout is Zone 11.
-                if d.options["np_layout"] != "zone63" {
-                    OptionRow(model: settings, data: d, key: "zone11_style", title: "Zone 11 style",
-                              labels: ["standard": "Zone 11", "alt": "11 Alt"],
-                              note: d.options["zone11_style"] == "alt"
-                                  ? "No input, clock or volume; the title grows to fill the top."
-                                  : "Input, clock and volume along the top.")
-                }
+                              : "Large title across the top, with the running time below it.")
+                OptionRow(model: settings, data: d, key: "viz_lock", title: "Visualizer",
+                          labels: ["off": "Auto", "on": "Viz Lock"],
+                          note: d.options["viz_lock"] == "on"
+                              ? "The visualizer shows whatever is playing, even with track info."
+                              : "The visualizer comes up for audio without track info, or on a long press.")
                 OptionRow(model: settings, data: d, key: "zone4_mode", title: "Playback bar",
                           labels: ["info": "Info", "visualizer": "Visualizer"])
             } else {

@@ -84,7 +84,7 @@ OPT_TEMP = 2
 OPT_NP_LAYOUT = 5
 OPT_CLOCK_FORMAT = 6
 OPT_UI_STYLE = 7
-OPT_ZONE11_STYLE = 8
+OPT_VIZ_LOCK = 8
 
 
 @dataclass(frozen=True)
@@ -101,8 +101,7 @@ _GENERAL_SLOTS: tuple[Slot, ...] = (
     Slot("button", "update", "UPDATE"),
     Slot("button", "reset", "RESET"),
     Slot("button", "restart", "RESTART"),
-    # Only means something under ZONE 11: dimmed and skipped by focus otherwise.
-    Slot("toggle", f"option:{OPT_ZONE11_STYLE}", choices=("ZONE 11", "11 ALT")),
+    Slot("toggle", f"option:{OPT_VIZ_LOCK}", choices=("AUTO", "VIZ LOCK")),
     Slot("toggle", f"option:{OPT_NP_LAYOUT}", choices=("ZONE 11", "ZONE 6,3")),
     Slot("button", "sports", "SPORTS"),
 )
@@ -201,10 +200,7 @@ def pigeon_focus_ring(view: object = DEFAULT_VIEW) -> tuple[str, ...]:
 
 def slot_enabled(slot: Slot, state: MainSettingsState | None = None) -> bool:
     """False for a tile that is drawn dim and skipped by focus right now."""
-    if slot.focus_id == f"option:{OPT_ZONE11_STYLE}":
-        from pigeon.widgets.options_settings import zone11_selected
-
-        return zone11_selected(state)
+    _ = slot, state
     return True
 
 
@@ -1537,7 +1533,7 @@ __all__ = [
     "OPT_NP_LAYOUT",
     "OPT_TEMP",
     "OPT_TIME",
-    "OPT_ZONE11_STYLE",
+    "OPT_VIZ_LOCK",
     "Slot",
     "THEME_KEYS",
     "VIEWS",
