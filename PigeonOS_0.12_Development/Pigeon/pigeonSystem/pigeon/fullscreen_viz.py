@@ -55,7 +55,9 @@ _ONE = float(1 << SHIFT)
 TOAST_S = 1.6
 _CONFIG_POLL_S = 0.5
 _LAYER_CACHE = 24
-STATE_KEY = "fullscreen_viz_preset"  # app state: preset last picked with the encoder
+# App state: preset last picked with the encoder. Renamed when Spectrum moved
+# to the front, so every device starts on it once instead of an old index.
+STATE_KEY = "fullscreen_viz_preset_v2"
 REMEMBER_AFTER_S = 2.0
 
 # Set on a preset copy while building alpha-matted layers (``render(clear=True)``).
@@ -347,10 +349,10 @@ STYLES: dict[str, dict[str, object]] = {
 }
 
 DEFAULT_PRESETS: list[dict[str, object]] = [
-    {"name": "Pixel VU", "style": "pixel_vu"},
-    {"name": "Sweep VU", "style": "sweep_vu"},
     {"name": "Spectrum", "style": "dots", "colB": "#B2DAFC", "unlit": 0.38, "cols": 30.0, "rows": 17.0,
      "dotScale": 0.9, "shape": "square", "hueSpan": 0.0, "insetX": 60.0, "bottom": 760.0, "floorDb": -78.0},
+    {"name": "Pixel VU", "style": "pixel_vu"},
+    {"name": "Sweep VU", "style": "sweep_vu"},
     {"name": "Meter Bridge", "style": "led_ladder"},
     {"name": "RTA 31", "style": "rta", "fftSize": 8192, "floorDb": -84.0, "ceilDb": -12.0,
      "attackMs": 20.0, "releaseMs": 320.0, "peakHoldMs": 900.0, "peakFall": 0.4,
@@ -642,9 +644,11 @@ class Analysis:
         x[:] = np.clip(x, -0.02, 1.62)
         v[pinned] = 0.0
 
-    def update(self, p: dict, dt: float, needs: tuple[str, ...], names: tuple[str, ...] = ("M",)) -> None:
+    def update(self, p: dict, dt: float, needs: tuple[str, ...], names: tuple[str, ...] = ("M",),
+               *, silent: bool = False) -> None:
+        """``silent``: analyse silence, so levels fall at their release rate (e.g. an exit animation)."""
         sr = _audio.sample_rate()
-        fresh = _audio.audio_fresh()
+        fresh = _audio.audio_fresh() and not silent
         n_blk = int(min(8192, max(256, dt * sr)))
         n_fft = 0
         if "spectrum" in needs:
@@ -2069,11 +2073,12 @@ class FullscreenViz:
 
     # -- frame --------------------------------------------------------------------
     def render(self, out: np.ndarray, rect: tuple[int, ...] | None = None, *, capture: bool = True,
-               toast: bool = True, clear: bool = False) -> None:
+               toast: bool = True, clear: bool = False, silent: bool = False) -> None:
         """Draw the active preset into ``out`` (BGR or BGRA), or into ``rect = (x, y, w, h[, r])``.
 
         ``clear``: no page fill — the art draws straight over what ``rect`` already
-        holds (``rect`` must lie inside ``out``).
+        holds (``rect`` must lie inside ``out``). ``silent``: draw as if the
+        input went quiet (bars fall to rest).
         """
         t_start = time.perf_counter()
         p = self.preset()
@@ -2083,7 +2088,7 @@ class FullscreenViz:
         self._last_t = now
         if capture:
             _audio.want_mic_capture()
-        self.analysis.update(style.analysis_params(p), dt, style.needs, style.channels(p))
+        self.analysis.update(style.analysis_params(p), dt, style.needs, style.channels(p), silent=silent)
 
         oh, ow = out.shape[:2]
         if rect is None:

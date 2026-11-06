@@ -1,18 +1,14 @@
-"""Visualizer mode: Now Playing ↔ Visualizer, and its audio badge.
+"""Visualizer mode: a long press on the navigation encoder forces Clocksaver.
 
-A long press on the navigation encoder flips between the two modes;
-settings_pigeon option5 picks the one Pigeon starts in. The layouts live in
-:mod:`pigeon.auto_widgets`:
+While it is on, :mod:`pigeon.auto_widgets` shows the full-frame Clocksaver
+(analog or digital, per the clock option) over whatever is playing, and
+:mod:`pigeon.viz_backdrop` brings the full-screen visualizer in over it while
+program audio comes in. Another long press plays the exit and returns to the
+automatic layout.
+settings_pigeon option5 picks the state Pigeon starts in.
 
-* Now Playing — zone 6 TT, zone 3 volume, zone 4 visualizer or cast info,
-  zone 5 status bar or seconds.
-* Visualizer — zone 6 visualizer (:mod:`pigeon.fullscreen_viz` scaled into
-  the zone), zone 3 analog clock, zone 4 cast info or the receiver's input
-  and volume, zone 5 status bar or seconds.
-
-While the visualizer shows and no program audio arrives, the red audio badge
-(the settings_pigeon audio tile) sits in zone 6's corner. When audio returns
-it turns green for :data:`GREEN_HOLD_S` seconds, then fades out.
+Audio with no player metadata gets the same visualizer Clocksaver without the
+long press. The zone-6 badge below belongs to the older zone-6 layout.
 """
 
 from __future__ import annotations
@@ -57,9 +53,25 @@ def set_active(on: bool) -> None:
 
 
 def toggle() -> bool:
-    """Flip the mode (long encoder press). Returns the new state."""
-    set_active(not is_active())
-    return bool(_active)
+    """Long encoder press. Returns the new state.
+
+    Off -> on forces Clocksaver. On -> off first plays the visualizer's exit
+    (:mod:`pigeon.viz_backdrop`), then switches. With the mode off, a press
+    dismisses the automatic visualizer (audio without player metadata) until
+    the audio stops; a press during an exit animation cancels it.
+    """
+    from pigeon import viz_backdrop
+
+    if viz_backdrop.cancel_leave():
+        return is_active()
+    if is_active():
+        if not viz_backdrop.leave_then(lambda: set_active(False)):
+            set_active(False)
+    elif viz_backdrop.active():
+        viz_backdrop.suppress()
+    else:
+        set_active(True)
+    return is_active()
 
 
 class AudioBadge:

@@ -256,17 +256,16 @@ def _plan(
     )
 
 
-def _visualizer_plan(sig: AutoWidgetSignals, *, metadata: bool) -> AutoWidgetPlan:
-    """Zone 6 visualizer, analog clock in zone 3. With player metadata, zone 4/5
-    keep cast info and the status bar; without it, zone 4 shows the receiver's
-    input and volume and zone 5 the seconds widget."""
-    if metadata:
-        return _plan(layout=LAYOUT_ZONE6_VISUALIZER, assignments=(VISUALIZER_Z6, "", CLOCK, INFO, STATUS), sig=sig)
+def _visualizer_clocksaver_plan(sig: AutoWidgetSignals) -> AutoWidgetPlan:
+    """Full-frame Clocksaver; :mod:`pigeon.viz_backdrop` draws the visualizer
+    behind it while program audio plays."""
+    z4, z4_text = _zone4_fallback(sig)
     return _plan(
-        layout=LAYOUT_ZONE6_VISUALIZER,
-        assignments=(VISUALIZER_Z6, "", CLOCK, "", SECONDS),
+        layout=LAYOUT_ZONE8_CLOCKSAVER,
+        assignments=("", "", "", z4, SECONDS),
         sig=sig,
-        zone4_receiver=True,
+        zone8=CLOCK_SAVER,
+        zone4_text=z4_text,
     )
 
 
@@ -290,9 +289,9 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
         )
 
     if sig.visualizer_mode:
-        # Stays up with or without audio (the audio badge reports a missing feed).
-        # A paused title still has cast info and a position to show.
-        return _visualizer_plan(sig, metadata=meta != METADATA_ABSENT)
+        # Long press: Clocksaver over whatever is playing (visualizer behind it
+        # while audio comes in), until the next long press.
+        return _visualizer_clocksaver_plan(sig)
 
     if sig.wan_ok:
         if meta == METADATA_OK:
@@ -342,8 +341,8 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
 
         z4, z4_text = _zone4_fallback(sig)
         if sig.audio_levels and not paused:
-            # Audio but no player metadata: the visualizer shows what is playing.
-            return _visualizer_plan(sig, metadata=False)
+            # Audio but no player metadata: Clocksaver with the visualizer behind it.
+            return _visualizer_clocksaver_plan(sig)
         return _plan(
             layout=LAYOUT_ZONE8_CLOCKSAVER,
             assignments=("", "", "", z4, SECONDS),
@@ -364,7 +363,7 @@ def resolve_auto_widgets(sig: AutoWidgetSignals) -> AutoWidgetPlan:
             exit_ok=False,
         )
     if sig.audio_levels:
-        return _visualizer_plan(sig, metadata=False)
+        return _visualizer_clocksaver_plan(sig)
     if sig.wan_ok_at_startup:
         return _plan(
             layout=LAYOUT_ZONE6_CLOCKSAVER,

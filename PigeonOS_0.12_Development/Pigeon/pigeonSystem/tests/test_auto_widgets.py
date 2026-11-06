@@ -20,9 +20,7 @@ from pigeon.auto_widgets import (  # noqa: E402
     LAYOUT_ZONE6_PAUSESAVER,
     LAYOUT_ZONE8_CLOCKSAVER,
     LAYOUT_ZONE10_PAUSESAVER,
-    LAYOUT_ZONE6_VISUALIZER,
     CLOCK,
-    VISUALIZER_Z6,
     METADATA_ABSENT,
     METADATA_OK,
     METADATA_STOPPED,
@@ -89,7 +87,7 @@ class AutoWidgetResolveTests(unittest.TestCase):
             )
             self.assertEqual(plan.assignments[2], VOLUME)
 
-    def test_lan_down_with_audio_shows_the_visualizer(self) -> None:
+    def test_lan_down_with_audio_is_the_visualizer_clocksaver(self) -> None:
         plan = resolve_auto_widgets(
             _sig(
                 wan_ok=False,
@@ -99,8 +97,9 @@ class AutoWidgetResolveTests(unittest.TestCase):
                 audio_levels=True,
             )
         )
-        self.assertEqual(plan.layout, LAYOUT_ZONE6_VISUALIZER)
-        self.assertEqual(plan.assignments, (VISUALIZER_Z6, "", CLOCK, "", SECONDS))
+        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
+        self.assertEqual(plan.zone8, CLOCK_SAVER)
+        self.assertEqual(plan.assignments[4], SECONDS)
         self.assertTrue(plan.blank_volume)
 
     def test_audio_levels_widget_is_retired(self) -> None:
@@ -138,15 +137,15 @@ class AutoWidgetResolveTests(unittest.TestCase):
                     self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
                     self.assertEqual(plan.zone8, CLOCK_SAVER)
 
-    def test_absent_metadata_with_audio_is_the_zone6_visualizer(self) -> None:
-        # Audio but no player metadata: visualizer, analog clock, the receiver's
-        # input + volume in zone 4, seconds in zone 5.
+    def test_absent_metadata_with_audio_is_the_visualizer_clocksaver(self) -> None:
+        # Audio but no player metadata: full-frame Clocksaver (the visualizer
+        # is drawn behind it by viz_backdrop), seconds in zone 5.
         plan = resolve_auto_widgets(
             _sig(player_metadata=METADATA_ABSENT, audio_levels=True)
         )
-        self.assertEqual(plan.layout, LAYOUT_ZONE6_VISUALIZER)
-        self.assertEqual(plan.assignments, (VISUALIZER_Z6, "", CLOCK, "", SECONDS))
-        self.assertTrue(plan.zone4_receiver)
+        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
+        self.assertEqual(plan.zone8, CLOCK_SAVER)
+        self.assertEqual(plan.assignments[4], SECONDS)
         # Metadata returns: back to the standard layout.
         back = resolve_auto_widgets(_sig(player_metadata=METADATA_OK, audio_levels=True))
         self.assertEqual(back.layout, LAYOUT_NP)
@@ -163,7 +162,7 @@ class AutoWidgetResolveTests(unittest.TestCase):
         meta = classify_player_metadata(md, playing=True)
         self.assertEqual(meta, METADATA_ABSENT)
         plan = resolve_auto_widgets(_sig(player_metadata=meta, audio_levels=True))
-        self.assertEqual(plan.layout, LAYOUT_ZONE6_VISUALIZER)
+        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
         plan = resolve_auto_widgets(_sig(player_metadata=meta, audio_levels=False))
         self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
 
@@ -223,7 +222,7 @@ class AutoWidgetResolveTests(unittest.TestCase):
         )
         self.assertEqual(plan.zone4_text, "LOUNGE")
 
-    def test_zone4_receiver_readout_when_wan_off(self) -> None:
+    def test_receiver_name_on_the_visualizer_clocksaver_when_wan_off(self) -> None:
         plan = resolve_auto_widgets(
             _sig(
                 wan_ok=False,
@@ -235,8 +234,8 @@ class AutoWidgetResolveTests(unittest.TestCase):
                 receiver_name="DENON",
             )
         )
-        self.assertTrue(plan.zone4_receiver)
-        self.assertEqual(plan.zone4_text, "")
+        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
+        self.assertEqual(plan.zone4_text, "DENON")
 
     def test_auto_clocksaver_uses_digital_face_when_clock_format_digital(self) -> None:
         zone8 = resolve_auto_widgets(
@@ -384,25 +383,22 @@ if __name__ == "__main__":
 
 
 class VisualizerModeLayoutTests(unittest.TestCase):
-    """Long-press visualizer mode (``visualizer_mode`` signal)."""
+    """Long-press visualizer mode (``visualizer_mode`` signal) forces Clocksaver."""
 
-    def test_with_metadata_keeps_cast_info_and_status_bar(self) -> None:
+    def test_forces_clocksaver_over_now_playing(self) -> None:
         plan = resolve_auto_widgets(_sig(player_metadata=METADATA_OK, audio_levels=True, visualizer_mode=True))
-        self.assertEqual(plan.layout, LAYOUT_ZONE6_VISUALIZER)
-        self.assertEqual(plan.assignments, (VISUALIZER_Z6, "", CLOCK, INFO, STATUS))
-        self.assertFalse(plan.zone4_receiver)
+        self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER)
+        self.assertEqual(plan.zone8, CLOCK_SAVER)
 
-    def test_paused_title_keeps_cast_info(self) -> None:
-        plan = resolve_auto_widgets(
-            _sig(player_metadata=METADATA_STOPPED, pausesaver_art=True, visualizer_mode=True)
-        )
-        self.assertEqual(plan.assignments, (VISUALIZER_Z6, "", CLOCK, INFO, STATUS))
+    def test_forces_clocksaver_with_or_without_audio_or_metadata(self) -> None:
+        for meta in (METADATA_OK, METADATA_STOPPED, METADATA_ABSENT):
+            for audio in (True, False):
+                plan = resolve_auto_widgets(_sig(player_metadata=meta, audio_levels=audio, visualizer_mode=True))
+                self.assertEqual(plan.layout, LAYOUT_ZONE8_CLOCKSAVER, (meta, audio))
 
-    def test_without_metadata_shows_receiver_and_seconds(self) -> None:
-        for audio in (True, False):  # stays up with no audio (the badge reports it)
-            plan = resolve_auto_widgets(_sig(audio_levels=audio, visualizer_mode=True))
-            self.assertEqual(plan.assignments, (VISUALIZER_Z6, "", CLOCK, "", SECONDS))
-            self.assertTrue(plan.zone4_receiver)
+    def test_off_returns_to_now_playing(self) -> None:
+        plan = resolve_auto_widgets(_sig(player_metadata=METADATA_OK, audio_levels=True, visualizer_mode=False))
+        self.assertEqual(plan.layout, LAYOUT_NP)
 
     def test_forced_settings_still_win(self) -> None:
         plan = resolve_auto_widgets(_sig(wan_ok=False, reliable_clock=False, visualizer_mode=True))

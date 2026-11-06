@@ -23,6 +23,7 @@ import time
 
 from pigeon.core import frame_scope as _frame_scope
 from pigeon.core import frame_stats as _frame_stats
+from pigeon import viz_backdrop as _viz_backdrop
 
 if TYPE_CHECKING:
     from pigeon_0_12 import DisplayView, SceneFit
@@ -919,27 +920,37 @@ def compose_display_from_source(
             )
             _cs_dim_d = _clock_saver_layer_opacity(now_cs)
             _meter_face_d = _idle_audio_meter_active(now_cs)
-            if intro_op is None and not _meter_face_d:
+            _viz_bg_d = intro_op is None and not _meter_face_d and _viz_backdrop.active()
+            if intro_op is None and not _meter_face_d and not _viz_bg_d:
                 _clock_saver_dim_pre_digit_canvas(canvas, _cs_dim_d)
             _time_op_d = float(intro_op) if intro_op is not None else 1.0
             _date_op_d = float(intro_op) if intro_op is not None else _cs_dim_d
-            (time_bgra, t_rect), (date_bgra, d_rect) = _clock_saver_layers(
-                shadow_bgr=acc_cs,
-                layer_opacity=_cs_dim_d,
-                time_layer_opacity=_time_op_d,
-                date_layer_opacity=_date_op_d,
-                date_anchor_row=CLOCK_ANCHOR_ROW,
-                date_anchor_col=CLOCK_ANCHOR_COL,
-                replace_with_meter=_meter_face_d,
-            )
-            _blit_saver_layers_design(
-                canvas,
-                time_bgra,
-                t_rect,
-                date_bgra,
-                d_rect,
-                copy_full_bgr=_meter_face_d,
-            )
+            def _layers_d():
+                return _clock_saver_layers(
+                    shadow_bgr=acc_cs,
+                    layer_opacity=_cs_dim_d,
+                    time_layer_opacity=_time_op_d,
+                    date_layer_opacity=_date_op_d,
+                    date_anchor_row=CLOCK_ANCHOR_ROW,
+                    date_anchor_col=CLOCK_ANCHOR_COL,
+                    replace_with_meter=_meter_face_d,
+                )
+
+            if _viz_bg_d:
+                canvas[:] = 0
+                _viz_backdrop.compose(
+                    canvas, (int(time.time()), round(_cs_dim_d, 2), round(_time_op_d, 2), round(_date_op_d, 2)), _layers_d
+                )
+            else:
+                (time_bgra, t_rect), (date_bgra, d_rect) = _layers_d()
+                _blit_saver_layers_design(
+                    canvas,
+                    time_bgra,
+                    t_rect,
+                    date_bgra,
+                    d_rect,
+                    copy_full_bgr=_meter_face_d,
+                )
             if playback_overlay_widget is not None and (
                 playback_overlay_flags.get("clock_saver_volume_only")
                 or playback_overlay_flags.get("clock_saver_netflix_full_overlay")
@@ -1355,25 +1366,33 @@ def compose_display_fast_no_grid(
             )
             _cs_dim_v1 = _clock_saver_layer_opacity(now_cs)
             _meter_face_v1 = meter_v1
-            if not _meter_face_v1:
+            _viz_bg_v1 = not _meter_face_v1 and _viz_backdrop.active()
+            if not _meter_face_v1 and not _viz_bg_v1:
                 _clock_saver_dim_pre_digit_canvas(canvas_np, _cs_dim_v1)
-            (time_bgra, t_rect), (date_bgra, d_rect) = _clock_saver_layers(
-                shadow_bgr=acc_cs,
-                layer_opacity=_cs_dim_v1,
-                time_layer_opacity=1.0,
-                date_layer_opacity=_cs_dim_v1,
-                date_anchor_row=CLOCK_ANCHOR_ROW,
-                date_anchor_col=CLOCK_ANCHOR_COL,
-                replace_with_meter=_meter_face_v1,
-            )
-            _blit_saver_layers_design(
-                canvas_np,
-                time_bgra,
-                t_rect,
-                date_bgra,
-                d_rect,
-                copy_full_bgr=_meter_face_v1,
-            )
+            def _layers_v1():
+                return _clock_saver_layers(
+                    shadow_bgr=acc_cs,
+                    layer_opacity=_cs_dim_v1,
+                    time_layer_opacity=1.0,
+                    date_layer_opacity=_cs_dim_v1,
+                    date_anchor_row=CLOCK_ANCHOR_ROW,
+                    date_anchor_col=CLOCK_ANCHOR_COL,
+                    replace_with_meter=_meter_face_v1,
+                )
+
+            if _viz_bg_v1:
+                canvas_np[:] = 0
+                _viz_backdrop.compose(canvas_np, (int(time.time()), round(_cs_dim_v1, 2)), _layers_v1)
+            else:
+                (time_bgra, t_rect), (date_bgra, d_rect) = _layers_v1()
+                _blit_saver_layers_design(
+                    canvas_np,
+                    time_bgra,
+                    t_rect,
+                    date_bgra,
+                    d_rect,
+                    copy_full_bgr=_meter_face_v1,
+                )
         else:
             t_sync0 = time.perf_counter()
             _sync_now_playing_screen_state_for_frame()
@@ -1456,29 +1475,39 @@ def compose_display_fast_no_grid(
             )
             _cs_dim = _clock_saver_layer_opacity(now_cs)
             _meter_face = _idle_audio_meter_active(now_cs)
-            if intro_op is None and not _meter_face:
+            _viz_bg = intro_op is None and not _meter_face and _viz_backdrop.active()
+            if intro_op is None and not _meter_face and not _viz_bg:
                 _clock_saver_dim_pre_digit_canvas(base, _cs_dim)
             _time_op = float(intro_op) if intro_op is not None else 1.0
             _date_op = float(intro_op) if intro_op is not None else _cs_dim
-            (time_bgra, t_rect), (date_bgra, d_rect) = _clock_saver_layers(
-                shadow_bgr=acc_cs,
-                layer_opacity=_cs_dim,
-                time_layer_opacity=_time_op,
-                date_layer_opacity=_date_op,
-                date_anchor_row=CLOCK_ANCHOR_ROW,
-                date_anchor_col=CLOCK_ANCHOR_COL,
-                replace_with_meter=_meter_face,
-            )
-            _blit_saver_layers_target(
-                base,
-                time_bgra,
-                t_rect,
-                date_bgra,
-                d_rect,
-                cap_w,
-                cap_h,
-                copy_full_bgr=_meter_face,
-            )
+            def _layers_f():
+                return _clock_saver_layers(
+                    shadow_bgr=acc_cs,
+                    layer_opacity=_cs_dim,
+                    time_layer_opacity=_time_op,
+                    date_layer_opacity=_date_op,
+                    date_anchor_row=CLOCK_ANCHOR_ROW,
+                    date_anchor_col=CLOCK_ANCHOR_COL,
+                    replace_with_meter=_meter_face,
+                )
+
+            if _viz_bg:
+                base[:] = 0
+                _viz_backdrop.compose(
+                    base, (int(time.time()), round(_cs_dim, 2), round(_time_op, 2), round(_date_op, 2)), _layers_f
+                )
+            else:
+                (time_bgra, t_rect), (date_bgra, d_rect) = _layers_f()
+                _blit_saver_layers_target(
+                    base,
+                    time_bgra,
+                    t_rect,
+                    date_bgra,
+                    d_rect,
+                    cap_w,
+                    cap_h,
+                    copy_full_bgr=_meter_face,
+                )
             if (
                 (
                     playback_overlay_flags.get("clock_saver_volume_only")
@@ -1914,6 +1943,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                 else int(time.time())
             )
             clock_saver_off = 1 if _clock_saver_for_compose(now) else 0
+            viz_backdrop_off = False
             meter_off_key = 0
             meter_active_off = _PIGEON_EXT and _idle_audio_meter_active(now)
             if meter_active_off and latest_meter_cache_key is not None:
@@ -1923,6 +1953,13 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
                     # Meter face has no second-hand clock; skip identical fills.
                     no_anim = True
                     tick_key_off = 0
+                elif latest_visualizer_cache_key is not None and _viz_backdrop.active():
+                    # Visualizer behind the clocksaver: its spectrum drives the key
+                    # (it changes every frame while audio plays; the clock rides along).
+                    no_anim = True
+                    tick_key_off = 0
+                    meter_off_key = int(latest_visualizer_cache_key())
+                    viz_backdrop_off = True
                 else:
                     # Digital clock needs ~1 Hz. Forcing no_anim=False plus a
                     # 1 ms catch-up delay spun the saver at full CPU.
@@ -1997,7 +2034,7 @@ def render_once(*, BACKDROP_BRIGHTNESS, DevPhase, DisplayView, SKIP_POST_SPLASH_
             t_compose1 = time.perf_counter()
             _update_label_photo_from_bgr(label, out_bgr, label_live_photo)
             t_compose2 = time.perf_counter()
-            if meter_active_off or live_audio_off:
+            if meter_active_off or live_audio_off or viz_backdrop_off:
                 _record_live_audio_timing(t_compose0, t_compose1, t_compose2)
             skip_cache[0] = scene_off_key
         else:
