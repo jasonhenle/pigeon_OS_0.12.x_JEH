@@ -80,7 +80,7 @@ class PresetTests(_Base):
         self.assertNotIn("readouts", items[0])
 
     def test_rotation_is_spectrum_and_lab_starters_render(self) -> None:
-        self.assertEqual([p["name"] for p in fv.presets()], ["Spectrum"])
+        self.assertEqual([p["name"] for p in fv.presets()], ["Spectrum", "Sweep VU"])
         names = [d["name"] for d in fv.LAB_PRESETS]
         self.assertEqual(len(names), len(set(names)))
         buf = np.zeros((400, 640, 3), np.uint8)
@@ -89,6 +89,19 @@ class PresetTests(_Base):
         for i in range(len(names)):
             fv.FullscreenViz(i).render(buf, toast=False)
             self.assertGreater(int(buf.max()), 0, names[i])
+
+    def test_sweep_vu_wedges_follow_the_theme_and_wear_the_badge(self) -> None:
+        sweep = next(p for p in fv.presets() if p["name"] == "Sweep VU")
+        self.assertEqual(fv.themed(sweep, "#00A22D")["segColor"], "#00A22D")
+        self.assertIsNotNone(fv._wordmark_ink())
+        g = fv.ArcVU._geo(sweep)
+        cy = int(g["y0"] + g["H"] - g["cover"] / 2.0)
+        cx = int(g["x0"] + g["W"] / 2.0)
+        base = fv.ArcVU().layers(sweep, fv.DESIGN_W, fv.DESIGN_H)["base"]
+        plain = fv.ArcVU().layers(dict(sweep, brand=False), fv.DESIGN_W, fv.DESIGN_H)["base"]
+        box = (slice(cy - 20, cy + 20), slice(cx - 60, cx + 60))
+        self.assertGreater(int(base[box].max()), 60, "badge drawn on the cover")
+        self.assertEqual(int(plain[box].max()), 0)
 
     def test_text_is_off_by_default(self) -> None:
         for p in fv.presets() + [fv.complete_preset(dict(d)) for d in fv.LAB_PRESETS]:
