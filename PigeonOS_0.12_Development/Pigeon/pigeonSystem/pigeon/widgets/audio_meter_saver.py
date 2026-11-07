@@ -615,7 +615,7 @@ def persistent_hiss_present(now: float | None = None) -> bool:
     saver can never intervene.
     """
     global _persistent_hiss
-    if _well_above_noise_floor():
+    if _well_above_noise_floor() or _noise_floor.steady_program_within(HISS_WINDOW_S):
         _persistent_hiss = False
         return False
     count, mean, span, peak = _hiss_window_stats(now)

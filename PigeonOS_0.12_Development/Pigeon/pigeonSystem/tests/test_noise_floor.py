@@ -23,6 +23,19 @@ def _noise(seconds: float, dbfs: float, seed: int = 0) -> np.ndarray:
     return x / np.sqrt(np.mean(x * x)) * 10 ** (dbfs / 20)
 
 
+def _quiet_music(seconds: float, dbfs: float, seed: int = 0) -> np.ndarray:
+    """Chords changing every 0.3 s at a steady level: what a turned-down zone 2 sends."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(int(RATE * seconds)) / RATE
+    x = np.zeros(t.size)
+    step = int(0.3 * RATE)
+    for s0 in range(0, t.size, step):
+        sl = slice(s0, s0 + step)
+        x[sl] = sum(np.sin(2 * np.pi * f * t[sl]) * f ** -0.3 for f in rng.uniform(80, 2000, 4))
+    x = np.stack([x, x], axis=1)
+    return x / np.sqrt(np.mean(x * x)) * 10 ** (dbfs / 20)
+
+
 def _feed(prof: nf.NoiseProfiler, x: np.ndarray) -> bool:
     took = False
     for i in range(0, x.shape[0] - CHUNK + 1, CHUNK):
@@ -41,9 +54,29 @@ class _Clock:
 class ProfilerTests(unittest.TestCase):
     def setUp(self) -> None:
         nf.set_profile(None)
+        nf._steady_program_mono = 0.0
 
     def tearDown(self) -> None:
         nf.set_profile(None)
+        nf._steady_program_mono = 0.0
+
+    def test_never_takes_steady_quiet_music(self) -> None:
+        prof = nf.NoiseProfiler(RATE, 2, clock=_Clock())
+        self.assertFalse(_feed(prof, _quiet_music(nf.QUIET_S + 2, -50)))
+        self.assertIsNone(nf.profile())
+        self.assertTrue(nf.steady_program_within(1.0), "noted as program for the hiss check")
+
+    def test_spectrum_steady_on_hiss_rumble_and_hum(self) -> None:
+        rng = np.random.default_rng(4)
+        hiss = rng.normal(size=(RATE * 3, 2)) * 1e-3
+        spec = np.fft.rfft(rng.normal(size=(RATE * 3, 2)), axis=0)
+        f = np.fft.rfftfreq(RATE * 3, 1 / RATE)
+        spec[(f < 20) | (f > 55)] = 0
+        rumble = np.fft.irfft(spec, n=RATE * 3, axis=0) + hiss * 0.1
+        hum = np.sin(2 * np.pi * 60 * np.arange(RATE * 3) / RATE)[:, None] * 1e-3 + hiss * 0.1
+        for clip in (hiss, rumble, hum):
+            self.assertTrue(nf.spectrum_steady(clip, RATE))
+        self.assertFalse(nf.spectrum_steady(_quiet_music(3, -50), RATE))
 
     def test_learns_steady_quiet_input(self) -> None:
         prof = nf.NoiseProfiler(RATE, 2, clock=_Clock())
