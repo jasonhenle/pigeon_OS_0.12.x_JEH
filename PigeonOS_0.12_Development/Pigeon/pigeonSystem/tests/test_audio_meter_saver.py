@@ -288,6 +288,34 @@ class ProgramAudioPresentTests(unittest.TestCase):
         self.assertTrue(am.program_audio_present())
         self.assertTrue(am.program_audio_session_present())
 
+    def _learned_floor(self, dbfs: float) -> None:
+        from pigeon import noise_floor
+
+        ms = 10.0 ** (dbfs / 10.0)
+        noise_floor.set_profile(noise_floor.Profile(
+            clip=np.zeros((4, 2), np.float32), rate=48000.0, ms=np.array([ms, ms]), lfe_ms=0.0, taken_mono=0.0
+        ))
+        self.addCleanup(noise_floor.set_profile, None)
+
+    def test_quiet_steady_program_well_above_the_floor_is_not_hiss(self) -> None:
+        # A zone 2 output at -20 dB: steady low fill, but 35 dB over the learned floor.
+        self._learned_floor(-86.0)
+        now = time.monotonic()
+        self._feed_steady_fill(0.14)
+        am._latest = _meter(fill=0.14, cal_dbfs=-51.0)
+        am._last_pcm_mono = now
+        self.assertFalse(am.persistent_hiss_present())
+        self.assertTrue(am.program_audio_present())
+
+    def test_steady_hiss_near_the_learned_floor_is_still_hiss(self) -> None:
+        self._learned_floor(-56.0)
+        now = time.monotonic()
+        self._feed_steady_fill(0.08)
+        am._latest = _meter(fill=0.08, cal_dbfs=-48.0)
+        am._last_pcm_mono = now
+        self.assertTrue(am.persistent_hiss_present())
+        self.assertFalse(am.program_audio_present())
+
 
 class StereoMeterWidgetLayoutTests(unittest.TestCase):
     def test_volume_band_is_the_lower_fifth(self) -> None:
