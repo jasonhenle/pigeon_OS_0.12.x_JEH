@@ -69,6 +69,17 @@ def setup_url() -> str:
         pass
     if svc.tls_info:
         fields["fp"] = str(svc.tls_info.get("fingerprint_sha256") or "")
+    # Where to reach it directly, so the app need not wait on an mDNS lookup (the pin still proves it
+    # is this device; a stale address just falls back to mDNS).
+    try:
+        from pigeon.local_ip import local_ipv4_address
+
+        ip = local_ipv4_address()
+        if ip and _server is not None:
+            fields["host"] = ip
+            fields["port"] = str(_server.port)
+    except Exception:
+        pass
     base = (os.environ.get("PIGEON_SETUP_URL_BASE") or "").strip() or DEFAULT_SETUP_URL_BASE
     return f"{base}#{urlencode(fields)}"
 

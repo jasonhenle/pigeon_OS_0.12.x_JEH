@@ -42,7 +42,7 @@ struct AddDeviceView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
                                         LCDLabel(text: d.name, size: 24)
-                                        Text(d.claimed ? "Needs a new code" : "Ready to add")
+                                        Text(d.needsSetup ? "Ready to set up" : d.claimed ? "Needs a new code" : "Ready to add")
                                             .font(Theme.ui(14)).foregroundStyle(Theme.secondaryText)
                                     }
                                     Spacer()
@@ -117,6 +117,7 @@ struct AddDeviceView: View {
 
 struct ClaimView: View {
     @EnvironmentObject private var store: DeviceStore
+    @EnvironmentObject private var setup: SetupCoordinator
     @Environment(\.dismiss) private var dismiss
     let target: AddDeviceView.Target
     var onDone: () -> Void
@@ -165,10 +166,20 @@ struct ClaimView: View {
         do {
             let r = try await target.client
                 .claim(code: code, controllerName: UIDevice.current.name, controllerID: store.controllerID)
-            store.add(KnownDevice(id: r.device.id, name: r.device.name, product: target.product,
-                                  host: target.host, port: target.port, pin: target.pin), token: r.token)
+            let known = KnownDevice(id: r.device.id, name: r.device.name, product: target.product,
+                                    host: target.host, port: target.port, pin: target.pin)
+            store.add(known, token: r.token)
+            let needsSetup = (try? await store.client(for: known).setup()).map { !$0.isDone } ?? false
             dismiss()
             onDone()
+            if needsSetup {
+                // Let both sheets finish closing before the setup screen covers the app.
+                let coordinator = setup
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(700))
+                    coordinator.request = .device(id: known.id)
+                }
+            }
         } catch let PigeonError.api(_, code, message) {
             errorText = code == "rate_limited" ? "Too many tries. Wait a minute." : message
             self.code = ""

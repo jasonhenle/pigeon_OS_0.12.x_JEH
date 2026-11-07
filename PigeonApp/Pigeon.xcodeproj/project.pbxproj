@@ -22,7 +22,10 @@
 		9FDA03837E893E2D3474638A /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120988CC68C601A7C2F78ED8 /* Theme.swift */; };
 		9FFF9F2957F4B924A1991AA2 /* PigeonClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D4CDF184E76B8AF8457FB3 /* PigeonClient.swift */; };
 		A1303CFD64AF17CF0F6000B9 /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9CFC40C338AD19039EAFF /* DeviceBrowser.swift */; };
+		BA418D08B1E52DB68D427A69 /* SetupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B8C5EB22D046A0BB075792 /* SetupCoordinator.swift */; };
 		BEC1783752922461FE24BE8A /* SportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C8B7D63F9A818EDBB0E7E8 /* SportsView.swift */; };
+		C040D357276C00AE846E9AB7 /* SetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F346992B1A07FBEDC735386 /* SetupTests.swift */; };
+		C8016C38A0382B261BCBE222 /* SetupFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE02FA4435C9A5E6EC3DB57E /* SetupFlowView.swift */; };
 		D31D243110E497C175787245 /* DevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ECFBD1CCB8CB5A1B062300 /* DevicesView.swift */; };
 		D45C89CC4C6B55C1F424BB92 /* VisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417BC2EAA7CAADD62359ABFB /* VisualizerView.swift */; };
 		E70DB177052A319EB162F2BE /* SharpSansSemibold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 4A64913793A2F88E121414D0 /* SharpSansSemibold.otf */; };
@@ -44,6 +47,7 @@
 		17D4CDF184E76B8AF8457FB3 /* PigeonClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PigeonClient.swift; sourceTree = "<group>"; };
 		1E78CAFD971EFA4D21AD41FC /* DeviceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStore.swift; sourceTree = "<group>"; };
 		27E071529EB338C9A3462FF9 /* SharpSansMedium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SharpSansMedium.otf; sourceTree = "<group>"; };
+		2F346992B1A07FBEDC735386 /* SetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupTests.swift; sourceTree = "<group>"; };
 		3372496F28E40E0542291FD1 /* PigeonTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PigeonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3762431839A00E0481DC1636 /* PigeonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PigeonApp.swift; sourceTree = "<group>"; };
 		40F938D02692D7D45891F5A1 /* AddDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDeviceView.swift; sourceTree = "<group>"; };
@@ -59,8 +63,10 @@
 		A5D705F3F3E9ED241835C65C /* ClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientTests.swift; sourceTree = "<group>"; };
 		A7B9CFC40C338AD19039EAFF /* DeviceBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBrowser.swift; sourceTree = "<group>"; };
 		A7C01AA68AE4B49AB9463DE1 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		B2B8C5EB22D046A0BB075792 /* SetupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupCoordinator.swift; sourceTree = "<group>"; };
 		B3884DEDC3F80F5BE1B7B5B4 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		B6C3EDE037F6DF21B83900EC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CE02FA4435C9A5E6EC3DB57E /* SetupFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupFlowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -79,6 +85,7 @@
 				63ECFBD1CCB8CB5A1B062300 /* DevicesView.swift */,
 				03C1744ECA1BF8B623A51E9A /* RootView.swift */,
 				5013FC18FF49E1805AE52DBA /* SearchView.swift */,
+				CE02FA4435C9A5E6EC3DB57E /* SetupFlowView.swift */,
 				97C8B7D63F9A818EDBB0E7E8 /* SportsView.swift */,
 				417BC2EAA7CAADD62359ABFB /* VisualizerView.swift */,
 			);
@@ -116,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				A5D705F3F3E9ED241835C65C /* ClientTests.swift */,
+				2F346992B1A07FBEDC735386 /* SetupTests.swift */,
 			);
 			path = PigeonTests;
 			sourceTree = "<group>";
@@ -168,6 +176,7 @@
 			children = (
 				1E78CAFD971EFA4D21AD41FC /* DeviceStore.swift */,
 				8C65045E40B6726CB54509F0 /* Keychain.swift */,
+				B2B8C5EB22D046A0BB075792 /* SetupCoordinator.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -272,6 +281,8 @@
 				9FFF9F2957F4B924A1991AA2 /* PigeonClient.swift in Sources */,
 				93611D4B5EBD522A5BC1392D /* RootView.swift in Sources */,
 				121DB773A35E34FBBEF8FC78 /* SearchView.swift in Sources */,
+				BA418D08B1E52DB68D427A69 /* SetupCoordinator.swift in Sources */,
+				C8016C38A0382B261BCBE222 /* SetupFlowView.swift in Sources */,
 				BEC1783752922461FE24BE8A /* SportsView.swift in Sources */,
 				9FDA03837E893E2D3474638A /* Theme.swift in Sources */,
 				D45C89CC4C6B55C1F424BB92 /* VisualizerView.swift in Sources */,
@@ -283,6 +294,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79B60FD664F648BC7EF677BB /* ClientTests.swift in Sources */,
+				C040D357276C00AE846E9AB7 /* SetupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +378,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -379,7 +391,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.15;
+				MARKETING_VERSION = 0.1.16;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -442,7 +454,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -461,7 +473,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.15;
+				MARKETING_VERSION = 0.1.16;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

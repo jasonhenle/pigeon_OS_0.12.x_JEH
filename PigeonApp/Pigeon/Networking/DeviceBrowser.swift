@@ -6,6 +6,8 @@ struct DiscoveredDevice: Identifiable, Equatable {
     var name: String
     var product: String
     var claimed: Bool
+    /// The device is showing its Welcome screen or waiting for a phone to finish setup.
+    var needsSetup: Bool = false
     var endpoint: NWEndpoint
 }
 
@@ -36,7 +38,7 @@ final class DeviceBrowser: ObservableObject {
                 guard let id = d["id"] else { return nil }
                 return DiscoveredDevice(
                     id: id, name: d["name"] ?? "Pigeon", product: d["product"] ?? "clock",
-                    claimed: d["claimed"] == "1", endpoint: r.endpoint)
+                    claimed: d["claimed"] == "1", needsSetup: d["setup"] == "1", endpoint: r.endpoint)
             }
             Task { @MainActor in self?.devices = found.sorted { $0.name < $1.name } }
         }
