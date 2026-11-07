@@ -77,6 +77,10 @@ SAMPLE_RATE = 48_000
 CHANNELS = 2
 SAMPLE_WIDTH = 2  # S16_LE
 FRAMES_PER_CHUNK = 384  # 8 ms at 48 kHz; matched to arecord -F 8000
+# Frames handled per pass of the capture loop: two periods (16 ms, still twice the
+# 30 fps display). Each pass costs a fixed ~1 ms of Python on a Pi 5, holding the
+# GIL from the Tk thread, so fewer, larger passes leave the visualizer smoother.
+FRAMES_PER_READ = 2 * FRAMES_PER_CHUNK
 RMS_WINDOW_FRAMES = 384  # unused for display; chunk length only
 FULL_SCALE = 32768.0
 DIAG_PERIOD_S = 8.0
@@ -151,7 +155,7 @@ _latest: MeterLevels = _SILENCE
 
 SPECTRUM_BINS = 48
 FFT_SIZE = 2048
-_FFT_EVERY_CHUNKS = 2
+_FFT_EVERY_CHUNKS = 1  # reads (FRAMES_PER_READ): one FFT per 16 ms
 _SPECTRUM_FMIN = 40.0
 _SPECTRUM_FMAX = 16_000.0
 _spectrum_lock = threading.Lock()
@@ -755,11 +759,11 @@ def _push_spectrum_mono(mono: np.ndarray) -> None:
         np.multiply(_fft_window, _hanning, out=_fft_window)
     mag = _noise_floor.clean_mag(np.abs(np.fft.rfft(_fft_window)), int(FFT_SIZE), _hanning, 1.0, "M")
     bins = _spectrum_bin_slices()
-    raw = np.zeros(int(SPECTRUM_BINS), dtype=np.float64)
-    for i, (lo, hi) in enumerate(bins):
-        sl = mag[int(lo) : int(hi)]
-        if sl.size:
-            raw[i] = float(np.sqrt(np.mean(sl * sl)))
+    # RMS of each bin's slice from a running sum (slices can overlap by one bin).
+    csum = np.concatenate(([0.0], np.cumsum(mag * mag)))
+    lo, hi = bins[:, 0], bins[:, 1]
+    width = np.maximum(hi - lo, 1)
+    raw = np.where(hi > lo, np.sqrt(np.maximum(csum[hi] - csum[lo], 0.0) / width), 0.0)
     peak = float(np.max(raw)) if raw.size else 0.0
     if peak > 1e-9:
         raw = raw / peak
@@ -1486,16 +1490,32 @@ def _lowpass_cascade(
     """Cascade one-pole lowpasses. ``samples`` are already normalized to ±1."""
     x = np.asarray(samples, dtype=np.float64)
     z = np.array(state, dtype=np.float64, copy=True)
-    a = float(alpha)
-    n_poles = int(z.size)
-    out = np.empty(x.size, dtype=np.float64)
-    for i in range(x.size):
-        v = float(x[i])
-        for p in range(n_poles):
-            z[p] += a * (v - z[p])
-            v = float(z[p])
-        out[i] = v
-    return out, z
+    if x.size == 0:
+        return np.zeros(0, dtype=np.float64), z
+    # Each pole is linear: y = M @ x + d * z, worked out once per length (no per-sample loop).
+    m, d = _one_pole_matrices(int(x.size), float(alpha))
+    v = x
+    for p in range(int(z.size)):
+        v = m @ v + d * z[p]
+        z[p] = v[-1]
+    return v, z
+
+
+_ONE_POLE_CACHE: dict[tuple[int, float], tuple[np.ndarray, np.ndarray]] = {}
+
+
+def _one_pole_matrices(n: int, alpha: float) -> tuple[np.ndarray, np.ndarray]:
+    """``(M, d)`` for ``z += alpha * (x - z)`` over ``n`` samples: ``y[i] = (M @ x)[i] + d[i] * z0``."""
+    key = (n, alpha)
+    hit = _ONE_POLE_CACHE.get(key)
+    if hit is None:
+        k = 1.0 - alpha
+        i = np.arange(n)
+        lag = i[:, None] - i[None, :]
+        m = np.where(lag >= 0, alpha * k ** np.maximum(lag, 0), 0.0)
+        hit = (m, k ** (i + 1))
+        _ONE_POLE_CACHE[key] = hit
+    return hit
 
 
 def _lfe_filter_chunk(
@@ -1724,8 +1744,8 @@ def _capture_loop(gen: int) -> None:
     if not _still_this_capture(gen):
         return
     _print_banner_once()
-    nbytes = FRAMES_PER_CHUNK * CHANNELS * SAMPLE_WIDTH
-    dt_chunk = float(FRAMES_PER_CHUNK) / float(SAMPLE_RATE)
+    nbytes = FRAMES_PER_READ * CHANNELS * SAMPLE_WIDTH
+    dt_chunk = float(FRAMES_PER_READ) / float(SAMPLE_RATE)
     use_low_latency = True
     arecord = shutil.which("arecord")
     if not arecord:
