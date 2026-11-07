@@ -1836,6 +1836,7 @@ def _capture_loop_body(
         rumble = _hum_filter.RumbleFilter(SAMPLE_RATE, CHANNELS) if hum_hz else None
         profiler = _noise_floor.NoiseProfiler(SAMPLE_RATE, CHANNELS)
         got_pcm = False
+        pending = b""
         while _still_this_capture(gen):
             try:
                 ready, _, _ = select.select([stdout], [], [], 0.25)
@@ -1843,11 +1844,14 @@ def _capture_loop_body(
                 break
             if not ready:
                 continue
-            raw = stdout.read(nbytes)
-            if not raw:
+            got = stdout.read(nbytes - len(pending))
+            if not got:
                 break
-            if len(raw) < nbytes:
+            # The pipe hands over one ALSA period at a time; gather a whole pass.
+            pending += got
+            if len(pending) < nbytes:
                 continue
+            raw, pending = pending, b""
             got_pcm = True
             _pcm_ever = True
             _last_pcm_mono = time.monotonic()
