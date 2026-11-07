@@ -307,6 +307,17 @@ class ProgramAudioPresentTests(unittest.TestCase):
         self.assertFalse(am.persistent_hiss_present())
         self.assertTrue(am.program_audio_present())
 
+    def test_steady_program_noted_by_the_noise_learner_is_not_hiss(self) -> None:
+        from pigeon import noise_floor
+
+        now = time.monotonic()
+        self._feed_steady_fill(0.14)
+        am._latest = _meter(fill=0.14, cal_dbfs=-51.0)
+        am._last_pcm_mono = now
+        with mock.patch.object(noise_floor, "_steady_program_mono", now):
+            self.assertFalse(am.persistent_hiss_present())
+            self.assertTrue(am.program_audio_present())
+
     def test_steady_hiss_near_the_learned_floor_is_still_hiss(self) -> None:
         self._learned_floor(-56.0)
         now = time.monotonic()

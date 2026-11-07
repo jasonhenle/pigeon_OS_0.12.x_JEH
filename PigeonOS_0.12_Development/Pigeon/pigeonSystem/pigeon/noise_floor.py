@@ -10,7 +10,11 @@ steady and low for :data:`QUIET_S`, the last :data:`CLIP_S` of it becomes the
 noise profile: the first quiet stretch after boot, then again on a later
 quiet stretch at most every :data:`REFRESH_S`. Anything louder than
 :data:`MAX_DBFS` or with more than :data:`MAX_SPREAD_DB` of movement is never
-taken for noise.
+taken for noise, and neither is a clip whose spectrum changes from one
+:data:`SEG_S` to the next (:func:`spectrum_steady`): quiet music can hold a
+steady level (a zone 2 output turned down), but its notes keep moving, while
+hiss and rumble keep the same spectrum. Such a stretch is noted as program
+(:func:`steady_program_within`), so the hiss check doesn't take it either.
 
 Readers subtract noise *power* (with :data:`MARGIN_DB` of over-subtraction so
 the floor sits at zero instead of flickering; :data:`SPECTRUM_MARGIN_DB` for
@@ -42,6 +46,11 @@ MARGIN_DB = 2.0
 # One FFT frame's bins swing well above their mean, so spectra over-subtract more.
 SPECTRUM_MARGIN_DB = 6.0
 CELLS_MARGIN_DB = 9.0
+# Spectrum steadiness: band levels over SEG_S slices; noise moves well under this.
+SEG_S = 0.25
+STEADY_BANDS = 16
+MAX_BAND_STD_DB = 2.0
+STEADY_CHECK_S = 1.0  # the check costs a few ms on a Pi 5; reuse its verdict this long
 _K = 10.0 ** (MARGIN_DB / 10.0)
 _K_SPECTRUM = 10.0 ** (SPECTRUM_MARGIN_DB / 10.0)
 _K_CELLS = 10.0 ** (CELLS_MARGIN_DB / 10.0)
@@ -63,6 +72,31 @@ class Profile:
 
 _profile: Profile | None = None
 _lock = threading.Lock()
+_steady_program_mono = 0.0  # last time a steady, quiet stretch turned out to be program
+
+
+def spectrum_steady(clip: np.ndarray, rate: float) -> bool:
+    """True when ``clip``'s spectrum holds still: median band-level spread over :data:`SEG_S` slices."""
+    x = np.asarray(clip, dtype=np.float64)
+    x = x.mean(axis=1) if x.ndim == 2 else x
+    n = int(float(rate) * SEG_S)
+    segs = x.size // max(1, n)
+    if n < 64 or segs < 4:
+        return True
+    frames = x[: segs * n].reshape(segs, n).astype(np.float32) * np.hanning(n).astype(np.float32)
+    spec = np.fft.rfft(frames, axis=1)
+    power = spec.real ** 2 + spec.imag ** 2
+    edges = np.geomspace(60.0, min(16_000.0, 0.45 * float(rate)), STEADY_BANDS + 1)
+    bins = np.unique(np.clip(np.round(edges * n / float(rate)).astype(int), 0, power.shape[1]))
+    bands = np.add.reduceat(power, bins, axis=1)[:, : bins.size - 1]
+    db = 10.0 * np.log10(bands.astype(np.float64) + 1e-20)
+    return float(np.median(db.std(axis=0))) <= MAX_BAND_STD_DB
+
+
+def steady_program_within(seconds: float, now: float | None = None) -> bool:
+    """True when a steady, quiet stretch was judged program (not noise) in the last ``seconds``."""
+    t = time.monotonic() if now is None else float(now)
+    return _steady_program_mono > 0.0 and (t - _steady_program_mono) < float(seconds)
 
 
 def profile() -> Profile | None:
@@ -184,6 +218,8 @@ class NoiseProfiler:
         n_quiet = int(round(QUIET_S / BLOCK_S))
         self._dbs: deque[float] = deque(maxlen=n_quiet)
         self._lfe: deque[float] = deque(maxlen=int(round(CLIP_S / BLOCK_S)))
+        self._steady_checked = -1e9
+        self._steady = True
 
     def feed(self, x: np.ndarray, lfe_ms: float) -> bool:
         """One chunk ``(frames, channels)`` plus its LFE mean square. True when a profile was taken."""
@@ -225,6 +261,13 @@ class NoiseProfiler:
         if max(self._dbs) >= MAX_DBFS or (max(self._dbs) - min(self._dbs)) > MAX_SPREAD_DB:
             return False
         now = float(self._clock())
+        if now - self._steady_checked >= STEADY_CHECK_S:
+            self._steady_checked = now
+            self._steady = spectrum_steady(self._clip, self.rate)
+        if not self._steady:
+            global _steady_program_mono
+            _steady_program_mono = time.monotonic()
+            return False
         cur = _profile
         if cur is not None and (now - cur.taken_mono) < REFRESH_S:
             return False
