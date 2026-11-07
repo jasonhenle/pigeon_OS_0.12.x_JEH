@@ -193,6 +193,19 @@ class TimelineTests(unittest.TestCase):
         self.assertLess(int(c[450, 900].max()), 40, "only the (fake, unsplit) face fading back in")
 
 
+class WantedTests(unittest.TestCase):
+    def test_holds_through_a_quiet_passage_then_lets_go(self) -> None:
+        from pigeon.widgets import audio_meter_saver as am
+
+        now = 5000.0
+        with mock.patch.object(am, "program_audio_present", lambda: False), \
+                mock.patch.object(am.time, "monotonic", lambda: now):
+            with mock.patch.object(am, "_program_audio_seen_mono", now - (vb.HOLD_S - 1.0)):
+                self.assertTrue(vb.wanted(), "quiet for a few seconds: still playing")
+            with mock.patch.object(am, "_program_audio_seen_mono", now - (vb.HOLD_S + 0.5)):
+                self.assertFalse(vb.wanted())
+
+
 class OverlayTests(unittest.TestCase):
     def test_overlay_matches_the_regular_alpha_blend(self) -> None:
         from pigeon.compositing import alpha_blend_bgra_over_bgr

@@ -57,6 +57,9 @@ _INK_MIN = 56
 # A visualizer pixel this bright covers the time under it.
 _COVER_MIN = 24
 _ROTATE_WINDOW_S = 1.0
+# Program audio counts as still playing this long after it last cleared the gate,
+# so a quiet passage doesn't end the visualizer (the meter's own hold is 2.5 s).
+HOLD_S = 6.0
 # Receiver input label just under the time, flush with its left edge (moves, dims and fades with it).
 LABEL_PX = 80
 LABEL_GAP_PX = 18
@@ -72,11 +75,11 @@ _suppressed = False  # long press dismissed the automatic visualizer until audio
 
 
 def wanted() -> bool:
-    """True while program audio is coming in on the meter capture."""
+    """True while program audio is coming in on the meter capture (held :data:`HOLD_S`)."""
     try:
-        from pigeon.widgets.audio_meter_saver import program_audio_present
+        from pigeon.widgets.audio_meter_saver import program_audio_seen_within
 
-        return bool(program_audio_present())
+        return bool(program_audio_seen_within(HOLD_S))
     except Exception:
         return False
 
