@@ -182,6 +182,9 @@ HISS_MIN_SAMPLES = 16
 HISS_MAX_SPAN = 0.08
 HISS_MAX_MEAN_FILL = 0.32
 HISS_CLEAR_FILL = 0.40
+# With a learned noise floor (:mod:`pigeon.noise_floor`), a level this far above it is
+# program, however steady: a quiet output (a zone 2 at -20 dB) moves little in fill.
+HISS_ABOVE_FLOOR_DB = 15.0
 _program_audio_until = 0.0
 _program_audio_session_until = 0.0
 # Last time program audio was detected (settings_pigeon 60 s indicator).
@@ -595,6 +598,15 @@ def _hiss_window_stats(
     return len(samples), mean, peak - low, peak
 
 
+def _well_above_noise_floor() -> bool:
+    """True when the capture sits :data:`HISS_ABOVE_FLOOR_DB` over the learned floor (False with none)."""
+    p = _noise_floor.profile()
+    if p is None:
+        return False
+    sample = _latest
+    return max(float(sample.dbfs_l), float(sample.dbfs_r)) >= p.dbfs + float(HISS_ABOVE_FLOOR_DB)
+
+
 def persistent_hiss_present(now: float | None = None) -> bool:
     """True when the capture has sat on a near-constant low-level noise floor.
 
@@ -603,6 +615,9 @@ def persistent_hiss_present(now: float | None = None) -> bool:
     saver can never intervene.
     """
     global _persistent_hiss
+    if _well_above_noise_floor():
+        _persistent_hiss = False
+        return False
     count, mean, span, peak = _hiss_window_stats(now)
     if peak >= float(HISS_CLEAR_FILL) or mean >= float(HISS_CLEAR_FILL):
         _persistent_hiss = False
